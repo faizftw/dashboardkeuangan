@@ -19,7 +19,7 @@ export default async function InputHarianPage() {
   // 2. Fetch Active Programs
   const { data: activePrograms } = await supabase
     .from('programs')
-    .select('id, name, target_type')
+    .select('*')
     .eq('is_active', true)
     .order('name')
 

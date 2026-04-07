@@ -233,6 +233,13 @@ export function InputFormClient({ programs, pastInputs }: { programs: Program[],
 
               {(activeProgram?.target_type === 'quantitative' || activeProgram?.target_type === 'hybrid') && (
                 <div className="bg-blue-50/50 p-4 rounded-lg border border-blue-100 space-y-4">
+                  <div className="flex justify-between items-center bg-white p-2 rounded border border-blue-100 shadow-sm">
+                    <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">🎯 Target Harian Anda:</span>
+                    <span className="text-xs font-bold text-indigo-700">
+                      Rp {Number(activeProgram.daily_target_rp || 0).toLocaleString('id-ID')} | {activeProgram.daily_target_user || 0} User
+                    </span>
+                  </div>
+                  
                   <h4 className="text-xs font-bold text-blue-800 uppercase tracking-wide">Pencapaian Kuantitatif</h4>
                   <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-1.5 flex flex-col">

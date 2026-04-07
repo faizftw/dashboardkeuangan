@@ -47,6 +47,8 @@ export interface Database {
           target_type: 'quantitative' | 'qualitative' | 'hybrid'
           monthly_target_rp: number | null
           monthly_target_user: number | null
+          daily_target_rp: number | null
+          daily_target_user: number | null
           qualitative_description: string | null
           is_active: boolean
           created_at: string
@@ -59,6 +61,8 @@ export interface Database {
           target_type?: 'quantitative' | 'qualitative' | 'hybrid'
           monthly_target_rp?: number | null
           monthly_target_user?: number | null
+          daily_target_rp?: number | null
+          daily_target_user?: number | null
           qualitative_description?: string | null
           is_active?: boolean
           created_at?: string
@@ -71,6 +75,8 @@ export interface Database {
           target_type?: 'quantitative' | 'qualitative' | 'hybrid'
           monthly_target_rp?: number | null
           monthly_target_user?: number | null
+          daily_target_rp?: number | null
+          daily_target_user?: number | null
           qualitative_description?: string | null
           is_active?: boolean
           created_at?: string

@@ -11,8 +11,8 @@ export default async function MasterDataPage({
 }) {
   const supabase = createClient()
   
-  // Get active tab, default to 'program'
-  const activeTab = searchParams.tab || 'program'
+  // Get active tab, default to 'periode'
+  const activeTab = searchParams.tab || 'periode'
 
   // Get user role
   const { data: { user } } = await supabase.auth.getUser()
@@ -48,16 +48,6 @@ export default async function MasterDataPage({
         {/* Tabs Header */}
         <div className="flex border-b border-slate-200 bg-slate-50/50 px-4">
           <a
-            href="?tab=program"
-            className={`px-6 py-3.5 text-sm font-semibold border-b-2 transition-colors ${
-              activeTab === 'program'
-                ? 'border-indigo-600 text-indigo-700'
-                : 'border-transparent text-slate-600 hover:text-slate-900 hover:border-slate-300'
-            }`}
-          >
-            Program & Target
-          </a>
-          <a
             href="?tab=periode"
             className={`px-6 py-3.5 text-sm font-semibold border-b-2 transition-colors ${
               activeTab === 'periode'
@@ -67,14 +57,28 @@ export default async function MasterDataPage({
           >
             Pengaturan Periode
           </a>
+          <a
+            href="?tab=program"
+            className={`px-6 py-3.5 text-sm font-semibold border-b-2 transition-colors ${
+              activeTab === 'program'
+                ? 'border-indigo-600 text-indigo-700'
+                : 'border-transparent text-slate-600 hover:text-slate-900 hover:border-slate-300'
+            }`}
+          >
+            Program & Target
+          </a>
         </div>
 
         {/* Tab Content */}
         <div className="p-6">
-          {activeTab === 'program' ? (
-            <ProgramClient programs={programs || []} isAdmin={isAdmin} />
-          ) : (
+          {activeTab === 'periode' ? (
             <PeriodClient periods={periods || []} isAdmin={isAdmin} />
+          ) : (
+            <ProgramClient 
+              programs={programs || []} 
+              isAdmin={isAdmin} 
+              activePeriod={periods?.find(p => p.is_active)}
+            />
           )}
         </div>
       </div>

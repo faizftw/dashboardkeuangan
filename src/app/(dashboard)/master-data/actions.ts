@@ -17,6 +17,8 @@ export async function createProgram(data: {
   target_type: 'quantitative' | 'qualitative' | 'hybrid'
   monthly_target_rp?: number | null
   monthly_target_user?: number | null
+  daily_target_rp?: number | null
+  daily_target_user?: number | null
   qualitative_description?: string | null
 }): Promise<ActionResponse> {
   const supabase = createClient()
@@ -52,6 +54,58 @@ export async function toggleProgramStatus(id: string, currentStatus: boolean): P
     .eq('id', id)
 
   if (error) return { error: error.message }
+
+  revalidatePath('/master-data')
+  return { success: true }
+}
+
+export async function updateProgram(id: string, data: {
+  name: string
+  pic_name: string
+  pic_whatsapp?: string
+  target_type: 'quantitative' | 'qualitative' | 'hybrid'
+  monthly_target_rp?: number | null
+  monthly_target_user?: number | null
+  daily_target_rp?: number | null
+  daily_target_user?: number | null
+  qualitative_description?: string | null
+}): Promise<ActionResponse> {
+  const supabase = createClient()
+  
+  // Verify admin
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { error: 'Unauthorized' }
+  const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).single()
+  if (profile?.role !== 'admin') return { error: 'Hanya admin yang bisa mengubah program.' }
+
+  const { error } = await supabase.from('programs')
+    .update(data)
+    .eq('id', id)
+
+  if (error) {
+    console.error('Update Program Error:', error)
+    return { error: error.message }
+  }
+
+  revalidatePath('/master-data')
+  return { success: true }
+}
+
+export async function deleteProgram(id: string): Promise<ActionResponse> {
+  const supabase = createClient()
+  
+  // Verify admin
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { error: 'Unauthorized' }
+  const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).single()
+  if (profile?.role !== 'admin') return { error: 'Hanya admin yang bisa menghapus program.' }
+
+  const { error } = await supabase.from('programs').delete().eq('id', id)
+
+  if (error) {
+    console.error('Delete Program Error:', error)
+    return { error: error.message }
+  }
 
   revalidatePath('/master-data')
   return { success: true }

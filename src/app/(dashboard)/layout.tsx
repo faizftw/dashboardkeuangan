@@ -24,12 +24,6 @@ export default async function DashboardLayout({
     .eq('id', user.id)
     .single()
 
-  console.log("=== DIAGNOSTIC DBG ===")
-  console.log("User Email:", user.email)
-  console.log("User ID:", user.id)
-  console.log("Profile Data:", profile)
-  console.log("Profile Error:", profileError)
-  console.log("======================")
 
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col">
