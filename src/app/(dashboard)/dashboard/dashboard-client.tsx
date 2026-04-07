@@ -34,6 +34,39 @@ type AggregatedProgram = Program & {
   business_status: 'PERLU PERHATIAN' | 'MENUJU TARGET' | 'TERCAPAI' | 'TERLAMPAUI'
 }
 
+// Custom Tooltip component for Recharts
+const CustomTooltip = ({ active, payload, label }: any) => {
+  if (active && payload && payload.length) {
+    const data = payload[0].payload;
+    return (
+      <div className="bg-white p-4 rounded-xl shadow-xl border border-slate-200 min-w-[240px] z-[9999]">
+        <p className="font-bold text-slate-800 mb-3 border-b border-slate-100 pb-2">{label}</p>
+        <div className="space-y-2">
+          <div className="flex justify-between items-center gap-4">
+             <span className="text-xs font-semibold text-slate-500">Target Bulan Ini</span>
+             <span className="text-sm font-bold text-slate-700">{formatRupiah(data.Target)}</span>
+          </div>
+          <div className="flex justify-between items-center gap-4">
+             <span className="text-xs font-semibold text-slate-500">Total Pencapaian</span>
+             <span className="text-sm font-bold text-indigo-600">{formatRupiah(data.Pencapaian)}</span>
+          </div>
+          <div className="mt-3 pt-3 border-t border-slate-100 flex justify-between items-center">
+            <span className="text-xs font-semibold text-slate-500">Status Capaian</span>
+            <span className={`text-xs font-bold px-2 py-1 rounded inline-block ${
+              data.percentage >= 100 ? 'bg-emerald-100 text-emerald-800' :
+              data.percentage >= 50 ? 'bg-amber-100 text-amber-800' :
+              'bg-red-100 text-red-800'
+            }`}>
+              {data.percentage.toFixed(1)}%
+            </span>
+          </div>
+        </div>
+      </div>
+    );
+  }
+  return null;
+};
+
 export function DashboardClient({ programs, dailyInputs, activePeriod, isAdmin }: DashboardClientProps) {
   const [filterType, setFilterType] = useState<string>('all')
   const [filterStatus, setFilterStatus] = useState<string>('all')
@@ -145,39 +178,6 @@ export function DashboardClient({ programs, dailyInputs, activePeriod, isAdmin }
   const totalAchievementRp = aggregatedData.reduce((sum, p) => sum + p.cumulative_rp, 0)
   const globalPercentage = totalTargetRp > 0 ? (totalAchievementRp / totalTargetRp) * 100 : 0
 
-  // Custom Tooltip component for Recharts
-  const CustomTooltip = ({ active, payload, label }: any) => {
-    if (active && payload && payload.length) {
-      const data = payload[0].payload;
-      return (
-        <div className="bg-white p-4 rounded-xl shadow-xl border border-slate-200 min-w-[240px]">
-          <p className="font-bold text-slate-800 mb-3 border-b border-slate-100 pb-2">{label}</p>
-          <div className="space-y-2">
-            <div className="flex justify-between items-center gap-4">
-               <span className="text-xs font-semibold text-slate-500">Target Bulan Ini</span>
-               <span className="text-sm font-bold text-slate-700">{formatRupiah(data.Target)}</span>
-            </div>
-            <div className="flex justify-between items-center gap-4">
-               <span className="text-xs font-semibold text-slate-500">Total Pencapaian</span>
-               <span className="text-sm font-bold text-indigo-600">{formatRupiah(data.Pencapaian)}</span>
-            </div>
-            <div className="mt-3 pt-3 border-t border-slate-100 flex justify-between items-center">
-              <span className="text-xs font-semibold text-slate-500">Status Capaian</span>
-              <span className={`text-xs font-bold px-2 py-1 rounded inline-block ${
-                data.percentage >= 100 ? 'bg-emerald-100 text-emerald-800' :
-                data.percentage >= 50 ? 'bg-amber-100 text-amber-800' :
-                'bg-red-100 text-red-800'
-              }`}>
-                {data.percentage.toFixed(1)}%
-              </span>
-            </div>
-          </div>
-        </div>
-      );
-    }
-    return null;
-  };
-
   return (
     <div className="space-y-8">
       
@@ -214,19 +214,21 @@ export function DashboardClient({ programs, dailyInputs, activePeriod, isAdmin }
 
       {/* 3. Global Chart View */}
       {chartData.length > 0 && (
-        <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
+        <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm overflow-visible">
           <h3 className="text-lg font-bold text-slate-800 mb-6 flex items-center gap-2">
             📊 Tinjauan Visual Pencapaian (Kuantitatif)
           </h3>
-          <div className="w-full h-[350px]">
+          <div className="w-full h-[350px] overflow-visible">
              <ResponsiveContainer width="100%" height="100%">
                <BarChart data={chartData} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
                  <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#64748b' }} />
                  <YAxis tickFormatter={formatYAxis} axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#64748b' }} />
                  <Tooltip 
-                   content={<CustomTooltip />}
-                   cursor={{ fill: '#f8fafc' }}
+                    content={<CustomTooltip />}
+                    cursor={{ fill: '#f8fafc' }}
+                    wrapperStyle={{ zIndex: 9999, pointerEvents: 'none' }}
+                    allowEscapeViewBox={{ x: true, y: true }}
                  />
                  <Bar dataKey="Target" fill="#cbd5e1" radius={[4, 4, 0, 0]} barSize={40} />
                  <Bar dataKey="Pencapaian" radius={[4, 4, 0, 0]} barSize={40}>
