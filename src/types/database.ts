@@ -44,7 +44,7 @@ export interface Database {
           name: string
           pic_name: string
           pic_whatsapp: string | null
-          target_type: 'quantitative' | 'qualitative'
+          target_type: 'quantitative' | 'qualitative' | 'hybrid'
           monthly_target_rp: number | null
           monthly_target_user: number | null
           qualitative_description: string | null
@@ -56,7 +56,7 @@ export interface Database {
           name: string
           pic_name: string
           pic_whatsapp?: string | null
-          target_type?: 'quantitative' | 'qualitative'
+          target_type?: 'quantitative' | 'qualitative' | 'hybrid'
           monthly_target_rp?: number | null
           monthly_target_user?: number | null
           qualitative_description?: string | null
@@ -68,7 +68,7 @@ export interface Database {
           name?: string
           pic_name?: string
           pic_whatsapp?: string | null
-          target_type?: 'quantitative' | 'qualitative'
+          target_type?: 'quantitative' | 'qualitative' | 'hybrid'
           monthly_target_rp?: number | null
           monthly_target_user?: number | null
           qualitative_description?: string | null
@@ -152,7 +152,7 @@ export interface Database {
     }
     Enums: {
       user_role: 'admin' | 'pic'
-      target_type: 'quantitative' | 'qualitative'
+      target_type: 'quantitative' | 'qualitative' | 'hybrid'
       qualitative_status: 'not_started' | 'in_progress' | 'completed'
     }
   }
