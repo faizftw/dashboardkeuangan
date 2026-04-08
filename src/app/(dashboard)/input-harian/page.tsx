@@ -92,6 +92,7 @@ export default async function InputHarianPage() {
                 programs={activePrograms} 
                 pastInputs={pastInputs} 
                 isAdmin={isAdmin}
+                activePeriod={activePeriod}
               />
             ) : (
               <div className="text-center py-8">

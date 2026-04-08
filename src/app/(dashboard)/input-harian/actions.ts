@@ -22,11 +22,12 @@ export async function submitDailyInput(data: {
   // Get active period
   const { data: period } = await supabase
     .from('periods')
-    .select('id')
+    .select('id, is_locked')
     .eq('is_active', true)
     .single()
 
   if (!period) return { error: 'Tidak ada periode aktif saat ini. Hubungi Admin.' }
+  if (period.is_locked) return { error: 'Periode ini sudah dikunci oleh Admin. Data tidak dapat ditambah.' }
 
   const payload = {
     ...data,
@@ -58,6 +59,16 @@ export async function updateDailyInput(id: string, data: {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return { error: 'Unauthorized' }
 
+  // Check if period is locked
+  const { data: currentInput } = await supabase
+    .from('daily_inputs')
+    .select('period_id, periods(is_locked)')
+    .eq('id', id)
+    .single()
+
+  const isLocked = (currentInput?.periods as any)?.is_locked
+  if (isLocked) return { error: 'Periode untuk data ini sudah dikunci oleh Admin.' }
+
   // Must only update their own records (enforced by RLS as well as code check if needed)
   const { error } = await supabase
     .from('daily_inputs')
@@ -79,6 +90,16 @@ export async function deleteDailyInput(id: string): Promise<ActionResponse> {
   
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return { error: 'Unauthorized' }
+
+  // Check if period is locked
+  const { data: currentInput } = await supabase
+    .from('daily_inputs')
+    .select('period_id, periods(is_locked)')
+    .eq('id', id)
+    .single()
+
+  const isLocked = (currentInput?.periods as any)?.is_locked
+  if (isLocked) return { error: 'Periode untuk data ini sudah dikunci oleh Admin.' }
 
   const { error } = await supabase
     .from('daily_inputs')
