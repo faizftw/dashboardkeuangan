@@ -37,11 +37,11 @@ export default function LoginPage() {
       <Card className="w-full max-w-md shadow-xl border-t-4 border-t-indigo-600 bg-white/90 backdrop-blur-sm z-10">
         <CardHeader className="space-y-4 text-center">
           <div className="mx-auto bg-indigo-100 w-16 h-16 rounded-2xl flex items-center justify-center transform rotate-3 shadow-sm">
-            <span className="text-2xl font-bold text-indigo-700">TK</span>
+            <span className="text-2xl font-bold text-indigo-700">DT</span>
           </div>
           <div className="space-y-1">
             <CardTitle className="text-2xl font-bold tracking-tight text-slate-900">
-              Target Keuangan
+              Dashboard Target
             </CardTitle>
             <CardDescription className="text-slate-500 font-medium">
               Dashboard Kinerja Bisnis

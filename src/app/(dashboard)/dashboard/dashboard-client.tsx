@@ -10,7 +10,6 @@ import {
   YAxis,
   CartesianGrid,
   Tooltip,
-  Legend,
   ResponsiveContainer,
   Cell,
   AreaChart,
@@ -37,7 +36,7 @@ type AggregatedProgram = Program & {
 }
 
 // Custom Tooltip component for Program Bar Chart
-const CustomTooltip = ({ active, payload, label }: any) => {
+const CustomTooltip = ({ active, payload, label }: { active?: boolean; payload?: any[]; label?: string }) => {
   if (active && payload && payload.length) {
     const data = payload[0].payload;
     return (
@@ -70,7 +69,7 @@ const CustomTooltip = ({ active, payload, label }: any) => {
 };
 
 // Tooltip for Daily Trend Chart
-const CustomTrendTooltip = ({ active, payload, label }: any) => {
+const CustomTrendTooltip = ({ active, payload, label }: { active?: boolean; payload?: any[]; label?: string }) => {
   if (active && payload && payload.length) {
     return (
       <div className="bg-white p-4 rounded-xl shadow-xl border border-slate-200 min-w-[200px] z-[9999]">
@@ -91,7 +90,7 @@ const CustomTrendTooltip = ({ active, payload, label }: any) => {
   return null;
 };
 
-export function DashboardClient({ programs, dailyInputs, activePeriod, isAdmin }: DashboardClientProps) {
+export function DashboardClient({ programs, dailyInputs, activePeriod }: DashboardClientProps) {
   const [filterType, setFilterType] = useState<string>('all')
   const [filterStatus, setFilterStatus] = useState<string>('all')
 
@@ -225,15 +224,14 @@ export function DashboardClient({ programs, dailyInputs, activePeriod, isAdmin }
           <p className="text-sm font-semibold text-slate-500 uppercase tracking-widest mb-1 relative z-10">Total Pencapaian (Rp)</p>
           <h3 className="text-2xl font-bold text-slate-800 relative z-10 mb-2">{formatRupiah(totalAchievementRp)}</h3>
         </div>
-        <div className={`rounded-xl shadow-sm p-6 flex flex-col justify-center relative overflow-hidden ${
-          globalPercentage >= 100 ? 'bg-gradient-to-br from-emerald-500 to-emerald-600 text-white border border-emerald-600' :
-          globalPercentage >= 50 ? 'bg-gradient-to-br from-amber-500 to-amber-600 text-white border border-amber-600' :
-          'bg-gradient-to-br from-rose-500 to-rose-600 text-white border border-rose-600'
-        }`}>
-          <div className="absolute right-0 top-0 w-32 h-32 bg-white/10 rounded-full blur-xl -mr-10 -mt-10 z-0"></div>
-          <p className="text-xs font-bold uppercase tracking-widest mb-1 text-white/80 relative z-10">Agregat Kinerja Kuantitatif</p>
-          <h3 className="text-4xl font-extrabold relative z-10">{globalPercentage.toFixed(1)}%</h3>
-        </div>
+       <div className={`rounded-xl shadow-sm p-6 flex flex-col justify-center relative overflow-hidden bg-white ${
+  globalPercentage >= 100 ? 'border-2 border-emerald-500 text-emerald-600' :
+  globalPercentage >= 50 ? 'border-2 border-amber-500 text-amber-600' :
+  'border-2 border-rose-500 text-rose-600'
+}`}>
+  <p className="text-xs font-bold uppercase tracking-widest mb-1 opacity-70">Agregat Kinerja Kuantitatif</p>
+  <h3 className="text-4xl font-extrabold">{globalPercentage.toFixed(1)}%</h3>
+</div>
       </div>
 
       {/* 2. Global Motivational Message */}
@@ -447,7 +445,7 @@ export function DashboardClient({ programs, dailyInputs, activePeriod, isAdmin }
                        <div className="pt-2 mt-2 border-t border-slate-100/80">
                          <h4 className="text-[10px] uppercase font-bold text-purple-600 tracking-wider mb-2">Milestone Kualitatif</h4>
                          <p className="text-xs text-slate-600 mb-3 bg-purple-50 p-2 rounded italic border border-purple-100">
-                           "{program.qualitative_description}"
+                           &quot;{program.qualitative_description}&quot;
                          </p>
                          <div className="flex gap-2">
                            {['not_started', 'in_progress', 'completed'].map((state, idx) => (
