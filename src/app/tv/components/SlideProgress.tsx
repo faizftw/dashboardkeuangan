@@ -35,9 +35,9 @@ export function SlideProgress({ currentSlide, totalSlides, progress }: SlideProg
       </div>
       
       {/* Slide Number Label */}
-      <div className="absolute bottom-6 left-8 text-xs font-bold text-slate-100 uppercase tracking-widest px-4 py-2 bg-slate-900/50 backdrop-blur-md rounded-full border border-slate-700/50">
+      {/* <div className="absolute bottom-6 left-8 text-xs font-bold text-slate-100 uppercase tracking-widest px-4 py-2 bg-slate-900/50 backdrop-blur-md rounded-full border border-slate-700/50">
         Slide <span className="text-indigo-400 font-extrabold">{currentSlide + 1}</span> / {totalSlides}
-      </div>
+      </div> */}
     </div>
   )
 }

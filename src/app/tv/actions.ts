@@ -13,6 +13,7 @@ export interface ProgramPerformance extends Program {
   percentageRp: number
   percentageUser: number
   status: 'TERCAPAI' | 'MENUJU TARGET' | 'PERLU PERHATIAN'
+  latestQualitativeStatus: Database['public']['Enums']['qualitative_status'] | null
 }
 
 export interface PICPerformance {
@@ -108,13 +109,18 @@ export async function getTVDashboardData(): Promise<TVDashboardData> {
     if (percentageRp >= 100) status = 'TERCAPAI'
     else if (percentageRp >= 50) status = 'MENUJU TARGET'
 
+    const latestInputWithStatus = [...progInputs]
+      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+      .find(i => i.qualitative_status !== null)
+
     return {
       ...prog,
       achievementRp,
       achievementUser,
       percentageRp,
       percentageUser,
-      status
+      status,
+      latestQualitativeStatus: latestInputWithStatus?.qualitative_status || null
     }
   })
 
