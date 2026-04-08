@@ -6,9 +6,11 @@ import { Slide1Total } from './components/Slide1Total'
 import { Slide2Programs } from './components/Slide2Programs'
 import { Slide3PICs } from './components/Slide3PICs'
 import { SlideProgress } from './components/SlideProgress'
+import { SlideProgramDetail } from './components/SlideProgramDetail'
+import { SlidePICDetail } from './components/SlidePICDetail'
 import { cn } from '@/lib/utils'
 
-const SLIDE_DURATION = 15000 // 15 seconds
+const SLIDE_DURATION = 10000 // 10 seconds
 const REFRESH_INTERVAL = 60000 // 60 seconds
 const PROGRESS_UPDATE_INTERVAL = 100 // 100ms for smooth progress bar
 
@@ -17,7 +19,12 @@ export default function TVDashboardPage() {
   const [activeSlide, setActiveSlide] = useState(0)
   const [progress, setProgress] = useState(0)
   const [isTransitioning, setIsTransitioning] = useState(false)
-  const totalSlides = 3
+
+  // Dynamic slides calculation
+  const totalSummarySlides = 3
+  const totalProgramSlides = data?.programs?.length || 0
+  const totalPICSlides = data?.pics?.length || 0
+  const totalSlides = totalSummarySlides + totalProgramSlides + totalPICSlides
 
   const fetchData = useCallback(async () => {
     try {
@@ -37,6 +44,8 @@ export default function TVDashboardPage() {
 
   // Slide Rotation & Progress Logic
   useEffect(() => {
+    if (!data) return
+
     const startTime = Date.now()
     
     const progressTimer = setInterval(() => {
@@ -57,7 +66,7 @@ export default function TVDashboardPage() {
     }, PROGRESS_UPDATE_INTERVAL)
 
     return () => clearInterval(progressTimer)
-  }, [activeSlide])
+  }, [activeSlide, data, totalSlides])
 
   if (!data) {
     return (
@@ -71,12 +80,31 @@ export default function TVDashboardPage() {
   }
 
   const renderSlide = () => {
-    switch (activeSlide) {
-      case 0: return <Slide1Total data={data} />
-      case 1: return <Slide2Programs data={data} />
-      case 2: return <Slide3PICs data={data} />
-      default: return null
+    // 0: Global Summary
+    // 1: All Programs Grid
+    // 2: All PICs Grid
+    // 3..3+P-1: Individual Program Details
+    // 3+P..3+P+PIC-1: Individual PIC Details
+
+    if (activeSlide === 0) return <Slide1Total data={data} />
+    if (activeSlide === 1) return <Slide2Programs data={data} />
+    if (activeSlide === 2) return <Slide3PICs data={data} />
+
+    const programIdx = activeSlide - totalSummarySlides
+    if (programIdx < totalProgramSlides) {
+      const program = data.programs[programIdx]
+      const programInputs = (data.rawInputs || []).filter(i => i.program_id === program.id)
+      return <SlideProgramDetail program={program} inputs={programInputs} />
     }
+
+    const picIdx = activeSlide - totalSummarySlides - totalProgramSlides
+    if (picIdx < totalPICSlides) {
+      const pic = data.pics[picIdx]
+      const picPrograms = data.programs.filter(p => p.pic_name === pic.picName)
+      return <SlidePICDetail pic={pic} programs={picPrograms} />
+    }
+
+    return null
   }
 
   return (

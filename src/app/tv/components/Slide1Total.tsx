@@ -40,7 +40,7 @@ export function Slide1Total({ data }: Slide1Props) {
             <div className="p-5 bg-indigo-500/10 rounded-2xl text-indigo-400">
               <Target size={48} />
             </div>
-            <span className="text-2xl font-bold text-slate-400 uppercase tracking-widest">Total Target (Rp)</span>
+            <span className="text-2xl font-bold text-slate-200 uppercase tracking-widest">Total Target (Rp)</span>
           </div>
           <div className="text-7xl font-black text-slate-200">{formatRupiah(aggregate.totalTargetRp)}</div>
         </div>
@@ -52,7 +52,7 @@ export function Slide1Total({ data }: Slide1Props) {
             <div className="p-5 bg-emerald-500/10 rounded-2xl text-emerald-400">
               <TrendingUp size={48} />
             </div>
-            <span className="text-2xl font-bold text-slate-400 uppercase tracking-widest">Total Pencapaian (Rp)</span>
+            <span className="text-2xl font-bold text-slate-200 uppercase tracking-widest">Total Pencapaian (Rp)</span>
           </div>
           <div className="text-7xl font-black text-emerald-400">{formatRupiah(aggregate.totalAchievementRp)}</div>
         </div>
@@ -64,7 +64,7 @@ export function Slide1Total({ data }: Slide1Props) {
             <div className="p-5 bg-blue-500/10 rounded-2xl text-blue-400">
               <Users size={48} />
             </div>
-            <span className="text-2xl font-bold text-slate-400 uppercase tracking-widest">Total Target User</span>
+            <span className="text-2xl font-bold text-slate-200 uppercase tracking-widest">Total Target User</span>
           </div>
           <div className="text-7xl font-black text-slate-200">{aggregate.totalTargetUser.toLocaleString()}</div>
         </div>
@@ -76,7 +76,7 @@ export function Slide1Total({ data }: Slide1Props) {
             <div className="p-5 bg-cyan-500/10 rounded-2xl text-cyan-400">
               <Users size={48} />
             </div>
-            <span className="text-2xl font-bold text-slate-400 uppercase tracking-widest">Total Pencapaian User</span>
+            <span className="text-2xl font-bold text-slate-200 uppercase tracking-widest">Total Pencapaian User</span>
           </div>
           <div className="text-7xl font-black text-cyan-400">{aggregate.totalAchievementUser.toLocaleString()}</div>
         </div>
@@ -88,7 +88,7 @@ export function Slide1Total({ data }: Slide1Props) {
           {/* Progress Rp */}
           <div className="space-y-3">
             <div className="flex justify-between items-end">
-               <span className="text-xl font-bold text-slate-400 uppercase tracking-widest">Akumulasi Kinerja (Rp)</span>
+               <span className="text-xl font-bold text-slate-200 uppercase tracking-widest">Akumulasi Kinerja (Rp)</span>
                <span className="text-4xl font-black text-indigo-400">{aggregate.percentageRp.toFixed(1)}%</span>
             </div>
             <div className="h-10 bg-slate-900 rounded-2xl border border-slate-800 p-1.5 overflow-hidden">
@@ -102,7 +102,7 @@ export function Slide1Total({ data }: Slide1Props) {
           {/* Progress User */}
           <div className="space-y-3">
             <div className="flex justify-between items-end">
-               <span className="text-xl font-bold text-slate-400 uppercase tracking-widest">Akumulasi Kinerja (User)</span>
+               <span className="text-xl font-bold text-slate-200 uppercase tracking-widest">Akumulasi Kinerja (User)</span>
                <span className="text-4xl font-black text-cyan-400">{aggregate.percentageUser.toFixed(1)}%</span>
             </div>
             <div className="h-10 bg-slate-900 rounded-2xl border border-slate-800 p-1.5 overflow-hidden">
@@ -119,21 +119,21 @@ export function Slide1Total({ data }: Slide1Props) {
            <div className="flex items-center justify-between">
               <div className="flex items-center gap-4">
                  <div className="w-4 h-4 rounded-full bg-emerald-500 shadow-[0_0_10px_rgba(16,185,129,0.5)]" />
-                 <span className="text-lg font-bold text-slate-300 uppercase">Tercapai</span>
+                 <span className="text-lg font-bold text-slate-100 uppercase">Tercapai</span>
               </div>
               <span className="text-3xl font-black text-emerald-400">{aggregate.tercapai}</span>
            </div>
            <div className="flex items-center justify-between">
               <div className="flex items-center gap-4">
                  <div className="w-4 h-4 rounded-full bg-amber-500 shadow-[0_0_10px_rgba(245,158,11,0.5)]" />
-                 <span className="text-lg font-bold text-slate-300 uppercase">Menuju Target</span>
+                 <span className="text-lg font-bold text-slate-100 uppercase">Menuju Target</span>
               </div>
               <span className="text-3xl font-black text-amber-400">{aggregate.menujuTarget}</span>
            </div>
            <div className="flex items-center justify-between">
               <div className="flex items-center gap-4">
                  <div className="w-4 h-4 rounded-full bg-rose-500 shadow-[0_0_10px_rgba(244,63,94,0.5)]" />
-                 <span className="text-lg font-bold text-slate-300 uppercase">Perlu Perhatian</span>
+                 <span className="text-lg font-bold text-slate-100 uppercase">Perlu Perhatian</span>
               </div>
               <span className="text-3xl font-black text-rose-400">{aggregate.perluPerhatian}</span>
            </div>

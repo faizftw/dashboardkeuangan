@@ -41,6 +41,7 @@ export interface TVDashboardData {
   }
   programs: ProgramPerformance[]
   pics: PICPerformance[]
+  rawInputs: DailyInput[]
 }
 
 export async function getTVDashboardData(): Promise<TVDashboardData> {
@@ -68,7 +69,8 @@ export async function getTVDashboardData(): Promise<TVDashboardData> {
         perluPerhatian: 0
       },
       programs: [],
-      pics: []
+      pics: [],
+      rawInputs: []
     }
   }
 
@@ -173,6 +175,7 @@ export async function getTVDashboardData(): Promise<TVDashboardData> {
       perluPerhatian: programPerformance.filter(p => p.status === 'PERLU PERHATIAN').length
     },
     programs: programPerformance,
-    pics: picPerformance
+    pics: picPerformance,
+    rawInputs: inputs
   }
 }

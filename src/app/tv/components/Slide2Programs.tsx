@@ -50,8 +50,8 @@ function ProgramCard({ program }: { program: ProgramPerformance }) {
           <h3 className="text-3xl font-extrabold text-slate-100 truncate mb-1 leading-tight">
              {program.name}
           </h3>
-          <p className="text-lg font-bold text-slate-500 uppercase tracking-widest">
-             PIC: <span className="text-slate-300">{program.pic_name}</span>
+          <p className="text-lg font-bold text-slate-200 uppercase tracking-widest">
+             PIC: <span className="text-slate-100 font-black">{program.pic_name}</span>
           </p>
         </div>
         <div className={cn(
@@ -66,10 +66,10 @@ function ProgramCard({ program }: { program: ProgramPerformance }) {
         {/* Rp Metric */}
         <div className="space-y-2">
            <div className="flex justify-between items-end">
-              <span className="text-sm font-bold text-slate-500 uppercase tracking-widest">Pencapaian Rp</span>
+              <span className="text-sm font-bold text-slate-200 uppercase tracking-widest">Pencapaian Rp</span>
               <div className="flex items-baseline gap-2">
-                 <span className="text-2xl font-black text-slate-200">{formatRupiah(program.achievementRp)}</span>
-                 <span className="text-xs font-bold text-slate-500">/ {formatRupiah(program.monthly_target_rp || 0)}</span>
+                 <span className="text-2xl font-black text-slate-100">{formatRupiah(program.achievementRp)}</span>
+                 <span className="text-xs font-bold text-slate-300">/ {formatRupiah(program.monthly_target_rp || 0)}</span>
               </div>
            </div>
            <div className="h-4 bg-slate-950 rounded-full overflow-hidden border border-slate-800">
@@ -83,10 +83,10 @@ function ProgramCard({ program }: { program: ProgramPerformance }) {
         {/* User Metric */}
         <div className="space-y-2">
            <div className="flex justify-between items-end">
-              <span className="text-sm font-bold text-slate-500 uppercase tracking-widest">Pencapaian User</span>
+              <span className="text-sm font-bold text-slate-200 uppercase tracking-widest">Pencapaian User</span>
               <div className="flex items-baseline gap-2">
-                 <span className="text-2xl font-black text-slate-200">{program.achievementUser.toLocaleString()}</span>
-                 <span className="text-xs font-bold text-slate-500">/ {(program.monthly_target_user || 0).toLocaleString()}</span>
+                 <span className="text-2xl font-black text-slate-100">{program.achievementUser.toLocaleString()}</span>
+                 <span className="text-xs font-bold text-slate-300">/ {(program.monthly_target_user || 0).toLocaleString()}</span>
               </div>
            </div>
            <div className="h-4 bg-slate-950 rounded-full overflow-hidden border border-slate-800">

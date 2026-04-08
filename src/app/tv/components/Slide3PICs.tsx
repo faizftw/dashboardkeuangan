@@ -66,12 +66,12 @@ function PICCard({ pic }: { pic: PICPerformance }) {
         {/* Rp Metric */}
         <div className="space-y-2">
            <div className="flex justify-between items-end">
-              <span className="text-xs font-bold text-slate-500 uppercase tracking-widest">Tanggung Jawab Rp</span>
+              <span className="text-xs font-bold text-slate-200 uppercase tracking-widest">Tanggung Jawab Rp</span>
               <span className="text-3xl font-black text-indigo-400">{pic.percentageRp.toFixed(1)}%</span>
            </div>
            <div className="flex items-baseline gap-2 mb-2">
-              <span className="text-xl font-bold text-slate-200">{formatRupiah(pic.totalAchievementRp)}</span>
-              <span className="text-[10px] font-bold text-slate-500">of {formatRupiah(pic.totalTargetRp)}</span>
+              <span className="text-xl font-bold text-slate-100">{formatRupiah(pic.totalAchievementRp)}</span>
+              <span className="text-[10px] font-bold text-slate-300">of {formatRupiah(pic.totalTargetRp)}</span>
            </div>
            <div className="h-4 bg-slate-950 rounded-full overflow-hidden border border-slate-800">
              <div 
@@ -84,14 +84,14 @@ function PICCard({ pic }: { pic: PICPerformance }) {
         {/* User Metric */}
         <div className="space-y-2">
            <div className="flex justify-between items-end">
-              <span className="text-xs font-bold text-slate-500 uppercase tracking-widest">Tanggung Jawab User</span>
+              <span className="text-xs font-bold text-slate-200 uppercase tracking-widest">Tanggung Jawab User</span>
               <span className="text-xl font-black text-cyan-400">
                 {pic.totalTargetUser > 0 ? ((pic.totalAchievementUser / pic.totalTargetUser) * 100).toFixed(0) : 0}%
               </span>
            </div>
            <div className="flex items-baseline gap-2 mb-2">
-              <span className="text-xl font-bold text-slate-200">{pic.totalAchievementUser.toLocaleString()}</span>
-              <span className="text-[10px] font-bold text-slate-500">of {pic.totalTargetUser.toLocaleString()}</span>
+              <span className="text-xl font-bold text-slate-100">{pic.totalAchievementUser.toLocaleString()}</span>
+              <span className="text-[10px] font-bold text-slate-300">of {pic.totalTargetUser.toLocaleString()}</span>
            </div>
            <div className="h-4 bg-slate-950 rounded-full overflow-hidden border border-slate-800">
              <div 
