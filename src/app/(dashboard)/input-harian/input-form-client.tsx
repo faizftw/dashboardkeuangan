@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { submitDailyInput, updateDailyInput, deleteDailyInput } from './actions'
 import { Database } from '@/types/database'
 import { formatRupiah } from '@/lib/utils'
+import { toast } from 'sonner'
 
 type Program = Database['public']['Tables']['programs']['Row']
 type DailyInput = Database['public']['Tables']['daily_inputs']['Row'] & {
@@ -40,7 +41,11 @@ export function InputFormClient({ programs, pastInputs, isAdmin }: { programs: P
     if (!confirm('Apakah Anda yakin ingin menghapus data ini?')) return
     setIsLoading(true)
     const res = await deleteDailyInput(id)
-    if ('error' in res && res.error) alert(res.error)
+    if ('error' in res && res.error) {
+      toast.error(res.error)
+    } else {
+      toast.success('Data berhasil dihapus!')
+    }
     setIsLoading(false)
   }
 
@@ -81,8 +86,10 @@ export function InputFormClient({ programs, pastInputs, isAdmin }: { programs: P
     
     if ('error' in res && res.error) {
       setError(res.error)
+      toast.error(res.error)
       setIsLoading(false)
     } else {
+      toast.success(editingId ? 'Data berhasil diperbarui!' : 'Pencapaian harian berhasil dicatat!')
       setIsModalOpen(false)
       setIsLoading(false)
     }

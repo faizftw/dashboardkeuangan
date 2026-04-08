@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { createProgram, toggleProgramStatus } from './actions'
 import { Database } from '@/types/database'
 import { formatRupiah } from '@/lib/utils'
+import { toast } from 'sonner'
 
 type Program = Database['public']['Tables']['programs']['Row']
 type TargetType = Database['public']['Enums']['target_type']
@@ -50,7 +51,7 @@ export function ProgramClient({
     setMonthlyRp(program.monthly_target_rp ? program.monthly_target_rp.toString() : '')
     setMonthlyUser(program.monthly_target_user ? program.monthly_target_user.toString() : '')
     
-    // Check if daily target was manually overridden (if it's not equal to automatic calc approx)
+    // Check if daily target was manually overridden
     if (program.daily_target_rp && program.monthly_target_rp) {
       const autoCalc = Math.floor(program.monthly_target_rp / workDays)
       setIsManualDaily(program.daily_target_rp !== autoCalc)
@@ -62,13 +63,21 @@ export function ProgramClient({
   }
 
   const handleDelete = async (id: string) => {
-    import('./actions').then(async ({ deleteProgram }) => {
-      if (!confirm('Apakah Anda yakin ingin menghapus program ini secara permanen?')) return
-      setIsLoading(true)
+    if (!confirm('Apakah Anda yakin ingin menghapus program ini secara permanen?')) return
+    setIsLoading(true)
+    try {
+      const { deleteProgram } = await import('./actions')
       const res = await deleteProgram(id)
-      if ('error' in res && res.error) alert(res.error)
+      if ('error' in res && res.error) {
+        toast.error(res.error)
+      } else {
+        toast.success('Program berhasil dihapus!')
+      }
+    } catch (err) {
+      toast.error('Terjadi kesalahan saat menghapus program')
+    } finally {
       setIsLoading(false)
-    })
+    }
   }
 
   async function handleSubmitProgram(e: React.FormEvent<HTMLFormElement>) {
@@ -77,12 +86,10 @@ export function ProgramClient({
     setError(null)
     
     const formData = new FormData(e.currentTarget)
-    
     const submittedPicId = formData.get('pic_id') as string
     const selectedProfile = picProfiles?.find(p => p.id === submittedPicId)
 
-    // Base data
-    const payload: Parameters<typeof createProgram>[0] = {
+    const payload: any = {
       name: formData.get('name') as string,
       pic_id: selectedProfile ? selectedProfile.id : null,
       pic_name: selectedProfile ? selectedProfile.name : '',
@@ -90,7 +97,6 @@ export function ProgramClient({
       target_type: selectedTargetType,
     }
 
-    // Quantitative payload (add if quantitative or hybrid)
     if (selectedTargetType === 'quantitative' || selectedTargetType === 'hybrid') {
       const rp = formData.get('monthly_target_rp')
       const user = formData.get('monthly_target_user')
@@ -103,7 +109,6 @@ export function ProgramClient({
       if (dUser) payload.daily_target_user = Number(dUser)
     }
 
-    // Qualitative payload (add if qualitative or hybrid)
     if (selectedTargetType === 'qualitative' || selectedTargetType === 'hybrid') {
       const desc = formData.get('qualitative_description')
       if (desc) payload.qualitative_description = desc as string
@@ -119,11 +124,12 @@ export function ProgramClient({
     
     if ('error' in res && res.error) {
       setError(res.error)
+      toast.error(res.error)
       setIsLoading(false)
     } else {
+      toast.success(editingProgramId ? 'Program berhasil diperbarui!' : 'Program baru berhasil ditambahkan!')
       setIsModalOpen(false)
       setIsLoading(false)
-      // Reset form default
       setSelectedTargetType('quantitative')
       setMonthlyRp('')
       setMonthlyUser('')
@@ -136,7 +142,11 @@ export function ProgramClient({
     if (!isAdmin) return
     setIsLoading(true)
     const res = await toggleProgramStatus(id, currentStatus)
-    if ('error' in res && res.error) alert(res.error)
+    if ('error' in res && res.error) {
+      toast.error(res.error)
+    } else {
+      toast.success(currentStatus ? 'Program dinonaktifkan' : 'Program diaktifkan')
+    }
     setIsLoading(false)
   }
 
@@ -279,7 +289,7 @@ export function ProgramClient({
         </table>
       </div>
 
-      {/* Tailwind Modal for Add Program */}
+      {/* Modal for Add/Edit Program */}
       {isModalOpen && isAdmin && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm overflow-y-auto">
           <div className="bg-white rounded-xl shadow-xl w-full max-w-lg mt-10 mb-10 shrink-0 transform transition-all">
@@ -329,7 +339,7 @@ export function ProgramClient({
                     <option value="" disabled>Belum ada user ber-role PIC terdaftar</option>
                   )}
                 </select>
-                <p className="text-[10px] text-slate-500">Pilih dari daftar User yang memiliki Role sebagai "PIC". (Nama PIC dan No WA akan disalin otomatis).</p>
+                <p className="text-[10px] text-slate-500">Pilih dari daftar User yang memiliki Role sebagai "PIC".</p>
               </div>
 
               <div className="border-t border-slate-100 pt-4 mt-2">
@@ -352,7 +362,6 @@ export function ProgramClient({
                 </div>
               </div>
 
-              {/* Conditional Fields based on Target Type */}
               <div className="bg-slate-50 p-4 rounded-lg border border-slate-100 space-y-4">
                 {(selectedTargetType === 'quantitative' || selectedTargetType === 'hybrid') && (
                   <>
@@ -399,7 +408,6 @@ export function ProgramClient({
                                 <span>Rp {calcDailyRp.toLocaleString('id-ID')}</span>
                                 <span>{calcDailyUser} User</span>
                              </div>
-                             {/* Hidden inputs to pass data */}
                              <input type="hidden" name="daily_target_rp" value={calcDailyRp} />
                              <input type="hidden" name="daily_target_user" value={calcDailyUser} />
                           </div>
