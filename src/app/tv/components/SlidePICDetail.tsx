@@ -10,7 +10,8 @@ import {
   CartesianGrid, 
   Tooltip, 
   ResponsiveContainer,
-  Cell
+  Cell,
+  LabelList
 } from 'recharts'
 
 interface SlidePICDetailProps {
@@ -149,6 +150,21 @@ export function SlidePICDetail({ pic, programs }: SlidePICDetailProps) {
                       barSize={40}
                       animationDuration={1500}
                     >
+                       <LabelList 
+                          dataKey="percentage" 
+                          position="right" 
+                          content={(props: any) => {
+                             const { x, y, width, value } = props;
+                             return (
+                                <text 
+                                   x={x + width + 10} y={y + 20} fill="#f1f5f9" fontSize={16} fontWeight={900} textAnchor="start" dominantBaseline="middle"
+                                   style={{ filter: 'drop-shadow(0px 1px 2px rgba(0,0,0,1))' }}
+                                >
+                                   {value}%
+                                </text>
+                             );
+                          }}
+                       />
                        {chartData.map((entry, index) => (
                           <Cell key={`cell-${index}`} fill={entry.color} />
                        ))}

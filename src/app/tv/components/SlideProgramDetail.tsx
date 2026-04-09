@@ -10,7 +10,8 @@ import {
   CartesianGrid, 
   Tooltip, 
   ResponsiveContainer,
-  ReferenceLine
+  ReferenceLine,
+  LabelList
 } from 'recharts'
 
 interface SlideProgramDetailProps {
@@ -247,7 +248,25 @@ export function SlideProgramDetail({ program, inputs }: SlideProgramDetailProps)
                            fillOpacity={1} 
                            fill="url(#colorAch)" 
                            animationDuration={2000}
-                        />
+                        >
+                           <LabelList 
+                              dataKey="pencapaian" 
+                              position="top" 
+                              offset={15}
+                              content={(props: any) => {
+                                 const { x, y, value } = props;
+                                 if (!value || value === 0) return null;
+                                 return (
+                                    <text 
+                                       x={x} y={y} dy={-10} fill="#f1f5f9" fontSize={14} fontWeight={900} textAnchor="middle"
+                                       style={{ filter: 'drop-shadow(0px 1px 3px rgba(0,0,0,1))' }}
+                                    >
+                                       {value >= 1000000 ? (value / 1000000).toFixed(1) + 'jt' : value.toLocaleString()}
+                                    </text>
+                                 );
+                              }}
+                           />
+                        </Area>
                         <Area 
                            type="monotone" 
                            dataKey="targetIdeal" 
@@ -273,51 +292,109 @@ export function SlideProgramDetail({ program, inputs }: SlideProgramDetailProps)
         {isHybrid && (
           <>
             <div className="col-span-4 space-y-6">
-               <div className="bg-slate-900/40 rounded-3xl p-8 border border-slate-800/80 shadow-xl overflow-hidden">
-                  <div className="text-sm font-bold text-slate-200 uppercase tracking-widest mb-4">Milestone Hybrid</div>
-                  <div className={cn(
-                    "p-6 rounded-2xl border mb-6 text-center",
-                    milestone.color
-                  )}>
-                    <div className="text-sm font-bold uppercase tracking-widest mb-1">Status Saat Ini</div>
-                    <div className="text-2xl font-black">{milestone.label}</div>
+               <div className="bg-slate-900/40 rounded-3xl p-8 border border-slate-800/80 shadow-xl overflow-hidden min-h-[300px] flex flex-col justify-between">
+                  <div>
+                    <div className="text-sm font-bold text-slate-200 uppercase tracking-widest mb-4">Milestone Hybrid</div>
+                    <div className={cn(
+                      "p-6 rounded-2xl border mb-6 text-center shadow-lg",
+                      milestone.color
+                    )}>
+                      <div className="text-sm font-bold uppercase tracking-widest mb-1">Status Saat Ini</div>
+                      <div className="text-3xl font-black">{milestone.label}</div>
+                    </div>
                   </div>
-                  <div className="text-lg text-slate-300 italic leading-relaxed bg-slate-950/30 p-4 rounded-xl border border-slate-800/50">
+                  <div className="text-xl text-slate-100 italic leading-relaxed bg-indigo-500/10 p-6 rounded-2xl border border-indigo-500/20">
                     &quot;{program.qualitative_description || 'No description'}&quot;
                   </div>
                </div>
                
-               <div className="bg-slate-900/40 rounded-3xl p-8 border border-slate-800/80 shadow-xl overflow-hidden">
-                  <div className="text-sm font-bold text-slate-200 uppercase tracking-widest mb-4">Metrik Finansial</div>
-                  <div className="grid grid-cols-2 gap-4">
-                     <div>
-                        <div className="text-[10px] font-bold text-slate-400 uppercase mb-1">Capaian Rp</div>
-                        <div className="text-xl font-black text-emerald-400">{formatRupiah(program.achievementRp)}</div>
-                     </div>
-                     <div>
-                        <div className="text-[10px] font-bold text-slate-400 uppercase mb-1">Capaian User</div>
-                        <div className="text-xl font-black text-cyan-400">{program.achievementUser}</div>
-                     </div>
+               <div className="bg-slate-900/40 rounded-3xl p-8 border border-slate-800/80 shadow-xl overflow-hidden space-y-8">
+                  <div className="text-sm font-bold text-slate-200 uppercase tracking-widest">Metrik Finansial (Hybrid)</div>
+                  {/* Rp Metric */}
+                  <div className="space-y-3">
+                    <div className="flex justify-between items-end">
+                      <span className="text-xs font-bold text-indigo-400 uppercase tracking-widest">Capaian Rp</span>
+                      <span className="text-2xl font-black text-emerald-400">{formatRupiah(program.achievementRp)}</span>
+                    </div>
+                    <div className="h-3 bg-slate-950 rounded-full overflow-hidden border border-slate-800">
+                      <div 
+                        className="h-full bg-emerald-500 rounded-full transition-all duration-1000 shadow-[0_0_10px_rgba(16,185,129,0.5)]"
+                        style={{ width: `${Math.min(program.percentageRp, 100)}%` }}
+                      />
+                    </div>
+                  </div>
+                  {/* User Metric */}
+                  <div className="space-y-3">
+                    <div className="flex justify-between items-end">
+                      <span className="text-xs font-bold text-indigo-400 uppercase tracking-widest">Capaian User</span>
+                      <span className="text-2xl font-black text-cyan-400">{program.achievementUser.toLocaleString()}</span>
+                    </div>
+                    <div className="h-3 bg-slate-950 rounded-full overflow-hidden border border-slate-800">
+                      <div 
+                        className="h-full bg-cyan-500 rounded-full transition-all duration-1000 shadow-[0_0_10px_rgba(6,182,212,0.5)]"
+                        style={{ width: `${Math.min(program.percentageUser, 100)}%` }}
+                      />
+                    </div>
                   </div>
                </div>
             </div>
 
-            <div className="col-span-8 bg-slate-900/40 rounded-3xl p-8 border border-slate-800/80 shadow-xl flex flex-col">
-               <div className="flex justify-between items-center mb-8">
-                  <h3 className="text-2xl font-black text-slate-100 uppercase tracking-tighter">Performa Program Hybrid</h3>
-               </div>
-               <div className="flex-grow w-full">
-                  <ResponsiveContainer width="100%" height="100%">
-                     <AreaChart data={chartDataWithTarget} margin={{ top: 10, right: 10, left: 10, bottom: 0 }}>
-                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#1e293b" />
-                        <XAxis dataKey="displayDate" hide />
-                        <YAxis hide domain={[0, 'auto']} />
-                        <Area type="monotone" dataKey="pencapaian" stroke="#6366f1" strokeWidth={3} fillOpacity={0.2} fill="#6366f1" />
-                        <Area type="monotone" dataKey="targetIdeal" stroke="#475569" strokeWidth={1} strokeDasharray="5 5" fill="transparent" />
-                     </AreaChart>
-                  </ResponsiveContainer>
-               </div>
-            </div>
+                <div className="flex-grow w-full">
+                   <ResponsiveContainer width="100%" height="100%">
+                      <AreaChart data={chartDataWithTarget} margin={{ top: 20, right: 10, left: 10, bottom: 0 }}>
+                         <defs>
+                            <linearGradient id="colorAchHybrid" x1="0" y1="0" x2="0" y2="1">
+                               <stop offset="5%" stopColor="#6366f1" stopOpacity={0.3}/>
+                               <stop offset="95%" stopColor="#6366f1" stopOpacity={0}/>
+                            </linearGradient>
+                         </defs>
+                         <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#1e293b" />
+                         <XAxis dataKey="displayDate" axisLine={false} tickLine={false} tick={{ fill: '#64748b', fontSize: 12, fontWeight: 700 }} />
+                         <YAxis hide domain={[0, (dataMax: number) => Math.max(dataMax, program.monthly_target_rp || 0)]} />
+                         <Area 
+                            type="monotone" 
+                            dataKey="pencapaian" 
+                            stroke="#6366f1" 
+                            strokeWidth={4} 
+                            fillOpacity={1} 
+                            fill="url(#colorAchHybrid)"
+                            animationDuration={2000}
+                         >
+                            <LabelList 
+                               dataKey="pencapaian" 
+                               position="top" 
+                               offset={15}
+                               content={(props: any) => {
+                                  const { x, y, value } = props;
+                                  if (!value || value === 0) return null;
+                                  return (
+                                     <text 
+                                        x={x} y={y} dy={-10} fill="#f1f5f9" fontSize={14} fontWeight={900} textAnchor="middle"
+                                        style={{ filter: 'drop-shadow(0px 1px 3px rgba(0,0,0,1))' }}
+                                     >
+                                        {value >= 1000000 ? (value / 1000000).toFixed(1) + 'jt' : value.toLocaleString()}
+                                     </text>
+                                  );
+                               }}
+                            />
+                         </Area>
+                         <Area 
+                            type="monotone" 
+                            dataKey="targetIdeal" 
+                            stroke="#475569" 
+                            strokeWidth={2} 
+                            strokeDasharray="5 5" 
+                            fill="transparent" 
+                         />
+                         <ReferenceLine 
+                           y={program.monthly_target_rp || 0} 
+                           stroke="#ef4444" 
+                           strokeDasharray="3 3"
+                           label={{ position: 'right', value: 'TARGET', fill: '#ef4444', fontSize: 10, fontWeight: 900 }}
+                         />
+                      </AreaChart>
+                   </ResponsiveContainer>
+                </div>
           </>
         )}
       </div>
