@@ -56,7 +56,7 @@ export function SlidePICDetail({ pic, programs }: SlidePICDetailProps) {
         {/* Status Badge Big */}
         <div className="flex flex-col items-end">
            <div className={cn(
-             "px-10 py-4 rounded-3xl border-2 text-4xl font-black uppercase tracking-tighter shadow-2xl transition-all duration-1000",
+             "px-10 py-4 rounded-3xl border-2 text-4xl font-black text-slate-50 uppercase tracking-tighter shadow-2xl transition-all duration-1000",
              pic.status === 'TERCAPAI' ? 'text-emerald-400 border-emerald-500 bg-emerald-500/10' :
              pic.status === 'MENUJU TARGET' ? 'text-amber-400 border-amber-500 bg-amber-500/10' :
              'text-rose-400 border-rose-500 bg-rose-500/10'
@@ -71,22 +71,22 @@ export function SlidePICDetail({ pic, programs }: SlidePICDetailProps) {
         <div className="col-span-5 space-y-8">
            <div className="bg-slate-900/40 rounded-3xl p-10 border border-slate-800/80 shadow-2xl relative overflow-hidden group h-full flex flex-col justify-center">
               <div className="absolute top-0 right-0 p-8 opacity-10">
-                 <div className="text-[120px] font-black leading-none">{pic.percentageRp.toFixed(0)}%</div>
+                 <div className="text-[120px] font-black text-slate-50 leading-none">{pic.percentageRp.toFixed(0)}%</div>
               </div>
 
               <div className="space-y-10 relative z-10">
                  <div>
                     <h4 className="text-xl font-bold text-slate-200 uppercase tracking-widest mb-2">Total Tanggung Jawab (Rp)</h4>
-                    <p className="text-6xl font-black text-slate-100">{formatRupiah(pic.totalTargetRp)}</p>
+                    <p className="text-6xl font-black text-slate-50">{formatRupiah(pic.totalTargetRp)}</p>
                  </div>
                  <div>
                     <h4 className="text-xl font-bold text-slate-200 uppercase tracking-widest mb-2">Total Pencapaian (Rp)</h4>
-                    <p className="text-7xl font-black text-indigo-400">{formatRupiah(pic.totalAchievementRp)}</p>
+                    <p className="text-7xl font-black text-slate-50">{formatRupiah(pic.totalAchievementRp)}</p>
                  </div>
                  <div className="space-y-4">
                     <div className="flex justify-between items-end px-2">
                        <span className="text-xl font-bold text-slate-200 uppercase tracking-widest">Akumulasi Kinerja</span>
-                       <span className="text-4xl font-black text-slate-100">{pic.percentageRp.toFixed(1)}%</span>
+                       <span className="text-4xl font-black text-slate-50">{pic.percentageRp.toFixed(1)}%</span>
                     </div>
                     <div className="h-6 bg-slate-950 rounded-full overflow-hidden border border-slate-800 p-1">
                        <div 
@@ -103,7 +103,7 @@ export function SlidePICDetail({ pic, programs }: SlidePICDetailProps) {
                  <div className="space-y-4 pt-6 mt-6 border-t border-slate-800/50">
                     <div className="flex justify-between items-end px-2">
                        <span className="text-xl font-bold text-slate-200 uppercase tracking-widest">Capaian User</span>
-                       <span className="text-4xl font-black text-cyan-400">
+                       <span className="text-4xl font-black text-slate-50">
                           {pic.totalTargetUser > 0 ? ((pic.totalAchievementUser / pic.totalTargetUser) * 100).toFixed(0) : 0}%
                        </span>
                     </div>
@@ -125,7 +125,7 @@ export function SlidePICDetail({ pic, programs }: SlidePICDetailProps) {
         {/* Program Breakdown Chart */}
         <div className="col-span-7 bg-slate-900/40 rounded-3xl p-10 border border-slate-800/80 shadow-2xl flex flex-col">
            <div className="flex justify-between items-center mb-10">
-              <h4 className="text-2xl font-black text-slate-100 uppercase tracking-tighter">Performa per Program Dikelola (%)</h4>
+              <h4 className="text-2xl font-black text-slate-50 uppercase tracking-tighter">Performa per Program Dikelola (%)</h4>
            </div>
 
            <div className="flex-grow w-full">
@@ -144,7 +144,8 @@ export function SlidePICDetail({ pic, programs }: SlidePICDetailProps) {
                     <Tooltip 
                        cursor={{ fill: '#1e293b', opacity: 0.4 }}
                        contentStyle={{ backgroundColor: '#0f172a', borderColor: '#1e293b', borderRadius: '12px' }}
-                       itemStyle={{ fontWeight: 900 }}
+                       itemStyle={{ color: '#f8fafc', fontWeight: 900 }}
+                       labelStyle={{ color: '#94a3b8', marginBottom: '4px' }}
                     />
                     <Bar 
                       dataKey="percentage" 
@@ -163,7 +164,7 @@ export function SlidePICDetail({ pic, programs }: SlidePICDetailProps) {
                                 <g transform={`translate(${x},${y + 20})`}>
                                    <rect x={10} y={-14} width={50} height={28} fill="#1e293b" opacity={0.8} rx={6} stroke="#334155" strokeWidth={1} />
                                    <text 
-                                      x={35} y={0} fill="#f1f5f9" fontSize={16} fontWeight={900} textAnchor="middle" dominantBaseline="middle"
+                                      x={35} y={0} fill="#ffffff" fontSize={16} fontWeight={900} textAnchor="middle" dominantBaseline="middle"
                                       style={{ filter: 'drop-shadow(0px 1px 2px rgba(0,0,0,1))' }}
                                    >
                                       {value}%

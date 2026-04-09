@@ -7,11 +7,10 @@ import {
   Area, 
   XAxis, 
   YAxis, 
-  CartesianGrid, 
-  Tooltip, 
+  CartesianGrid,
+  Tooltip,
   ResponsiveContainer,
-  ReferenceLine,
-  LabelList
+  ReferenceLine
 } from 'recharts'
 
 interface SlideProgramDetailProps {
@@ -28,7 +27,7 @@ export function SlideProgramDetail({ program, inputs }: SlideProgramDetailProps)
   
   let cumulativeRp = 0
   const chartData = sortedInputs.map(input => {
-    cumulativeRp += (input.achievement_rp || 0)
+    cumulativeRp += Number(input.achievement_rp || 0)
     const dateObj = new Date(input.date)
     return {
       date: input.date,
@@ -219,7 +218,7 @@ export function SlideProgramDetail({ program, inputs }: SlideProgramDetailProps)
 
                <div className="flex-grow w-full">
                   <ResponsiveContainer width="100%" height="100%">
-                     <AreaChart data={chartDataWithTarget} margin={{ top: 10, right: 10, left: 10, bottom: 0 }}>
+                     <AreaChart data={chartDataWithTarget} margin={{ top: 45, right: 60, left: 10, bottom: 0 }}>
                         <defs>
                            <linearGradient id="colorAch" x1="0" y1="0" x2="0" y2="1">
                               <stop offset="5%" stopColor="#6366f1" stopOpacity={0.3}/>
@@ -248,28 +247,37 @@ export function SlideProgramDetail({ program, inputs }: SlideProgramDetailProps)
                            stroke="#6366f1" 
                            strokeWidth={4} 
                            fill="url(#colorAch)" 
-                           animationDuration={2000}
+                           isAnimationActive={false}
+                           // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                           dot={(props: any) => {
+                             const { cx, cy, payload, index } = props;
+                             const numValue = Number(payload.pencapaian);
+                             const isLast = index === chartDataWithTarget.length - 1;
+                             const showLabel = index % 3 === 0 || isLast;
+                             
+                             if (!showLabel || !numValue || numValue === 0) {
+                               return <circle key={index} cx={cx} cy={cy} r={3} fill="#6366f1" stroke="#1e293b" strokeWidth={1} />;
+                             }
+
+                             const formatted = numValue >= 1_000_000_000
+                               ? (numValue / 1_000_000_000).toFixed(1).replace(/\.0$/, '') + 'M'
+                               : numValue >= 1_000_000
+                                 ? (numValue / 1_000_000).toFixed(1).replace(/\.0$/, '') + 'jt'
+                                 : numValue >= 1_000
+                                   ? (numValue / 1_000).toFixed(0) + 'rb'
+                                   : String(numValue);
+
+                             return (
+                               <g key={index}>
+                                 <circle cx={cx} cy={cy} r={4} fill="#6366f1" stroke="#1e293b" strokeWidth={2} />
+                                 <text x={cx} y={cy - 26} fill="#f8fafc" fontSize={11} fontWeight={900} textAnchor="middle">
+                                   {formatted}
+                                 </text>
+                               </g>
+                             );
+                           }}
+                           activeDot={{ r: 6, fill: '#818cf8' }}
                         >
-                           {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
-                           <LabelList 
-                              dataKey="pencapaian" 
-                              position="top" 
-                              offset={15}
-                              // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                              content={(props: any) => {
-                                 const { x, y, value } = props;
-                                 if (value === undefined || value === null || value === 0) return null;
-                                 const formatted = value >= 1000000 ? (value / 1000000).toFixed(1) + 'jt' : value.toLocaleString();
-                                 return (
-                                    <g transform={`translate(${x},${y})`}>
-                                       <rect x={-28} y={-32} width={56} height={20} fill="#1e293b" opacity={0.8} rx={6} stroke="#334155" strokeWidth={1} />
-                                       <text x={0} y={-18} fill="#f8fafc" fontSize={11} fontWeight={900} textAnchor="middle" style={{ textShadow: "0px 1px 2px rgba(0,0,0,0.8)" }}>
-                                          {formatted}
-                                       </text>
-                                    </g>
-                                 );
-                              }}
-                           />
                         </Area>
                         <Area 
                            type="monotone" 
@@ -278,6 +286,34 @@ export function SlideProgramDetail({ program, inputs }: SlideProgramDetailProps)
                            strokeWidth={2} 
                            strokeDasharray="5 5" 
                            fill="transparent" 
+                           isAnimationActive={false}
+                           // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                           dot={(props: any) => {
+                             const { cx, cy, payload, index } = props;
+                             const numValue = Number(payload.targetIdeal);
+                             const isLast = index === chartDataWithTarget.length - 1;
+                             const showLabel = index % 3 === 0 || isLast;
+                             
+                             if (!showLabel || !numValue || numValue === 0) {
+                               return <circle key={index} cx={cx} cy={cy} r={2} fill="#475569" opacity={0.5} />;
+                             }
+
+                             const formatted = numValue >= 1_000_000_000
+                               ? (numValue / 1_000_000_000).toFixed(1).replace(/\.0$/, '') + 'M'
+                               : numValue >= 1_000_000
+                                 ? (numValue / 1_000_000).toFixed(1).replace(/\.0$/, '') + 'jt'
+                                 : numValue >= 1_000
+                                   ? (numValue / 1_000).toFixed(0) + 'rb'
+                                   : String(numValue);
+
+                             return (
+                               <g key={`target-dot-${index}`}>
+                                 <text x={cx} y={cy + 20} fill="#64748b" fontSize={10} fontWeight={700} textAnchor="middle">
+                                   {formatted}
+                                 </text>
+                               </g>
+                             );
+                           }}
                         />
                         <ReferenceLine 
                           y={program.monthly_target_rp || 0} 
@@ -285,6 +321,7 @@ export function SlideProgramDetail({ program, inputs }: SlideProgramDetailProps)
                           strokeDasharray="3 3"
                           label={{ position: 'right', value: 'TARGET', fill: '#ef4444', fontSize: 10, fontWeight: 900 }}
                         />
+
                      </AreaChart>
                   </ResponsiveContainer>
                </div>
@@ -349,7 +386,7 @@ export function SlideProgramDetail({ program, inputs }: SlideProgramDetailProps)
                    </div>
                    <div className="flex-grow w-full">
                       <ResponsiveContainer width="100%" height="100%">
-                         <AreaChart data={chartDataWithTarget} margin={{ top: 30, right: 10, left: 10, bottom: 0 }}>
+                         <AreaChart data={chartDataWithTarget} margin={{ top: 45, right: 60, left: 40, bottom: 0 }}>
                             <defs>
                                <linearGradient id="colorAchHybrid" x1="0" y1="0" x2="0" y2="1">
                                   <stop offset="5%" stopColor="#6366f1" stopOpacity={0.3}/>
@@ -365,28 +402,37 @@ export function SlideProgramDetail({ program, inputs }: SlideProgramDetailProps)
                                stroke="#6366f1" 
                                strokeWidth={4} 
                                fill="url(#colorAchHybrid)"
-                               animationDuration={2000}
+                               isAnimationActive={false}
+                               // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                               dot={(props: any) => {
+                                 const { cx, cy, payload, index } = props;
+                                 const numValue = Number(payload.pencapaian);
+                                 const isLast = index === chartDataWithTarget.length - 1;
+                                 const showLabel = index % 3 === 0 || isLast;
+                                 
+                                 if (!showLabel || !numValue || numValue === 0) {
+                                   return <circle key={index} cx={cx} cy={cy} r={3} fill="#6366f1" stroke="#1e293b" strokeWidth={1} />;
+                                 }
+                                 
+                                 const formatted = numValue >= 1_000_000_000
+                                   ? (numValue / 1_000_000_000).toFixed(1).replace(/\.0$/, '') + 'M'
+                                   : numValue >= 1_000_000
+                                     ? (numValue / 1_000_000).toFixed(1).replace(/\.0$/, '') + 'jt'
+                                     : numValue >= 1_000
+                                       ? (numValue / 1_000).toFixed(0) + 'rb'
+                                       : String(numValue);
+
+                                 return (
+                                   <g key={index}>
+                                     <circle cx={cx} cy={cy} r={4} fill="#6366f1" stroke="#1e293b" strokeWidth={2} />
+                                     <text x={cx} y={cy - 26} fill="#f8fafc" fontSize={11} fontWeight={900} textAnchor="middle">
+                                       {formatted}
+                                     </text>
+                                   </g>
+                                 );
+                               }}
+                               activeDot={{ r: 6, fill: '#818cf8' }}
                             >
-                               {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
-                               <LabelList 
-                                  dataKey="pencapaian" 
-                                  position="top" 
-                                  offset={15}
-                                  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                                  content={(props: any) => {
-                                     const { x, y, value } = props;
-                                     if (value === undefined || value === null || value === 0) return null;
-                                     const formatted = value >= 1000000 ? (value / 1000000).toFixed(1) + 'jt' : value.toLocaleString();
-                                     return (
-                                        <g transform={`translate(${x},${y})`}>
-                                           <rect x={-28} y={-32} width={56} height={20} fill="#1e293b" opacity={0.8} rx={6} stroke="#334155" strokeWidth={1} />
-                                           <text x={0} y={-18} fill="#f8fafc" fontSize={11} fontWeight={900} textAnchor="middle" style={{ textShadow: "0px 1px 2px rgba(0,0,0,0.8)" }}>
-                                              {formatted}
-                                           </text>
-                                        </g>
-                                     );
-                                  }}
-                               />
                             </Area>
                          <Area 
                             type="monotone" 
@@ -395,6 +441,34 @@ export function SlideProgramDetail({ program, inputs }: SlideProgramDetailProps)
                             strokeWidth={2} 
                             strokeDasharray="5 5" 
                             fill="transparent" 
+                            isAnimationActive={false}
+                            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                            dot={(props: any) => {
+                              const { cx, cy, payload, index } = props;
+                              const numValue = Number(payload.targetIdeal);
+                              const isLast = index === chartDataWithTarget.length - 1;
+                              const showLabel = index % 3 === 0 || isLast;
+                              
+                              if (!showLabel || !numValue || numValue === 0) {
+                                return <circle key={index} cx={cx} cy={cy} r={2} fill="#475569" opacity={0.5} />;
+                              }
+
+                              const formatted = numValue >= 1_000_000_000
+                                ? (numValue / 1_000_000_000).toFixed(1).replace(/\.0$/, '') + 'M'
+                                : numValue >= 1_000_000
+                                  ? (numValue / 1_000_000).toFixed(1).replace(/\.0$/, '') + 'jt'
+                                  : numValue >= 1_000
+                                    ? (numValue / 1_000).toFixed(0) + 'rb'
+                                    : String(numValue);
+
+                              return (
+                                <g key={`target-dot-hybrid-${index}`}>
+                                  <text x={cx} y={cy + 20} fill="#64748b" fontSize={10} fontWeight={700} textAnchor="middle">
+                                    {formatted}
+                                  </text>
+                                </g>
+                              );
+                            }}
                          />
                          <ReferenceLine 
                            y={program.monthly_target_rp || 0} 
