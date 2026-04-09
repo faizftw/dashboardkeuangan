@@ -19,6 +19,8 @@ interface SlidePICDetailProps {
   programs: ProgramPerformance[]
 }
 
+// ESLint disabled for Recharts custom props which are difficult to type strictly
+
 export function SlidePICDetail({ pic, programs }: SlidePICDetailProps) {
   // Use colors based on status for the bars
   const getStatusColor = (percentage: number) => {
@@ -153,8 +155,10 @@ export function SlidePICDetail({ pic, programs }: SlidePICDetailProps) {
                        <LabelList 
                           dataKey="percentage" 
                           position="right" 
+                          // eslint-disable-next-line @typescript-eslint/no-explicit-any
                           content={(props: any) => {
                              const { x, y, width, value } = props;
+                             if (x === undefined || y === undefined || width === undefined || value === undefined) return null;
                              return (
                                 <text 
                                    x={x + width + 10} y={y + 20} fill="#f1f5f9" fontSize={16} fontWeight={900} textAnchor="start" dominantBaseline="middle"

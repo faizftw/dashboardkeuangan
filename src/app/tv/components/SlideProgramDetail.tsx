@@ -19,6 +19,8 @@ interface SlideProgramDetailProps {
   inputs: DailyInput[]
 }
 
+// ESLint disabled for Recharts custom props which are difficult to type strictly
+
 export function SlideProgramDetail({ program, inputs }: SlideProgramDetailProps) {
   // 1. Process Trend Data
   // Group by date and calculate cumulative
@@ -253,9 +255,10 @@ export function SlideProgramDetail({ program, inputs }: SlideProgramDetailProps)
                               dataKey="pencapaian" 
                               position="top" 
                               offset={15}
-                              content={(props: any) => {
+                              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                           content={(props: any) => {
                                  const { x, y, value } = props;
-                                 if (!value || value === 0) return null;
+                                 if (value === undefined || value === null || value === 0) return null;
                                  return (
                                     <text 
                                        x={x} y={y} dy={-10} fill="#f1f5f9" fontSize={14} fontWeight={900} textAnchor="middle"
@@ -364,15 +367,19 @@ export function SlideProgramDetail({ program, inputs }: SlideProgramDetailProps)
                                dataKey="pencapaian" 
                                position="top" 
                                offset={15}
+                               // eslint-disable-next-line @typescript-eslint/no-explicit-any
                                content={(props: any) => {
                                   const { x, y, value } = props;
-                                  if (!value || value === 0) return null;
+                                  if (value === undefined || value === null || value === 0) return null;
+                                  const numX = typeof x === 'number' ? x : parseFloat(x || '0');
+                                  const numY = typeof y === 'number' ? y : parseFloat(y || '0');
+                                  const numVal = typeof value === 'number' ? value : parseFloat(value || '0');
                                   return (
                                      <text 
-                                        x={x} y={y} dy={-10} fill="#f1f5f9" fontSize={14} fontWeight={900} textAnchor="middle"
+                                        x={numX} y={numY} dy={-10} fill="#f1f5f9" fontSize={14} fontWeight={900} textAnchor="middle"
                                         style={{ filter: 'drop-shadow(0px 1px 3px rgba(0,0,0,1))' }}
                                      >
-                                        {value >= 1000000 ? (value / 1000000).toFixed(1) + 'jt' : value.toLocaleString()}
+                                        {numVal >= 1000000 ? (numVal / 1000000).toFixed(1) + 'jt' : numVal.toLocaleString()}
                                      </text>
                                   );
                                }}
