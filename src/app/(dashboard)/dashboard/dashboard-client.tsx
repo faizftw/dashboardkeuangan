@@ -15,7 +15,11 @@ import {
   AreaChart,
   Area
 } from 'recharts'
-import {ChartNoAxesColumn, ChartNoAxesCombined} from 'lucide-react'
+import { useRouter, usePathname, useSearchParams } from 'next/navigation'
+import { Calendar as CalendarIcon, Filter, XCircle, ChartNoAxesColumn, ChartNoAxesCombined } from 'lucide-react'
+import { DatePickerWithRange } from '@/components/date-range-picker'
+import { DateRange } from 'react-day-picker'
+import { format as formatDate } from 'date-fns'
 
 type Program = Database['public']['Tables']['programs']['Row']
 type DailyInput = Database['public']['Tables']['daily_inputs']['Row']
@@ -25,7 +29,10 @@ interface DashboardClientProps {
   programs: Program[]
   dailyInputs: DailyInput[]
   activePeriod: Period
-  isAdmin: boolean
+  initialFilters: {
+    startDate: string
+    endDate: string
+  }
 }
 
 type AggregatedProgram = Program & {
@@ -103,9 +110,52 @@ const CustomTrendTooltip = ({ active, payload, label }: { active?: boolean; payl
   return null;
 };
 
-export function DashboardClient({ programs, dailyInputs, activePeriod }: DashboardClientProps) {
+// ... (logic)
+
+export function DashboardClient({ programs, dailyInputs, activePeriod, initialFilters }: DashboardClientProps) {
+  const router = useRouter()
+  const pathname = usePathname()
+  const searchParams = useSearchParams()
+
   const [filterType, setFilterType] = useState<string>('all')
   const [filterStatus, setFilterStatus] = useState<string>('all')
+  
+  // Date range state
+  const [dateRange, setDateRange] = useState<DateRange | undefined>(() => {
+    if (initialFilters.startDate && initialFilters.endDate) {
+      return {
+        from: new Date(initialFilters.startDate),
+        to: new Date(initialFilters.endDate)
+      }
+    }
+    return undefined
+  })
+
+  const isFilterActive = !!(dateRange?.from && dateRange?.to)
+
+  const handleApplyFilter = () => {
+    const params = new URLSearchParams(searchParams.toString())
+    if (dateRange?.from && dateRange?.to) {
+      params.set('startDate', formatDate(dateRange.from, 'yyyy-MM-dd'))
+      params.set('endDate', formatDate(dateRange.to, 'yyyy-MM-dd'))
+    } else {
+      params.delete('startDate')
+      params.delete('endDate')
+    }
+    router.push(`${pathname}?${params.toString()}`)
+  }
+
+  const handleResetFilter = () => {
+    setDateRange(undefined)
+    const params = new URLSearchParams(searchParams.toString())
+    params.delete('startDate')
+    params.delete('endDate')
+    router.push(`${pathname}?${params.toString()}`)
+  }
+
+  // To support the useMemo trend logic, we need startDate and endDate strings
+  const startDate = dateRange?.from ? formatDate(dateRange.from, 'yyyy-MM-dd') : ''
+  const endDate = dateRange?.to ? formatDate(dateRange.to, 'yyyy-MM-dd') : ''
 
   // Data processing - Aggregate per Program
   const aggregatedData: AggregatedProgram[] = useMemo(() => {
@@ -159,25 +209,48 @@ export function DashboardClient({ programs, dailyInputs, activePeriod }: Dashboa
   // Chart 1: Daily Trend Data (Cumulative)
   const dailyTrendData = useMemo(() => {
     if (!activePeriod) return []
-    const totalDays = new Date(activePeriod.year, activePeriod.month, 0).getDate()
-    const days = Array.from({ length: totalDays }, (_, i) => i + 1)
+    
+    let datesInRange: string[] = []
     const totalTarget = programs.reduce((sum, p) => sum + (p.monthly_target_rp || 0), 0)
+
+    if (isFilterActive) {
+      // Generate dates between startDate and endDate
+      const start = new Date(startDate)
+      const end = new Date(endDate)
+      const current = new Date(start)
+      while (current <= end) {
+        datesInRange.push(current.toISOString().split('T')[0])
+        current.setDate(current.getDate() + 1)
+      }
+    } else {
+      // Default to active period month
+      const totalDaysInMonth = new Date(activePeriod.year, activePeriod.month, 0).getDate()
+      datesInRange = Array.from({ length: totalDaysInMonth }, (_, i) => {
+        const day = i + 1
+        return `${activePeriod.year}-${String(activePeriod.month).padStart(2, '0')}-${String(day).padStart(2, '0')}`
+      })
+    }
     
     let runningTotal = 0
-    return days.map(day => {
-      const dateStr = `${activePeriod.year}-${String(activePeriod.month).padStart(2, '0')}-${String(day).padStart(2, '0')}`
+    return datesInRange.map((dateStr) => {
       const dayTotal = dailyInputs
         .filter(input => input.date === dateStr)
         .reduce((sum, input) => sum + Number(input.achievement_rp || 0), 0)
       
       runningTotal += dayTotal
+      
+      // For Target Ideal, we need to know the 'day of month' to keep linear target baseline
+      const dateObj = new Date(dateStr)
+      const dayOfMonth = dateObj.getDate()
+      const daysInMonth = new Date(dateObj.getFullYear(), dateObj.getMonth() + 1, 0).getDate()
+
       return {
-        tanggal: day,
+        tanggal: isFilterActive ? dateStr.substring(8, 10) + '/' + dateStr.substring(5, 7) : dayOfMonth,
         'Pencapaian Akumulatif': runningTotal,
-        'Target Ideal': Math.round((totalTarget / totalDays) * day)
+        'Target Ideal': Math.round((totalTarget / (activePeriod.working_days || daysInMonth)) * dayOfMonth)
       }
     })
-  }, [dailyInputs, activePeriod, programs])
+  }, [dailyInputs, activePeriod, programs, isFilterActive, startDate, endDate])
 
   // Chart 2: Per-Program Bar Chart Data
   const chartData = useMemo(() => {
@@ -356,7 +429,56 @@ export function DashboardClient({ programs, dailyInputs, activePeriod }: Dashboa
         )}
       </div>
 
-      {/* 4. Filters */}
+      {/* 4. Date Range Filter */}
+      <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
+        <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-6">
+          <div className="flex items-center gap-3">
+            <div className="p-2 bg-indigo-50 rounded-lg">
+              <CalendarIcon className="w-5 h-5 text-indigo-600" />
+            </div>
+            <div>
+              <h4 className="text-sm font-bold text-slate-800">Filter Jangka Waktu</h4>
+              <p className="text-xs text-slate-500">Pilih rentang tanggal kustom untuk melihat performa spesifik.</p>
+            </div>
+          </div>
+
+          <div className="flex flex-col sm:flex-row items-center gap-4 w-full lg:w-auto">
+            <DatePickerWithRange 
+              date={dateRange} 
+              setDate={setDateRange} 
+            />
+            
+            <div className="flex gap-2 w-full sm:w-auto mt-2 sm:mt-0">
+               <button 
+                onClick={handleApplyFilter}
+                disabled={!dateRange?.from || !dateRange?.to}
+                className="flex-1 sm:flex-none bg-indigo-600 hover:bg-indigo-700 disabled:bg-slate-300 text-white text-sm font-bold px-6 py-2 rounded-lg transition-colors flex items-center justify-center gap-2"
+               >
+                 <Filter className="w-4 h-4" /> Terapkan
+               </button>
+               {isFilterActive && (
+                 <button 
+                  onClick={handleResetFilter}
+                  className="p-2 text-slate-400 hover:text-rose-500 transition-colors"
+                  title="Reset Filter"
+                 >
+                   <XCircle className="w-6 h-6" />
+                 </button>
+               )}
+            </div>
+          </div>
+        </div>
+        
+        {isFilterActive && dateRange?.from && dateRange?.to && (
+          <div className="mt-4 pt-4 border-t border-slate-100 flex items-center gap-2">
+            <span className="text-xs font-semibold text-slate-500 italic">
+              Menampilkan data dari <span className="text-indigo-600 font-bold">{formatDate(dateRange.from, 'dd MMM yyyy')}</span> sampai <span className="text-indigo-600 font-bold">{formatDate(dateRange.to, 'dd MMM yyyy')}</span>
+            </span>
+          </div>
+        )}
+      </div>
+
+      {/* 5. Filters */}
       <div className="flex flex-col sm:flex-row gap-4 items-center bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
         <div className="flex items-center gap-2 w-full sm:w-auto">
           <span className="text-sm font-semibold text-slate-600 whitespace-nowrap">Filter Tipe:</span>

@@ -9,10 +9,14 @@ import { SlideProgress } from './components/SlideProgress'
 import { SlideProgramDetail } from './components/SlideProgramDetail'
 import { SlidePICDetail } from './components/SlidePICDetail'
 import { cn } from '@/lib/utils'
+import { chunkArray } from './utils'
 
 const SLIDE_DURATION = 10000 // 10 seconds
 const REFRESH_INTERVAL = 60000 // 60 seconds
 const PROGRESS_UPDATE_INTERVAL = 100 // 100ms for smooth progress bar
+
+const PROGRAMS_PER_PAGE = 4
+const PICS_PER_PAGE = 6
 
 export default function TVDashboardPage() {
   const [data, setData] = useState<TVDashboardData | null>(null)
@@ -20,11 +24,22 @@ export default function TVDashboardPage() {
   const [progress, setProgress] = useState(0)
   const [isTransitioning, setIsTransitioning] = useState(false)
 
-  // Dynamic slides calculation
-  const totalSummarySlides = 3
-  const totalProgramSlides = data?.programs?.length || 0
-  const totalPICSlides = data?.pics?.length || 0
-  const totalSlides = totalSummarySlides + totalProgramSlides + totalPICSlides
+  // Chunking and Dynamic slides calculation
+  const programChunks = data ? chunkArray(data.programs, PROGRAMS_PER_PAGE) : []
+  const picChunks = data ? chunkArray(data.pics, PICS_PER_PAGE) : []
+
+  const totalSummarySlides = 1
+  const totalProgramGridSlides = programChunks.length
+  const totalPICGridSlides = picChunks.length
+  const totalProgramDetailSlides = data?.programs?.length || 0
+  const totalPICDetailSlides = data?.pics?.length || 0
+
+  const totalSlides = 
+    totalSummarySlides + 
+    totalProgramGridSlides + 
+    totalPICGridSlides + 
+    totalProgramDetailSlides + 
+    totalPICDetailSlides
 
   const fetchData = useCallback(async () => {
     try {
@@ -44,7 +59,7 @@ export default function TVDashboardPage() {
 
   // Slide Rotation & Progress Logic
   useEffect(() => {
-    if (!data) return
+    if (!data || totalSlides === 0) return
 
     const startTime = Date.now()
     
@@ -80,25 +95,48 @@ export default function TVDashboardPage() {
   }
 
   const renderSlide = () => {
-    // 0: Global Summary
-    // 1: All Programs Grid
-    // 2: All PICs Grid
-    // 3..3+P-1: Individual Program Details
-    // 3+P..3+P+PIC-1: Individual PIC Details
+    let currentIdx = 0
 
-    if (activeSlide === 0) return <Slide1Total data={data} />
-    if (activeSlide === 1) return <Slide2Programs data={data} />
-    if (activeSlide === 2) return <Slide3PICs data={data} />
+    // 1. Global Summary
+    if (activeSlide === currentIdx) return <Slide1Total data={data} />
+    currentIdx += totalSummarySlides
 
-    const programIdx = activeSlide - totalSummarySlides
-    if (programIdx < totalProgramSlides) {
-      const program = data.programs[programIdx]
+    // 2. Program Grid Pages
+    if (activeSlide < currentIdx + totalProgramGridSlides) {
+      const chunkIdx = activeSlide - currentIdx
+      return (
+        <Slide2Programs 
+          programs={programChunks[chunkIdx]} 
+          pagination={{ current: chunkIdx + 1, total: totalProgramGridSlides }} 
+        />
+      )
+    }
+    currentIdx += totalProgramGridSlides
+
+    // 3. PIC Grid Pages
+    if (activeSlide < currentIdx + totalPICGridSlides) {
+      const chunkIdx = activeSlide - currentIdx
+      return (
+        <Slide3PICs 
+          pics={picChunks[chunkIdx]} 
+          pagination={{ current: chunkIdx + 1, total: totalPICGridSlides }} 
+        />
+      )
+    }
+    currentIdx += totalPICGridSlides
+
+    // 4. Individual Program Details
+    if (activeSlide < currentIdx + totalProgramDetailSlides) {
+      const progIdx = activeSlide - currentIdx
+      const program = data.programs[progIdx]
       const programInputs = (data.rawInputs || []).filter(i => i.program_id === program.id)
       return <SlideProgramDetail program={program} inputs={programInputs} />
     }
+    currentIdx += totalProgramDetailSlides
 
-    const picIdx = activeSlide - totalSummarySlides - totalProgramSlides
-    if (picIdx < totalPICSlides) {
+    // 5. Individual PIC Details
+    if (activeSlide < currentIdx + totalPICDetailSlides) {
+      const picIdx = activeSlide - currentIdx
       const pic = data.pics[picIdx]
       const picPrograms = data.programs.filter(p => p.pic_name === pic.picName)
       return <SlidePICDetail pic={pic} programs={picPrograms} />

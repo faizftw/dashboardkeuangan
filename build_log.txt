@@ -6,71 +6,18 @@
   - Environments: .env.local
 
    Creating an optimized production build ...
+
+warn - The class `duration-[2000ms]` is ambiguous and matches multiple utilities.
+warn - If this is content and not a class, replace it with `duration-&lsqb;2000ms&rsqb;` to silence this warning.
  Γ£ô Compiled successfully
    Linting and checking validity of types ...
 
 Failed to compile.
 
 ./src/app/(dashboard)/dashboard/dashboard-client.tsx
-39:82  Error: Unexpected any. Specify a different type.  @typescript-eslint/no-explicit-any
-72:87  Error: Unexpected any. Specify a different type.  @typescript-eslint/no-explicit-any
-93:72  Error: 'isAdmin' is defined but never used.  @typescript-eslint/no-unused-vars
-448:28  Error: `"` can be escaped with `&quot;`, `&ldquo;`, `&#34;`, `&rdquo;`.  react/no-unescaped-entities
-448:62  Error: `"` can be escaped with `&quot;`, `&ldquo;`, `&#34;`, `&rdquo;`.  react/no-unescaped-entities
+22:10  Error: 'parse' is defined but never used.  @typescript-eslint/no-unused-vars
 
-./src/app/(dashboard)/dashboard/page.tsx
-27:20  Error: Unexpected any. Specify a different type.  @typescript-eslint/no-explicit-any
-
-./src/app/(dashboard)/input-harian/actions.ts
-6:77  Error: Unexpected any. Specify a different type.  @typescript-eslint/no-explicit-any
-69:46  Error: Unexpected any. Specify a different type.  @typescript-eslint/no-explicit-any
-101:46  Error: Unexpected any. Specify a different type.  @typescript-eslint/no-explicit-any
-
-./src/app/(dashboard)/input-harian/input-form-client.tsx
-36:37  Error: Unexpected any. Specify a different type.  @typescript-eslint/no-explicit-any
-76:14  Error: 'err' is defined but never used.  @typescript-eslint/no-unused-vars
-95:20  Error: Unexpected any. Specify a different type.  @typescript-eslint/no-explicit-any
-131:14  Error: 'err' is defined but never used.  @typescript-eslint/no-unused-vars
-
-./src/app/(dashboard)/input-harian/page.tsx
-31:19  Error: Unexpected any. Specify a different type.  @typescript-eslint/no-explicit-any
-
-./src/app/(dashboard)/master-data/actions.ts
-7:77  Error: Unexpected any. Specify a different type.  @typescript-eslint/no-explicit-any
-
-./src/app/(dashboard)/master-data/period-client.tsx
-58:14  Error: 'err' is defined but never used.  @typescript-eslint/no-unused-vars
-78:14  Error: 'err' is defined but never used.  @typescript-eslint/no-unused-vars
-98:14  Error: 'err' is defined but never used.  @typescript-eslint/no-unused-vars
-107:33  Error: Unexpected any. Specify a different type.  @typescript-eslint/no-explicit-any
-122:14  Error: 'err' is defined but never used.  @typescript-eslint/no-unused-vars
-134:23  Error: Unexpected any. Specify a different type.  @typescript-eslint/no-explicit-any
-172:34  Error: Unexpected any. Specify a different type.  @typescript-eslint/no-explicit-any
-174:29  Error: Unexpected any. Specify a different type.  @typescript-eslint/no-explicit-any
-179:27  Error: Unexpected any. Specify a different type.  @typescript-eslint/no-explicit-any
-
-./src/app/(dashboard)/master-data/program-client.tsx
-20:18  Error: Unexpected any. Specify a different type.  @typescript-eslint/no-explicit-any
-76:14  Error: 'err' is defined but never used.  @typescript-eslint/no-unused-vars
-92:20  Error: Unexpected any. Specify a different type.  @typescript-eslint/no-explicit-any
-342:109  Error: `"` can be escaped with `&quot;`, `&ldquo;`, `&#34;`, `&rdquo;`.  react/no-unescaped-entities
-342:113  Error: `"` can be escaped with `&quot;`, `&ldquo;`, `&#34;`, `&rdquo;`.  react/no-unescaped-entities
-
-./src/app/(dashboard)/sidebar-layout-wrapper.tsx
-13:12  Error: Unexpected any. Specify a different type.  @typescript-eslint/no-explicit-any
-14:9  Error: Unexpected any. Specify a different type.  @typescript-eslint/no-explicit-any
-
-./src/app/(dashboard)/sidebar.tsx
-17:12  Error: Unexpected any. Specify a different type.  @typescript-eslint/no-explicit-any
-
-./src/app/login/page.tsx
-13:9  Error: 'router' is assigned a value but never used.  @typescript-eslint/no-unused-vars
-
-./src/lib/supabase/server.ts
-18:20  Error: 'error' is defined but never used.  @typescript-eslint/no-unused-vars
-27:20  Error: 'error' is defined but never used.  @typescript-eslint/no-unused-vars
-
-./src/types/database.ts
-Error: Parsing error: Unexpected keyword or identifier.
+./src/components/date-range-picker.tsx
+9:10  Error: 'Button' is defined but never used.  @typescript-eslint/no-unused-vars
 
 info  - Need to disable some ESLint rules? Learn more here: https://nextjs.org/docs/basic-features/eslint#disabling-rules

@@ -1,14 +1,20 @@
 import { createClient } from '@/lib/supabase/server'
 import { DashboardClient } from './dashboard-client'
 import { Database } from '@/types/database'
+import { Suspense } from 'react'
 
 type DailyInput = Database['public']['Tables']['daily_inputs']['Row']
 type Program = Database['public']['Tables']['programs']['Row']
 
 export const dynamic = 'force-dynamic'
 
-export default async function DashboardPage() {
+export default async function DashboardPage({
+  searchParams,
+}: {
+  searchParams: { startDate?: string; endDate?: string }
+}) {
   const supabase = createClient()
+  const { startDate, endDate } = searchParams
   
   // 1. Session and Profile
   const { data: { user } } = await supabase.auth.getUser()
@@ -22,7 +28,8 @@ export default async function DashboardPage() {
 
   let programsQuery = supabase.from('programs').select('*').eq('is_active', true)
   if (!isAdmin && user) {
-    // PIC can only see their own programs based on assigned pic_id
+    // PIC can only see their own programs based on assigned pic_client_id (or similar)
+    // Checking pic_id field from migration
     programsQuery = programsQuery.eq('pic_id', user.id)
   }
   const { data: programs } = await programsQuery
@@ -31,14 +38,26 @@ export default async function DashboardPage() {
   let dailyInputs: DailyInput[] = []
   if (activePeriod && programs && (programs as Program[]).length > 0) {
     const programIds = (programs as Program[]).map((p: Program) => p.id)
-    const { data: inputs } = await supabase
+    
+    let query = supabase
       .from('daily_inputs')
       .select('*')
-      .eq('period_id', activePeriod.id)
       .in('program_id', programIds)
-      .order('date', { ascending: true }) // important for chronogical grouping
+    
+    if (startDate && endDate) {
+      query = query.gte('date', startDate).lte('date', endDate)
+    } else {
+      query = query.eq('period_id', activePeriod.id)
+    }
+
+    const { data: inputs } = await query.order('date', { ascending: true })
       
     dailyInputs = inputs || []
+  }
+
+  const filterStrings = {
+    startDate: startDate || '',
+    endDate: endDate || ''
   }
 
   return (
@@ -67,12 +86,14 @@ export default async function DashboardPage() {
           <p>Admin harus mengatur periode aktif terlebih dahulu di Master Data agar dashboard dapat menampilkan kalkulasi.</p>
         </div>
       ) : programs && programs.length > 0 ? (
-        <DashboardClient 
-          programs={programs} 
-          dailyInputs={dailyInputs} 
-          activePeriod={activePeriod}
-          isAdmin={isAdmin}
-        />
+        <Suspense fallback={<div className="h-96 w-full animate-pulse bg-slate-100 rounded-xl" />}>
+          <DashboardClient 
+            programs={programs} 
+            dailyInputs={dailyInputs} 
+            activePeriod={activePeriod}
+            initialFilters={filterStrings}
+          />
+        </Suspense>
       ) : (
         <div className="bg-slate-50 border border-slate-200 rounded-xl p-12 text-center text-slate-500">
           <p className="font-medium text-lg">Tidak ada data program yang ditemukan.</p>

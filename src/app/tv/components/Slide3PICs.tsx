@@ -1,23 +1,32 @@
 'use client'
 
-import { TVDashboardData, PICPerformance } from '../actions'
+import { PICPerformance } from '../actions'
 import { cn } from '@/lib/utils'
 
 interface Slide3Props {
-  data: TVDashboardData
+  pics: PICPerformance[]
+  pagination?: {
+    current: number
+    total: number
+  }
 }
 
-export function Slide3PICs({ data }: Slide3Props) {
-  const { pics } = data
-
+export function Slide3PICs({ pics, pagination }: Slide3Props) {
   return (
     <div className="h-full flex flex-col p-12">
       <div className="flex justify-between items-end mb-12">
-         <h1 className="text-5xl font-black text-slate-100 uppercase tracking-tighter">
-            Performa Per PIC
-         </h1>
+         <div>
+            <h1 className="text-5xl font-black text-slate-100 uppercase tracking-tighter">
+               Performa Per PIC
+            </h1>
+            {pagination && pagination.total > 1 && (
+               <p className="text-indigo-400 font-bold uppercase tracking-[0.3em] mt-2">
+                  Halaman {pagination.current} dari {pagination.total}
+               </p>
+            )}
+         </div>
          <div className="px-6 py-2 bg-indigo-500/10 rounded-xl border border-indigo-500/20 text-indigo-400 font-bold text-xl uppercase tracking-widest">
-            Total {pics.length} Personel
+            {pagination ? `Menampilkan ${pics.length} Personel` : `Total ${pics.length} Personel`}
          </div>
       </div>
 

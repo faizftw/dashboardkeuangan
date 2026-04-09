@@ -1,27 +1,36 @@
 'use client'
 
-import { TVDashboardData, ProgramPerformance } from '../actions'
+import { ProgramPerformance } from '../actions'
 import { formatRupiah, cn } from '@/lib/utils'
 
 interface Slide2Props {
-  data: TVDashboardData
+  programs: ProgramPerformance[]
+  pagination?: {
+    current: number
+    total: number
+  }
 }
 
-export function Slide2Programs({ data }: Slide2Props) {
-  const { programs } = data
-
+export function Slide2Programs({ programs, pagination }: Slide2Props) {
   return (
     <div className="h-full flex flex-col p-12">
       <div className="flex justify-between items-end mb-12">
-         <h1 className="text-5xl font-black text-slate-100 uppercase tracking-tighter">
-            Performa Per Program
-         </h1>
+         <div>
+            <h1 className="text-5xl font-black text-slate-100 uppercase tracking-tighter">
+               Performa Per Program
+            </h1>
+            {pagination && pagination.total > 1 && (
+               <p className="text-indigo-400 font-bold uppercase tracking-[0.3em] mt-2">
+                  Halaman {pagination.current} dari {pagination.total}
+               </p>
+            )}
+         </div>
          <div className="px-6 py-2 bg-indigo-500/10 rounded-xl border border-indigo-500/20 text-indigo-400 font-bold text-xl uppercase tracking-widest">
-            Total {programs.length} Program Aktif
+            {pagination ? `Menampilkan ${programs.length} Program` : `Total ${programs.length} Program Aktif`}
          </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-x-12 gap-y-10 flex-grow">
+      <div className="grid grid-cols-2 gap-x-12 gap-y-10 flex-grow mb-12">
         {programs.map((program) => (
           <ProgramCard key={program.id} program={program} />
         ))}
