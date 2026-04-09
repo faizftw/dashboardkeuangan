@@ -252,10 +252,8 @@ export function SlideProgramDetail({ program, inputs }: SlideProgramDetailProps)
                            dot={(props: any) => {
                              const { cx, cy, payload, index } = props;
                              const numValue = Number(payload.pencapaian);
-                             const isLast = index === chartDataWithTarget.length - 1;
-                             const showLabel = index % 3 === 0 || isLast;
                              
-                             if (!showLabel || !numValue || numValue === 0) {
+                             if (!numValue || numValue === 0) {
                                return <circle key={index} cx={cx} cy={cy} r={3} fill="#6366f1" stroke="#1e293b" strokeWidth={1} />;
                              }
 
@@ -291,10 +289,8 @@ export function SlideProgramDetail({ program, inputs }: SlideProgramDetailProps)
                            dot={(props: any) => {
                              const { cx, cy, payload, index } = props;
                              const numValue = Number(payload.targetIdeal);
-                             const isLast = index === chartDataWithTarget.length - 1;
-                             const showLabel = index % 3 === 0 || isLast;
                              
-                             if (!showLabel || !numValue || numValue === 0) {
+                             if (!numValue || numValue === 0) {
                                return <circle key={index} cx={cx} cy={cy} r={2} fill="#475569" opacity={0.5} />;
                              }
 
@@ -407,10 +403,8 @@ export function SlideProgramDetail({ program, inputs }: SlideProgramDetailProps)
                                dot={(props: any) => {
                                  const { cx, cy, payload, index } = props;
                                  const numValue = Number(payload.pencapaian);
-                                 const isLast = index === chartDataWithTarget.length - 1;
-                                 const showLabel = index % 3 === 0 || isLast;
                                  
-                                 if (!showLabel || !numValue || numValue === 0) {
+                                 if (!numValue || numValue === 0) {
                                    return <circle key={index} cx={cx} cy={cy} r={3} fill="#6366f1" stroke="#1e293b" strokeWidth={1} />;
                                  }
                                  
@@ -446,10 +440,8 @@ export function SlideProgramDetail({ program, inputs }: SlideProgramDetailProps)
                             dot={(props: any) => {
                               const { cx, cy, payload, index } = props;
                               const numValue = Number(payload.targetIdeal);
-                              const isLast = index === chartDataWithTarget.length - 1;
-                              const showLabel = index % 3 === 0 || isLast;
                               
-                              if (!showLabel || !numValue || numValue === 0) {
+                              if (!numValue || numValue === 0) {
                                 return <circle key={index} cx={cx} cy={cy} r={2} fill="#475569" opacity={0.5} />;
                               }
 
