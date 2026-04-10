@@ -11,7 +11,7 @@ const montserrat = Montserrat({
 
 export const metadata: Metadata = {
   title: "Target Keuangan",
-  description: "Dashboard Kinerja Bisnis",
+  description: "Dashboard KPI",
 };
 
 import { Toaster } from "sonner";

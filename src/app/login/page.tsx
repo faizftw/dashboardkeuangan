@@ -44,7 +44,7 @@ export default function LoginPage() {
 
             <div className="mt-10">
               <h2 className="text-xl font-medium leading-snug text-white">
-                Dashboard Kinerja Bisnis
+                Dashboard KPI
               </h2>
               <p className="mt-3 text-sm leading-relaxed text-white/70">
                 Pantau target, analisis tren, dan ambil keputusan berbasis data secara real-time.
