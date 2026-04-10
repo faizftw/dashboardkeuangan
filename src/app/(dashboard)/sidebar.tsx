@@ -42,7 +42,7 @@ export function Sidebar({ profile, userEmail, isCollapsed, setIsCollapsed }: Sid
           <div className="bg-indigo-600 text-white w-8 h-8 rounded flex items-center justify-center font-bold text-sm">
             DT
           </div>
-          <span className="font-bold text-slate-900">Dashboard Target</span>
+          <span className="font-bold text-slate-900">Dashboard KPI</span>
         </div>
         <button
           onClick={() => setIsMobileOpen(true)}
@@ -76,7 +76,7 @@ export function Sidebar({ profile, userEmail, isCollapsed, setIsCollapsed }: Sid
             </div>
             {!isCollapsed && (
               <span className="font-extrabold text-xl bg-clip-text text-transparent bg-gradient-to-r from-slate-900 to-slate-700 truncate animate-in fade-in duration-500 whitespace-nowrap">
-                Dashboard Target
+                Dashboard KPI
               </span>
             )}
           </div>

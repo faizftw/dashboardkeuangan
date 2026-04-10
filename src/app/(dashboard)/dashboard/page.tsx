@@ -64,7 +64,7 @@ export default async function DashboardPage({
     <div className="space-y-6 mb-20">
       <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
         <div className="flex flex-col gap-2">
-          <h2 className="text-3xl font-bold tracking-tight text-slate-900">Dashboard Keuangan & Kinerja</h2>
+          <h2 className="text-3xl font-bold tracking-tight text-slate-900">Dashboard Key Performance Indicator</h2>
           <p className="text-slate-500">
             Pantau progres kinerja {isAdmin ? 'perusahaan secara global' : `program Anda (${profile?.name})`}.
           </p>
