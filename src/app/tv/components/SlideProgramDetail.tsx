@@ -61,6 +61,17 @@ export function SlideProgramDetail({ program, inputs }: SlideProgramDetailProps)
   const currentMilestone = program.latestQualitativeStatus || 'not_started'
   const milestone = milestoneStatusMap[currentMilestone]
 
+  // Motivational Message Logic
+  const motivationalMessage = program.percentageRp > 100 
+    ? "MASYAA ALLAH WOW TARGET TERLAMPAUI 🚀" 
+    : program.percentageRp === 100 
+      ? "ALHAMDULILLAH TARGET TERCAPAI 🌟" 
+      : "TARGET BELUM TERCAPAI CARI SOLUSINYA SEGERA DAN DAPATKAN BONUSNYA 💪";
+
+  const motivationalTheme = program.percentageRp >= 100 
+    ? "bg-emerald-500/10 border-emerald-500/40 text-emerald-400 shadow-[0_0_40px_rgba(16,185,129,0.15)]" 
+    : "bg-rose-500/10 border-rose-500/40 text-rose-400 shadow-[0_0_40px_rgba(244,63,94,0.1)]";
+
   return (
     <div className="h-full flex flex-col p-12 text-slate-100">
       {/* Header with Title and PIC */}
@@ -475,6 +486,18 @@ export function SlideProgramDetail({ program, inputs }: SlideProgramDetailProps)
           </>
         )}
       </div>
+
+      {/* Motivational Message Footer */}
+      {!isQualitative && (
+        <div className={cn(
+          "mt-10 p-10 rounded-[2.5rem] border-2 text-center transition-all duration-1000 flex items-center justify-center min-h-[140px]",
+          motivationalTheme
+        )}>
+          <p className="text-5xl font-black uppercase tracking-tighter leading-tight drop-shadow-sm">
+            {motivationalMessage}
+          </p>
+        </div>
+      )}
     </div>
   )
 }
