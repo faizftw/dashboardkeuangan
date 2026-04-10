@@ -13,10 +13,26 @@ import {
   ResponsiveContainer,
   Cell,
   AreaChart,
-  Area
+  Area,
+  PolarGrid,
+  PolarRadiusAxis,
+  RadialBar,
+  RadialBarChart,
+  Label
 } from 'recharts'
+import {
+  ChartContainer,
+  type ChartConfig,
+} from "@/components/ui/chart"
+import {
+  Card,
+  CardContent,
+  CardFooter,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card"
 import { useRouter, usePathname, useSearchParams } from 'next/navigation'
-import { Calendar as CalendarIcon, Filter, XCircle, ChartNoAxesColumn, ChartNoAxesCombined } from 'lucide-react'
+import { Calendar as CalendarIcon, Filter, XCircle, ChartNoAxesColumn, ChartNoAxesCombined, Target, Coins, TrendingUp } from 'lucide-react'
 import { DatePickerWithRange } from '@/components/date-range-picker'
 import { DateRange } from 'react-day-picker'
 import { format as formatDate } from 'date-fns'
@@ -114,7 +130,91 @@ const CustomTrendTooltip = ({ active, payload, label }: { active?: boolean; payl
   return null;
 };
 
-// ... (logic)
+// User Radial Chart Component
+const chartConfig = {
+  value: {
+    label: "Pencapaian",
+  },
+  users: {
+    label: "Total User",
+    color: "hsl(var(--chart-2))",
+  },
+} satisfies ChartConfig
+
+const UserRadialChart = ({ percentage, total, target }: { percentage: number, total: number, target: number }) => {
+  const chartData = [
+    { name: "users", value: percentage, fill: "var(--color-users)" },
+  ]
+
+  return (
+    <Card className="flex flex-col bg-white border-slate-200 shadow-sm overflow-hidden relative">
+      <div className="absolute right-0 top-0 w-24 h-24 bg-indigo-50 rounded-bl-full -mr-4 -mt-4 opacity-50 z-0 text-right p-4 font-black text-indigo-200/50 italic">USER</div>
+      <CardHeader className="items-center pb-0 pt-6 relative z-10">
+        <CardTitle className="text-sm font-semibold text-slate-500 uppercase tracking-widest">Agregat User</CardTitle>
+      </CardHeader>
+      <CardContent className="flex-1 pb-0 relative z-10">
+        <ChartContainer
+          config={chartConfig}
+          className="mx-auto aspect-square max-h-[180px]"
+        >
+          <RadialBarChart
+            data={chartData}
+            startAngle={90}
+            endAngle={90 + (3.6 * Math.min(percentage, 100))}
+            innerRadius={60}
+            outerRadius={90}
+          >
+            <PolarGrid
+              gridType="circle"
+              radialLines={false}
+              stroke="none"
+              className="first:fill-slate-100 last:fill-white"
+              polarRadius={[82, 68]}
+            />
+            <RadialBar dataKey="value" background cornerRadius={10} />
+            <PolarRadiusAxis tick={false} tickLine={false} axisLine={false}>
+              <Label
+                content={({ viewBox }) => {
+                  if (viewBox && "cx" in viewBox && "cy" in viewBox) {
+                    return (
+                      <text
+                        x={viewBox.cx}
+                        y={viewBox.cy}
+                        textAnchor="middle"
+                        dominantBaseline="middle"
+                      >
+                        <tspan
+                          x={viewBox.cx}
+                          y={viewBox.cy}
+                          className="fill-slate-800 text-3xl font-black"
+                        >
+                          {percentage.toFixed(1)}%
+                        </tspan>
+                        <tspan
+                          x={viewBox.cx}
+                          y={(viewBox.cy || 0) + 20}
+                          className="fill-slate-400 text-[10px] font-bold uppercase tracking-wider"
+                        >
+                          Pencapaian
+                        </tspan>
+                      </text>
+                    )
+                  }
+                }}
+              />
+            </PolarRadiusAxis>
+          </RadialBarChart>
+        </ChartContainer>
+      </CardContent>
+      <CardFooter className="flex-col gap-1 pb-6 relative z-10">
+        <div className="flex items-center gap-2 leading-none font-black text-indigo-600 text-sm">
+          {total.toLocaleString('id-ID')} <span className="text-slate-400 font-bold text-xs uppercase tracking-tighter"> / {Math.round(target).toLocaleString('id-ID')} User</span>
+        </div>
+      </CardFooter>
+    </Card>
+  )
+}
+
 
 export function DashboardClient({ programs, dailyInputs, activePeriod, initialFilters }: DashboardClientProps) {
   const router = useRouter()
@@ -223,7 +323,7 @@ export function DashboardClient({ programs, dailyInputs, activePeriod, initialFi
         business_status
       }
     })
-  }, [programs, dailyInputs, prorationFactor])
+  }, [programs, dailyInputs, prorationFactor, activePeriod])
 
   // Filtering Logic
   const filteredData = useMemo(() => {
@@ -327,29 +427,98 @@ export function DashboardClient({ programs, dailyInputs, activePeriod, initialFi
   const totalAchievementRp = aggregatedData.reduce((sum, p) => sum + p.cumulative_rp, 0)
   const globalPercentage = totalTargetRp > 0 ? (totalAchievementRp / totalTargetRp) * 100 : 0
 
+  const totalTargetUser = aggregatedData.reduce((sum, p) => sum + (p.effective_target_user || 0), 0)
+  const totalAchievementUser = aggregatedData.reduce((sum, p) => sum + p.cumulative_user, 0)
+  const globalUserPercentage = totalTargetUser > 0 ? (totalAchievementUser / totalTargetUser) * 100 : 0
+
   return (
     <div className="space-y-8 pb-10">
       
       {/* 1. Global Metrics */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-6 relative overflow-hidden">
-          <div className="absolute right-0 top-0 w-24 h-24 bg-blue-50 rounded-bl-full -mr-4 -mt-4 opacity-50 z-0"></div>
-          <p className="text-sm font-semibold text-slate-500 uppercase tracking-widest mb-1 relative z-10">Total Target (Rp)</p>
-          <h3 className="text-2xl font-bold text-slate-800 relative z-10 mb-2">{formatRupiah(totalTargetRp)}</h3>
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+        {/* Card 1: Total Target */}
+        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 relative overflow-hidden flex flex-col justify-between min-h-[220px]">
+          <div className="absolute right-0 top-0 w-32 h-32 bg-blue-50/50 rounded-bl-full -mr-8 -mt-8 opacity-40 z-0 flex items-end justify-center pb-8 pr-8">
+            <Target className="w-12 h-12 text-blue-200" />
+          </div>
+          <div className="relative z-10">
+            <p className="text-xs font-black text-slate-400 uppercase tracking-[0.2em] mb-3">Total Target</p>
+            <h3 className="text-2xl font-black text-slate-800 mb-1">{formatRupiah(totalTargetRp)}</h3>
+            <p className="text-[10px] font-bold text-slate-400 italic">Target akumulatif periode aktif</p>
+          </div>
+          <div className="relative z-10 mt-auto pt-4 border-t border-slate-50 flex items-center justify-between">
+            <span className="text-[10px] font-bold text-slate-500 uppercase tracking-tighter">Avg Target / Hari</span>
+            <span className="text-sm font-black text-blue-600">{formatRupiah(totalTargetRp / (daysInSelection || 30))}</span>
+          </div>
         </div>
-        <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-6 relative overflow-hidden">
-           <div className="absolute right-0 top-0 w-24 h-24 bg-emerald-50 rounded-bl-full -mr-4 -mt-4 opacity-50 z-0"></div>
-          <p className="text-sm font-semibold text-slate-500 uppercase tracking-widest mb-1 relative z-10">Total Pencapaian (Rp)</p>
-          <h3 className="text-2xl font-bold text-slate-800 relative z-10 mb-2">{formatRupiah(totalAchievementRp)}</h3>
+
+        {/* Card 2: Total Pencapaian */}
+        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 relative overflow-hidden flex flex-col justify-between min-h-[220px]">
+          <div className="absolute right-0 top-0 w-32 h-32 bg-emerald-50/50 rounded-bl-full -mr-8 -mt-8 opacity-40 z-0 flex items-end justify-center pb-8 pr-8">
+            <Coins className="w-12 h-12 text-emerald-200" />
+          </div>
+          <div className="relative z-10">
+            <p className="text-xs font-black text-slate-400 uppercase tracking-[0.2em] mb-3">Total Pencapaian</p>
+            <h3 className="text-2xl font-black text-slate-800 mb-1">{formatRupiah(totalAchievementRp)}</h3>
+            
+            <div className="mt-4 space-y-1">
+              <div className="flex justify-between items-center text-[10px] font-bold text-slate-500 uppercase">
+                <span>Progres Target</span>
+                <span className="text-emerald-600">{globalPercentage.toFixed(1)}%</span>
+              </div>
+              <div className="w-full bg-slate-100 rounded-full h-1.5 overflow-hidden">
+                <div 
+                  className="bg-emerald-500 h-full rounded-full transition-all duration-1000" 
+                  style={{ width: `${Math.min(globalPercentage, 100)}%` }}
+                />
+              </div>
+            </div>
+          </div>
+          <div className="relative z-10 mt-auto pt-4 border-t border-slate-50 flex items-center justify-between">
+            <span className="text-[10px] font-bold text-slate-500 uppercase tracking-tighter">Realisasi / Hari</span>
+            <span className="text-sm font-black text-emerald-600">{formatRupiah(totalAchievementRp / (daysInSelection || 30))}</span>
+          </div>
         </div>
-       <div className={`rounded-xl shadow-sm p-6 flex flex-col justify-center relative overflow-hidden bg-white ${
-  globalPercentage >= 100 ? 'border-2 border-emerald-500 text-emerald-600' :
-  globalPercentage >= 50 ? 'border-2 border-amber-500 text-amber-600' :
-  'border-2 border-rose-500 text-rose-600'
-}`}>
-  <p className="text-xs font-bold uppercase tracking-widest mb-1 opacity-70">Agregat Kinerja Kuantitatif</p>
-  <h3 className="text-4xl font-extrabold">{globalPercentage.toFixed(1)}%</h3>
-</div>
+        
+        {/* Card 3: Agregat Kinerja */}
+        <div className={`rounded-2xl shadow-sm p-6 relative overflow-hidden bg-white flex flex-col justify-between min-h-[220px] transition-all border ${
+          globalPercentage >= 100 ? 'border-emerald-500 shadow-emerald-100/50' :
+          globalPercentage >= 50 ? 'border-amber-500 shadow-amber-100/50' :
+          'border-rose-500 shadow-rose-100/50'
+        }`}>
+          <div className="absolute right-0 top-0 w-32 h-32 bg-slate-50/30 rounded-bl-full -mr-8 -mt-8 opacity-40 z-0 flex items-end justify-center pb-8 pr-8 text-slate-200">
+            <TrendingUp className="w-12 h-12" />
+          </div>
+          <div className="relative z-10">
+            <p className="text-xs font-black text-slate-400 uppercase tracking-[0.15em] mb-3">Kinerja Kuantitatif</p>
+            <div className="flex items-baseline gap-1">
+              <h3 className={`text-5xl font-black ${
+                globalPercentage >= 100 ? 'text-emerald-600' :
+                globalPercentage >= 50 ? 'text-amber-600' :
+                'text-rose-600'
+              }`}>{globalPercentage.toFixed(1)}%</h3>
+            </div>
+          </div>
+          
+          <div className="relative z-10 mt-auto pt-4 border-t border-slate-50">
+             <div className="flex items-center gap-2">
+                <div className={`w-2 h-2 rounded-full animate-pulse ${
+                   globalPercentage >= 100 ? 'bg-emerald-500' :
+                   globalPercentage >= 50 ? 'bg-amber-500' :
+                   'bg-rose-500'
+                }`} />
+                <span className="text-[10px] font-black uppercase tracking-widest text-slate-500">
+                   Status: {globalPercentage >= 100 ? 'LUAR BIASA' : globalPercentage >= 50 ? 'DALAM TREN' : 'KRITIS'}
+                </span>
+             </div>
+          </div>
+        </div>
+
+        <UserRadialChart 
+          percentage={globalUserPercentage} 
+          total={totalAchievementUser} 
+          target={totalTargetUser} 
+        />
       </div>
 
       {/* 2. Global Motivational Message */}
