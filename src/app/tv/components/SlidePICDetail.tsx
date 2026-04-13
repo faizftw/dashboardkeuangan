@@ -1,7 +1,7 @@
 'use client'
 
 import { PICPerformance, ProgramPerformance } from '../actions'
-import { formatRupiah, cn } from '@/lib/utils'
+import { cn } from '@/lib/utils'
 import { 
   BarChart, 
   Bar, 

@@ -152,7 +152,7 @@ export function SlideProgramDetail({ program, inputs, metricDefinitions = [], me
     tvMetrics.find(m => m.metric_group === 'user_acquisition') ||
     tvMetrics[0]
 
-  let chartDataWithTarget: any[] = []
+  let chartDataWithTarget: Record<string, unknown>[] = []
   let chartMaxTarget = 0
   let chartLabel = "Cumulative Analytics"
 

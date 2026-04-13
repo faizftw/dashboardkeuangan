@@ -41,7 +41,6 @@ export function Slide2Programs({ programs, pagination }: Slide2Props) {
 
 function ProgramCard({ program }: { program: ProgramPerformance }) {
   const isQualitative = program.target_type === 'qualitative'
-  const isHybrid = program.target_type === 'hybrid'
 
   const statusColors: Record<string, string> = {
     'EXCELLENT': 'text-emerald-400 bg-emerald-500/10 border-emerald-500/30 shadow-[0_0_15px_rgba(16,185,129,0.2)]',
@@ -108,14 +107,14 @@ function ProgramCard({ program }: { program: ProgramPerformance }) {
                 <div className="flex justify-between items-end">
                   <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{metric.label}</span>
                   <span className="text-lg font-black text-slate-200">
-                    {metric.unit_label === 'Rp' ? formatRupiah((metric as any).achieved || 0) : ((metric as any).achieved || 0)}
+                    {metric.unit_label === 'Rp' ? formatRupiah((metric as { achieved?: number }).achieved || 0) : ((metric as { achieved?: number }).achieved || 0)}
                     <span className="text-[10px] text-slate-500 ml-1">/ {metric.unit_label === 'Rp' ? formatRupiah(metric.monthly_target || 0) : (metric.monthly_target || 0)}</span>
                   </span>
                 </div>
                 <div className="h-2 bg-slate-950 rounded-full overflow-hidden border border-slate-800 p-0.5">
                   <div 
                     className={cn("h-full transition-all duration-1000 rounded-full", barColors[program.health.status])}
-                    style={{ width: `${Math.min((metric as any).percentage || 0, 100)}%` }}
+                    style={{ width: `${Math.min((metric as { percentage?: number }).percentage || 0, 100)}%` }}
                   />
                 </div>
               </div>

@@ -6,7 +6,9 @@ import {
   calculateProgramHealth, 
   aggregateByMetricGroup, 
   ProgramWithRelations,
-  ProgramHealthResult 
+  ProgramHealthResult,
+  getHealthStatus,
+  getPerformanceGrade
 } from '@/lib/dashboard-calculator'
 
 export type Milestone = Database['public']['Tables']['program_milestones']['Row']
@@ -214,7 +216,6 @@ export async function getTVDashboardData(): Promise<TVDashboardData> {
 
   const picPerformance: PICPerformance[] = Array.from(picMap.values()).map(pic => {
     const avgHealth = pic.healthSum / pic.count
-    const { getHealthStatus, getPerformanceGrade } = require('@/lib/dashboard-calculator')
     return {
       picId: pic.picId,
       picName: pic.picName,
