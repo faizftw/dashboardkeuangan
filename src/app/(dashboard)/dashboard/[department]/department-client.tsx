@@ -9,10 +9,8 @@ import { formatMetricValue } from '@/lib/formula-evaluator'
 import { useRouter, usePathname, useSearchParams } from 'next/navigation'
 import { 
   ArrowLeft,
-  Filter,
   BarChart3,
   HeartPulse,
-  TrendingUp,
   Target
 } from 'lucide-react'
 import { DatePickerWithRange } from '@/components/date-range-picker'
@@ -32,7 +30,6 @@ interface DepartmentClientProps {
   activePeriod: Period
   initialFilters: { startDate: string; endDate: string }
   milestoneCompletions: MilestoneCompletion[]
-  picProfiles: { id: string; name: string }[]
   metricValues: MetricValue[]
 }
 
@@ -44,7 +41,7 @@ const formatGroupValue = (key: string, val: number) => {
 }
 
 const getGroupLabel = (key: string) => {
-  const map: any = {
+  const map: Record<string, string> = {
     revenue: "Total Pendapatan",
     user_acquisition: "Total Akuisisi / Peserta",
     ad_spend: "Total Anggaran Keluar",
@@ -75,7 +72,6 @@ export function DepartmentClient({
   activePeriod, 
   initialFilters, 
   milestoneCompletions,
-  picProfiles,
   metricValues
 }: DepartmentClientProps) {
   const router = useRouter()

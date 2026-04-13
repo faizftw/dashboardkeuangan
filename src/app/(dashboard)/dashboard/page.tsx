@@ -60,10 +60,7 @@ export default async function DashboardPage({
     .select('*')
     .in('milestone_id', allMilestoneIds)
 
-  // 5. PIC Profiles for display names
-  const { data: picProfiles } = await supabase
-    .from('profiles')
-    .select('id, name')
+
 
   // 6. Daily Inputs
   let dailyInputs: DailyInput[] = []
@@ -135,7 +132,6 @@ export default async function DashboardPage({
             activePeriod={activePeriod}
             initialFilters={filterStrings}
             milestoneCompletions={milestoneCompletions || []}
-            picProfiles={picProfiles || []}
             metricValues={metricValues}
           />
         </Suspense>

@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react'
 import { InputFormClient } from './input-form-client'
 import { PivotTableClient } from './pivot-table-client'
 import { Database } from '@/types/database'
-import { List, LayoutGrid, PlusCircle } from 'lucide-react'
+import { List, LayoutGrid } from 'lucide-react'
 
 type ProgramMilestone = Database['public']['Tables']['program_milestones']['Row']
 type MilestoneCompletion = Database['public']['Tables']['milestone_completions']['Row']

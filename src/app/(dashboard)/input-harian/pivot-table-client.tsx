@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useMemo, useRef, useEffect, KeyboardEvent } from 'react'
+import { useState, useMemo, useRef, useEffect, KeyboardEvent, useCallback } from 'react'
 import { Database } from '@/types/database'
 import { formatMetricValue, evaluateFormula } from '@/lib/formula-evaluator'
 import { upsertSingleMetricValue } from './actions'
@@ -26,8 +26,7 @@ interface PivotTableClientProps {
 export function PivotTableClient({
   programs,
   activePeriod,
-  allPeriodMetricValues,
-  isAdmin
+  allPeriodMetricValues
 }: PivotTableClientProps) {
   const [selectedProgramId, setSelectedProgramId] = useState<string>(programs[0]?.id || '')
 
@@ -48,13 +47,13 @@ export function PivotTableClient({
   // Construct initial local values map from server data
   // Key format: `${dateString}_${metricDefinitionId}`
   // dateString: 'YYYY-MM-DD'
-  const buildDateString = (day: number) => {
+  const buildDateString = useCallback((day: number) => {
     if (!activePeriod) return ''
     const y = activePeriod.year
     const m = String(activePeriod.month).padStart(2, '0')
     const d = String(day).padStart(2, '0')
     return `${y}-${m}-${d}`
-  }
+  }, [activePeriod])
 
   // localValues state to support Optimistic UI and real-time recalculation
   const [localValues, setLocalValues] = useState<Record<string, number | null>>({})
@@ -157,8 +156,8 @@ export function PivotTableClient({
         value: newVal
       })
       if ('error' in res && res.error) throw new Error(res.error)
-    } catch (e: any) {
-      toast.error(`Gagal menyimpan: ${e.message}`)
+    } catch (e: unknown) {
+      toast.error(`Gagal menyimpan: ${e instanceof Error ? e.message : 'Unknown Error'}`)
       // Rollback
       setLocalValues(prev => ({ ...prev, [cellKey]: originalVal }))
     } finally {
@@ -222,7 +221,7 @@ export function PivotTableClient({
     })
 
     return { total: computedTotals, average: computedAverages, daysCount: maxDaysWithData }
-  }, [daysArray, metrics, localValues, activePeriod])
+  }, [daysArray, metrics, localValues, buildDateString])
 
   if (!activeProgram) {
     return <div className="text-center py-8 text-slate-500">Pilih program untuk melihat detail.</div>
@@ -268,7 +267,7 @@ export function PivotTableClient({
           </p>
           <div className="flex flex-wrap items-center justify-center gap-3">
             <div className="text-xs bg-slate-100 border border-slate-200 text-slate-600 px-3 py-2 rounded-lg font-medium">
-              Gunakan opsi <strong>"Semua Program"</strong> untuk mencatat pencapaian harian program ini.
+              Gunakan opsi <strong>&quot;Semua Program&quot;</strong> untuk mencatat pencapaian harian program ini.
             </div>
           </div>
         </div>

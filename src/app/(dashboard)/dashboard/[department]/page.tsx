@@ -7,6 +7,7 @@ type DailyInput = Database['public']['Tables']['daily_inputs']['Row']
 type Milestone = Database['public']['Tables']['program_milestones']['Row']
 type MetricDefinition = Database['public']['Tables']['program_metric_definitions']['Row']
 type MetricValue = Database['public']['Tables']['daily_metric_values']['Row']
+type MilestoneCompletion = Database['public']['Tables']['milestone_completions']['Row']
 
 type ProgramWithRelations = Database['public']['Tables']['programs']['Row'] & {
   program_pics: { profile_id: string }[]
@@ -67,7 +68,7 @@ export default async function DepartmentPage({
 
   // 4. Milestone Completions
   const allMilestoneIds = programs?.flatMap(p => p.program_milestones?.map((m: Milestone) => m.id)) || []
-  let milestoneCompletions: any = []
+  let milestoneCompletions: MilestoneCompletion[] = []
   if (allMilestoneIds.length > 0) {
     const { data } = await supabase
       .from('milestone_completions')
@@ -75,21 +76,6 @@ export default async function DepartmentPage({
       .in('milestone_id', allMilestoneIds)
     milestoneCompletions = data || []
   }
-
-  // 5. PIC Profiles for display names
-  // only fetch profiles that exist in these programs to save bandwidth
-  const profileIds = new Set<string>()
-  programs?.forEach(p => p.program_pics?.forEach(pic => profileIds.add(pic.profile_id)))
-  
-  let picProfiles: any = []
-  if (profileIds.size > 0) {
-    const { data } = await supabase
-      .from('profiles')
-      .select('id, name')
-      .in('id', Array.from(profileIds))
-    picProfiles = data || []
-  }
-
   // 6. Daily Inputs
   let dailyInputs: DailyInput[] = []
   if (programs && programs.length > 0) {
@@ -136,7 +122,6 @@ export default async function DepartmentPage({
         activePeriod={activePeriod}
         initialFilters={filterStrings}
         milestoneCompletions={milestoneCompletions}
-        picProfiles={picProfiles}
         metricValues={metricValues}
       />
     </Suspense>

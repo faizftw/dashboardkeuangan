@@ -2,7 +2,7 @@
 
 import { useState, useMemo } from 'react'
 import { Database } from '@/types/database'
-import { getDepartmentConfig, DEPARTMENTS } from '@/lib/department-config'
+import { getDepartmentConfig } from '@/lib/department-config'
 import { calculateProgramHealth, calculateDepartmentHealth, ProgramWithRelations } from '@/lib/dashboard-calculator'
 import { formatRupiah } from '@/lib/utils'
 import { formatMetricValue } from '@/lib/formula-evaluator'
@@ -16,7 +16,7 @@ import {
   ResponsiveContainer,
   ReferenceLine
 } from 'recharts'
-import { ChartContainer, type ChartConfig } from "@/components/ui/chart"
+import { ChartContainer } from "@/components/ui/chart"
 import { useRouter, usePathname, useSearchParams } from 'next/navigation'
 import { 
   HeartPulse, 
@@ -42,7 +42,6 @@ interface DashboardClientProps {
   activePeriod: Period
   initialFilters: { startDate: string; endDate: string }
   milestoneCompletions: MilestoneCompletion[]
-  picProfiles: { id: string; name: string }[]
   metricValues?: MetricValue[]
 }
 
@@ -65,7 +64,6 @@ export function DashboardClient({
   activePeriod, 
   initialFilters, 
   milestoneCompletions,
-  picProfiles,
   metricValues = []
 }: DashboardClientProps) {
   const router = useRouter()
@@ -189,8 +187,7 @@ export function DashboardClient({
       const subsetMetrics = metricValues.filter(m => m.date <= dateStr)
       
       const dayFactor = day / (activePeriod.working_days || 30) // pro-rated target factor for that specific day
-
-      const dayRecord: any = { day: String(day) }
+      const dayRecord: Record<string, string | number> = { day: String(day) }
       
       activeDepartments.forEach(dept => {
         const deptProgs = programs.filter(p => p.department === dept.key)
@@ -203,7 +200,7 @@ export function DashboardClient({
   }, [activePeriod, daysInSelection, dailyInputs, metricValues, milestoneCompletions, activeDepartments, programs])
 
   const chartConfig = useMemo(() => {
-    const cfg: any = {}
+    const cfg: Record<string, { label: string; color: string }> = {}
     activeDepartments.forEach((d, idx) => {
       cfg[d.key] = { label: d.config.label, color: `hsl(var(--chart-${(idx % 5) + 1}))` }
     })
@@ -351,6 +348,7 @@ export function DashboardClient({
                      contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }}
                      labelStyle={{ fontWeight: 'bold', color: '#1e293b', marginBottom: '8px' }}
                      itemStyle={{ fontWeight: 'bold', fontSize: '14px' }}
+                     // eslint-disable-next-line @typescript-eslint/no-explicit-any
                      formatter={(value: any) => [`${value}%`]}
                    />
                    <ReferenceLine y={100} stroke="#10b981" strokeDasharray="3 3" label={{ position: 'top', value: 'Target 100%', fill: '#10b981', fontSize: 10, fontWeight: 'bold' }} />

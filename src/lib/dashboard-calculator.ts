@@ -5,7 +5,6 @@ type MilestoneCompletion = Database['public']['Tables']['milestone_completions']
 type MetricDefinition = Database['public']['Tables']['program_metric_definitions']['Row']
 type MetricValue = Database['public']['Tables']['daily_metric_values']['Row']
 type DailyInput = Database['public']['Tables']['daily_inputs']['Row']
-type Period = Database['public']['Tables']['periods']['Row']
 
 export type ProgramWithRelations = Database['public']['Tables']['programs']['Row'] & {
   program_pics?: { profile_id: string }[]
