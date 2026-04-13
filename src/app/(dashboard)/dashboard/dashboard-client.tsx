@@ -14,7 +14,12 @@ import {
   CartesianGrid,
   Tooltip,
   ResponsiveContainer,
-  ReferenceLine
+  ReferenceLine,
+  RadialBarChart,
+  PolarGrid,
+  RadialBar,
+  PolarRadiusAxis,
+  Label
 } from 'recharts'
 import { ChartContainer } from "@/components/ui/chart"
 import { useRouter, usePathname, useSearchParams } from 'next/navigation'
@@ -308,36 +313,82 @@ export function DashboardClient({
       <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm space-y-6">
         <h3 className="font-bold text-slate-800 mb-2">Progres Kinerja per Departemen</h3>
         
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {activeDepartments.map(dept => (
-            <div key={dept.key} className="space-y-2 group">
-              <div className="flex justify-between items-end">
-                <div>
-                  <h4 className="font-bold text-slate-700 flex items-center gap-2">
-                     <span className={`w-3 h-3 rounded-full ${getProgressColor(dept.healthScore)}`}></span>
-                     {dept.config.label}
-                  </h4>
-                  <p className="text-xs text-slate-400 font-medium">{dept.programCount} Program</p>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+          {activeDepartments.map(dept => {
+             const pct = Math.min(dept.healthScore, 100);
+             const chartData = [
+               { name: dept.key, score: pct, fill: chartConfig[dept.key].color }
+             ];
+             
+             return (
+              <div key={dept.key} className="bg-slate-50 p-4 rounded-xl shadow-sm border border-slate-200 group relative">
+                <div className="flex justify-between items-start mb-2">
+                  <div className="flex flex-col">
+                    <h4 className="font-bold text-slate-700">{dept.config.label}</h4>
+                    <p className="text-xs text-slate-400 font-medium">{dept.programCount} Program</p>
+                  </div>
+                  <Link 
+                    href={`/dashboard/${dept.key}`} 
+                    className="p-1.5 rounded-full bg-white border border-slate-200 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 hover:border-indigo-200 shadow-sm transition-all"
+                  >
+                    <ArrowRight className="w-4 h-4" />
+                  </Link>
                 </div>
-                <div className="text-right">
-                  <span className="font-black text-lg text-slate-800">{dept.healthScore.toFixed(0)}%</span>
+                
+                <div className="flex items-center justify-center -my-2 relative z-0">
+                  <ChartContainer config={chartConfig} className="w-[160px] h-[160px]">
+                    <RadialBarChart
+                      data={chartData}
+                      startAngle={90}
+                      endAngle={pct === 0 ? 90 : 90 - (360 * (pct / 100))}
+                      innerRadius={55}
+                      outerRadius={70}
+                    >
+                      <PolarGrid
+                        gridType="circle"
+                        radialLines={false}
+                        stroke="none"
+                        className="first:fill-slate-200 last:fill-slate-50"
+                        polarRadius={[70, 55]}
+                      />
+                      <RadialBar dataKey="score" cornerRadius={10} background={false} />
+                      <PolarRadiusAxis tick={false} tickLine={false} axisLine={false}>
+                        <Label
+                          content={({ viewBox }) => {
+                            if (viewBox && "cx" in viewBox && "cy" in viewBox) {
+                              return (
+                                <text
+                                  x={viewBox.cx}
+                                  y={viewBox.cy}
+                                  textAnchor="middle"
+                                  dominantBaseline="middle"
+                                >
+                                  <tspan
+                                    x={viewBox.cx}
+                                    y={viewBox.cy}
+                                    className="fill-slate-800 text-2xl font-black"
+                                  >
+                                    {dept.healthScore.toFixed(0)}%
+                                  </tspan>
+                                  <tspan
+                                    x={viewBox.cx}
+                                    y={(viewBox.cy || 0) + 16}
+                                    className="fill-slate-400 text-[10px] font-bold uppercase tracking-widest"
+                                  >
+                                    Health
+                                  </tspan>
+                                </text>
+                              )
+                            }
+                          }}
+                        />
+                      </PolarRadiusAxis>
+                    </RadialBarChart>
+                  </ChartContainer>
                 </div>
               </div>
-              
-              {/* Progress Bar Container */}
-              <Link href={`/dashboard/${dept.key}`} className="block relative h-3 bg-slate-100 rounded-full overflow-hidden cursor-pointer hover:ring-2 hover:ring-indigo-300 transition-all">
-                <div 
-                  className={`absolute top-0 left-0 h-full rounded-full ${getProgressColor(dept.healthScore)} transition-all duration-1000`}
-                  style={{ width: `${Math.min(dept.healthScore, 100)}%` }}
-                ></div>
-              </Link>
-              <div className="text-right">
-                 <Link href={`/dashboard/${dept.key}`} className="text-xs font-bold text-indigo-600 hover:text-indigo-800 inline-flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                    Lihat Detail <ArrowRight className="w-3 h-3" />
-                 </Link>
-              </div>
-            </div>
-          ))}
+            )
+          })}
         </div>
       </div>
 
