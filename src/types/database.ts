@@ -338,6 +338,7 @@ export type Database = {
           show_on_dashboard: boolean
           show_on_tv: boolean
           display_order: number
+          metric_group: string | null
           created_at: string | null
         }
         Insert: {
@@ -355,6 +356,7 @@ export type Database = {
           show_on_dashboard?: boolean
           show_on_tv?: boolean
           display_order?: number
+          metric_group?: string | null
           created_at?: string | null
         }
         Update: {
@@ -372,6 +374,7 @@ export type Database = {
           show_on_dashboard?: boolean
           show_on_tv?: boolean
           display_order?: number
+          metric_group?: string | null
           created_at?: string | null
         }
         Relationships: [

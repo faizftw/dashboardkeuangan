@@ -2,249 +2,62 @@
 
 import { useState, useMemo } from 'react'
 import { Database } from '@/types/database'
-import { formatRupiah, cn } from '@/lib/utils'
-import { formatMetricValue } from '@/lib/formula-evaluator'
 import { getDepartmentConfig, DEPARTMENTS } from '@/lib/department-config'
+import { calculateProgramHealth, calculateDepartmentHealth, ProgramWithRelations } from '@/lib/dashboard-calculator'
+import { formatRupiah } from '@/lib/utils'
+import { formatMetricValue } from '@/lib/formula-evaluator'
 import {
-  BarChart,
-  Bar,
+  LineChart,
+  Line,
   XAxis,
   YAxis,
   CartesianGrid,
   Tooltip,
   ResponsiveContainer,
-  Cell,
-  AreaChart,
-  Area,
-  PolarGrid,
-  PolarRadiusAxis,
-  RadialBar,
-  RadialBarChart,
-  Label
+  ReferenceLine
 } from 'recharts'
-import {
-  ChartContainer,
-  type ChartConfig,
-} from "@/components/ui/chart"
-import {
-  Card,
-  CardContent,
-  CardFooter,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card"
+import { ChartContainer, type ChartConfig } from "@/components/ui/chart"
 import { useRouter, usePathname, useSearchParams } from 'next/navigation'
 import { 
-  Calendar as CalendarIcon, 
-  XCircle, 
-  ChartNoAxesColumn, 
-  ChartNoAxesCombined, 
+  HeartPulse, 
+  Layers, 
   Target, 
-  Coins, 
-  TrendingUp,
-  Users,
-  CheckCircle2,
-  Clock
+  CheckSquare, 
+  ArrowRight,
+  AlertTriangle
 } from 'lucide-react'
 import { DatePickerWithRange } from '@/components/date-range-picker'
 import { DateRange } from 'react-day-picker'
 import { format as formatDate } from 'date-fns'
+import Link from 'next/link'
 
-type Milestone = Database['public']['Tables']['program_milestones']['Row']
 type MilestoneCompletion = Database['public']['Tables']['milestone_completions']['Row']
-type MetricDefinition = Database['public']['Tables']['program_metric_definitions']['Row']
 type MetricValue = Database['public']['Tables']['daily_metric_values']['Row']
-
-type Program = Database['public']['Tables']['programs']['Row'] & {
-  program_pics: { profile_id: string }[]
-  program_milestones: Milestone[]
-  program_metric_definitions: MetricDefinition[]
-}
-
 type DailyInput = Database['public']['Tables']['daily_inputs']['Row']
 type Period = Database['public']['Tables']['periods']['Row']
 
 interface DashboardClientProps {
-  programs: Program[]
+  programs: ProgramWithRelations[]
   dailyInputs: DailyInput[]
   activePeriod: Period
-  initialFilters: {
-    startDate: string
-    endDate: string
-  }
+  initialFilters: { startDate: string; endDate: string }
   milestoneCompletions: MilestoneCompletion[]
   picProfiles: { id: string; name: string }[]
   metricValues?: MetricValue[]
 }
 
-type AggregatedProgram = Program & {
-  cumulative_rp: number
-  cumulative_user: number
-  effective_target_rp: number
-  effective_target_user: number
-  latest_qualitative_status: 'not_started' | 'in_progress' | 'completed' | null
-  qualitative_percentage: number
-  total_milestones: number
-  completed_milestones: number
-  percentage_rp: number
-  per_day_target_rp: number
-  per_day_target_user: number
-  business_status: 'PERLU PERHATIAN' | 'MENUJU TARGET' | 'TERCAPAI' | 'TERLAMPAUI'
-  team: { id: string, name: string }[]
+const getStatusColor = (score: number) => {
+  if (score >= 100) return 'text-emerald-600 bg-emerald-50 border-emerald-200'
+  if (score >= 80) return 'text-indigo-600 bg-indigo-50 border-indigo-200'
+  if (score >= 60) return 'text-amber-600 bg-amber-50 border-amber-200'
+  return 'text-red-600 bg-red-50 border-red-200'
 }
-
-interface TooltipPayloadEntry {
-  payload: {
-    Target: number;
-    Pencapaian: number;
-    percentage: number;
-  };
+const getProgressColor = (score: number) => {
+  if (score >= 100) return 'bg-emerald-500'
+  if (score >= 80) return 'bg-indigo-500'
+  if (score >= 60) return 'bg-amber-500'
+  return 'bg-red-500'
 }
-
-// Custom Tooltip component for Program Bar Chart
-const CustomTooltip = ({ active, payload, label }: { active?: boolean; payload?: TooltipPayloadEntry[]; label?: string }) => {
-  if (active && payload && payload.length) {
-    const data = payload[0].payload;
-    return (
-      <div className="bg-white p-4 rounded-xl shadow-xl border border-slate-200 min-w-[240px] z-[9999]">
-        <p className="font-bold text-slate-800 mb-3 border-b border-slate-100 pb-2">{label}</p>
-        <div className="space-y-2">
-          <div className="flex justify-between items-center gap-4">
-             <span className="text-xs font-semibold text-slate-500">Target (Pro-rata)</span>
-             <span className="text-sm font-bold text-slate-400">{formatRupiah(data.Target)}</span>
-          </div>
-          <div className="flex justify-between items-center gap-4">
-             <span className="text-xs font-semibold text-slate-500">Total Pencapaian</span>
-             <span className="text-sm font-bold text-indigo-600">{formatRupiah(data.Pencapaian)}</span>
-          </div>
-          <div className="mt-3 pt-3 border-t border-slate-100 flex justify-between items-center">
-            <span className="text-xs font-semibold text-slate-500">Status Capaian</span>
-            <span className={`text-xs font-bold px-2 py-1 rounded inline-block ${
-              data.percentage >= 100 ? 'bg-emerald-100 text-emerald-800' :
-              data.percentage >= 50 ? 'bg-amber-100 text-amber-800' :
-              'bg-red-100 text-red-800'
-            }`}>
-              {data.percentage.toFixed(1)}%
-            </span>
-          </div>
-        </div>
-      </div>
-    );
-  }
-  return null;
-};
-
-interface TrendPayloadEntry {
-  value: number;
-}
-
-// Tooltip for Daily Trend Chart
-const CustomTrendTooltip = ({ active, payload, label }: { active?: boolean; payload?: TrendPayloadEntry[]; label?: string }) => {
-  if (active && payload && payload.length) {
-    return (
-      <div className="bg-white p-4 rounded-xl shadow-xl border border-slate-200 min-w-[200px] z-[9999]">
-        <p className="font-bold text-slate-800 mb-3 border-b border-slate-100 pb-2">Tanggal {label}</p>
-        <div className="space-y-2">
-          <div className="flex justify-between items-center gap-4">
-             <span className="text-xs font-semibold text-slate-500">Akumulasi Aktual</span>
-             <span className="text-sm font-bold text-indigo-600">{formatRupiah(payload[0].value)}</span>
-          </div>
-          <div className="flex justify-between items-center gap-4">
-             <span className="text-xs font-semibold text-slate-500">Target Ideal (Linear)</span>
-             <span className="text-sm font-bold text-slate-400">{formatRupiah(payload[1].value)}</span>
-          </div>
-        </div>
-      </div>
-    );
-  }
-  return null;
-};
-
-// User Radial Chart Component
-const chartConfig = {
-  value: {
-    label: "Pencapaian",
-  },
-  users: {
-    label: "Total User",
-    color: "hsl(var(--chart-2))",
-  },
-} satisfies ChartConfig
-
-const UserRadialChart = ({ percentage, total, target }: { percentage: number, total: number, target: number }) => {
-  const chartData = [
-    { name: "users", value: percentage, fill: "var(--color-users)" },
-  ]
-
-  return (
-    <Card className="flex flex-col bg-white border-slate-200 shadow-sm overflow-hidden relative">
-      <div className="absolute right-0 top-0 w-24 h-24 bg-indigo-50 rounded-bl-full -mr-4 -mt-4 opacity-50 z-0 text-right p-4 font-black text-indigo-200/50 italic">USER</div>
-      <CardHeader className="items-center pb-0 pt-6 relative z-10">
-        <CardTitle className="text-sm font-semibold text-slate-500 uppercase tracking-widest">Agregat User</CardTitle>
-      </CardHeader>
-      <CardContent className="flex-1 pb-0 relative z-10">
-        <ChartContainer
-          config={chartConfig}
-          className="mx-auto aspect-square max-h-[180px]"
-        >
-          <RadialBarChart
-            data={chartData}
-            startAngle={90}
-            endAngle={90 + (3.6 * Math.min(percentage, 100))}
-            innerRadius={60}
-            outerRadius={90}
-          >
-            <PolarGrid
-              gridType="circle"
-              radialLines={false}
-              stroke="none"
-              className="first:fill-slate-100 last:fill-white"
-              polarRadius={[82, 68]}
-            />
-            <RadialBar dataKey="value" background cornerRadius={10} />
-            <PolarRadiusAxis tick={false} tickLine={false} axisLine={false}>
-              <Label
-                content={({ viewBox }) => {
-                  if (viewBox && "cx" in viewBox && "cy" in viewBox) {
-                    return (
-                      <text
-                        x={viewBox.cx}
-                        y={viewBox.cy}
-                        textAnchor="middle"
-                        dominantBaseline="middle"
-                      >
-                        <tspan
-                          x={viewBox.cx}
-                          y={viewBox.cy}
-                          className="fill-slate-800 text-3xl font-black"
-                        >
-                          {percentage.toFixed(1)}%
-                        </tspan>
-                        <tspan
-                          x={viewBox.cx}
-                          y={(viewBox.cy || 0) + 20}
-                          className="fill-slate-400 text-[10px] font-bold uppercase tracking-wider"
-                        >
-                          Pencapaian
-                        </tspan>
-                      </text>
-                    )
-                  }
-                }}
-              />
-            </PolarRadiusAxis>
-          </RadialBarChart>
-        </ChartContainer>
-      </CardContent>
-      <CardFooter className="flex-col gap-1 pb-6 relative z-10">
-        <div className="flex items-center gap-2 leading-none font-black text-indigo-600 text-sm">
-          {total.toLocaleString('id-ID')} <span className="text-slate-400 font-bold text-xs uppercase tracking-tighter"> / {Math.round(target).toLocaleString('id-ID')} User</span>
-        </div>
-      </CardFooter>
-    </Card>
-  )
-}
-
 
 export function DashboardClient({ 
   programs, 
@@ -262,8 +75,7 @@ export function DashboardClient({
   const [filterType, setFilterType] = useState<string>('all')
   const [filterStatus, setFilterStatus] = useState<string>('all')
   const [filterDepartment, setFilterDepartment] = useState<string>('all')
-  
-  // Date range state
+
   const [dateRange, setDateRange] = useState<DateRange | undefined>(() => {
     if (initialFilters.startDate && initialFilters.endDate) {
       return {
@@ -296,11 +108,7 @@ export function DashboardClient({
     router.push(`${pathname}?${params.toString()}`)
   }
 
-  // To support the useMemo trend logic, we need startDate and endDate strings
-  const startDateStr = dateRange?.from ? formatDate(dateRange.from, 'yyyy-MM-dd') : ''
-  const endDateStr = dateRange?.to ? formatDate(dateRange.to, 'yyyy-MM-dd') : ''
-
-  // 1. Calculate Pro-ration Factor
+  // 1. Pro-ration Factor
   const daysInSelection = useMemo(() => {
     if (isFilterActive && dateRange?.from && dateRange?.to) {
       const diffTime = Math.abs(dateRange.to.getTime() - dateRange.from.getTime())
@@ -313,562 +121,523 @@ export function DashboardClient({
     ? (daysInSelection / (activePeriod.working_days || 30)) 
     : 1
 
-  // 2. Data processing - Aggregate per Program
-  const aggregatedData: AggregatedProgram[] = useMemo(() => {
-    return programs.map(prog => {
-      const inputs = dailyInputs.filter(i => i.program_id === prog.id)
-      
-      const cumulative_rp = inputs.reduce((sum, current) => sum + Number(current.achievement_rp || 0), 0)
-      const cumulative_user = inputs.reduce((sum, current) => sum + Number(current.achievement_user || 0), 0)
-      
-      const latest_qualitative_status = inputs.length > 0 ? (inputs[inputs.length - 1].qualitative_status || 'not_started') : 'not_started'
+  // 2. Compute Global Health Status
+  const programHealths = useMemo(() => {
+    return programs.map(p => calculateProgramHealth(p, metricValues, dailyInputs, milestoneCompletions, prorationFactor))
+  }, [programs, metricValues, dailyInputs, milestoneCompletions, prorationFactor])
 
-      // Milestone Progress
-      const total_milestones = prog.program_milestones.length
-      const completed_milestones = prog.program_milestones.filter(ms => 
-        milestoneCompletions.find(c => c.milestone_id === ms.id && c.is_completed)
-      ).length
-      const qualitative_percentage = total_milestones > 0 ? (completed_milestones / total_milestones) * 100 : 0
+  const overallHealthScore = useMemo(() => {
+    if (programHealths.length === 0) return 0
+    return programHealths.reduce((sum, h) => sum + h.healthScore, 0) / programHealths.length
+  }, [programHealths])
 
-      // Calculate Pro-rated Targets
-      const effective_target_rp = (prog.monthly_target_rp || 0) * prorationFactor
-      const effective_target_user = (prog.monthly_target_user || 0) * prorationFactor
+  const globalStatusLabel = useMemo(() => {
+    if (overallHealthScore < 40) return "Kritis"
+    if (overallHealthScore < 60) return "Perlu Perhatian"
+    if (overallHealthScore < 80) return "Cukup"
+    if (overallHealthScore < 100) return "Baik"
+    return "Luar Biasa"
+  }, [overallHealthScore])
 
-      let percentage_rp = 0
-      if (effective_target_rp > 0) {
-        percentage_rp = (cumulative_rp / effective_target_rp) * 100
-      }
-
-      // Team resolution
-      const team = prog.program_pics.map(p => {
-        const profile = picProfiles.find(prof => prof.id === p.profile_id)
-        return { id: p.profile_id, name: profile?.name || '??' }
-      })
-
-      // Daily Target
-      const per_day_target_rp = prog.daily_target_rp || ((prog.monthly_target_rp || 0) / (activePeriod.working_days || 30))
-      const per_day_target_user = prog.daily_target_user || ((prog.monthly_target_user || 0) / (activePeriod.working_days || 30))
-
-      let business_status: AggregatedProgram['business_status'] = 'PERLU PERHATIAN'
-      if (prog.target_type === 'qualitative') {
-        if (qualitative_percentage >= 100) business_status = 'TERCAPAI'
-        else if (qualitative_percentage >= 50) business_status = 'MENUJU TARGET'
-        else business_status = 'PERLU PERHATIAN'
-      } else {
-        if (percentage_rp > 100) business_status = 'TERLAMPAUI'
-        else if (percentage_rp === 100) business_status = 'TERCAPAI'
-        else if (percentage_rp >= 50) business_status = 'MENUJU TARGET'
-        else business_status = 'PERLU PERHATIAN'
-      }
-
+  // 3. Compute Dept Stats
+  const activeDepartments = useMemo(() => {
+    const depts = new Set(programs.map(p => p.department))
+    return Array.from(depts).map(d => {
+      const deptProgs = programs.filter(p => p.department === d)
+      const health = calculateDepartmentHealth(deptProgs, metricValues, dailyInputs, milestoneCompletions, prorationFactor)
       return {
-        ...prog,
-        cumulative_rp,
-        cumulative_user,
-        effective_target_rp,
-        effective_target_user,
-        latest_qualitative_status,
-        qualitative_percentage,
-        total_milestones,
-        completed_milestones,
-        percentage_rp,
-        per_day_target_rp,
-        per_day_target_user,
-        business_status,
-        team
+        key: d,
+        config: getDepartmentConfig(d),
+        programCount: deptProgs.length,
+        healthScore: health.score
       }
-    })
-  }, [programs, dailyInputs, prorationFactor, activePeriod, milestoneCompletions, picProfiles])
+    }).sort((a, b) => b.healthScore - a.healthScore) // highest score first
+  }, [programs, metricValues, dailyInputs, milestoneCompletions, prorationFactor])
 
-  // Filtering Logic
-  const filteredData = useMemo(() => {
-    let result = aggregatedData
-    if (filterType !== 'all') result = result.filter(p => p.target_type === filterType)
-    if (filterDepartment !== 'all') result = result.filter(p => p.department === filterDepartment)
-    if (filterStatus !== 'all') {
-      if (filterStatus === 'TERCAPAI') result = result.filter(p => p.business_status === 'TERCAPAI' || p.business_status === 'TERLAMPAUI')
-      else result = result.filter(p => p.business_status === filterStatus)
-    }
-    return result.sort((a, b) => b.percentage_rp - a.percentage_rp)
-  }, [aggregatedData, filterType, filterStatus, filterDepartment])
+  // 4. Milestone Stats
+  const totalMilestones = useMemo(() => {
+    return programs.reduce((sum, p) => sum + (p.program_milestones?.length || 0), 0)
+  }, [programs])
+  const completedMilestones = useMemo(() => {
+    return programs.reduce((sum, p) => {
+       const msIds = p.program_milestones?.map(m => m.id) || []
+       const count = milestoneCompletions.filter(c => msIds.includes(c.milestone_id) && c.is_completed).length
+       return sum + count
+    }, 0)
+  }, [programs, milestoneCompletions])
 
-  // Chart 1: Daily Trend Data (Cumulative)
-  const dailyTrendData = useMemo(() => {
-    if (!activePeriod) return []
-    
-    let datesInRange: string[] = []
-    const totalTarget = programs.reduce((sum, p) => sum + (p.monthly_target_rp || 0), 0)
+  const targetTercapaiCount = programHealths.filter(h => h.healthScore >= 100).length
 
-    if (isFilterActive && startDateStr && endDateStr) {
-      const start = new Date(startDateStr)
-      const end = new Date(endDateStr)
-      const current = new Date(start)
-      while (current <= end) {
-        datesInRange.push(current.toISOString().split('T')[0])
-        current.setDate(current.getDate() + 1)
-      }
-    } else {
-      const totalDaysInMonth = new Date(activePeriod.year, activePeriod.month, 0).getDate()
-      datesInRange = Array.from({ length: totalDaysInMonth }, (_, i) => {
-        const day = i + 1
-        return `${activePeriod.year}-${String(activePeriod.month).padStart(2, '0')}-${String(day).padStart(2, '0')}`
+  // 5. Motivational Banner text
+  const bannerInfo = useMemo(() => {
+    const s = overallHealthScore
+    if (s < 40) return { title: "TARGET JAUH TERTINGGAL — FOKUS DAN KEJAR SEKARANG! 💪", bg: 'bg-red-600', text: 'text-red-50' }
+    if (s < 60) return { title: "MASIH ADA WAKTU — TINGKATKAN INTENSITAS! 🔥", bg: 'bg-amber-600', text: 'text-amber-50' }
+    if (s < 80) return { title: "PROGRES BAGUS — JANGAN KENDUR! 🎯", bg: 'bg-indigo-500', text: 'text-indigo-50' }
+    if (s < 100) return { title: "HAMPIR SAMPAI — SATU LANGKAH LAGI! 🚀", bg: 'bg-indigo-600', text: 'text-indigo-50' }
+    return { title: "TARGET TERCAPAI — LUAR BIASA! 🏆", bg: 'bg-emerald-600', text: 'text-emerald-50' }
+  }, [overallHealthScore])
+
+  // 6. Trend Daily Chart
+  // We need to trace the health score of the department per day in the period
+  const trendData = useMemo(() => {
+    const days = Array.from({ length: Math.min(daysInSelection, 31) }, (_, i) => i + 1)
+    return days.map(day => {
+      const dateStr = `${activePeriod.year}-${String(activePeriod.month).padStart(2, '0')}-${String(day).padStart(2, '0')}`
+      // Filter data up to this date
+      const subsetInputs = dailyInputs.filter(i => i.date <= dateStr)
+      const subsetMetrics = metricValues.filter(m => m.date <= dateStr)
+      
+      const dayFactor = day / (activePeriod.working_days || 30) // pro-rated target factor for that specific day
+
+      const dayRecord: any = { day: String(day) }
+      
+      activeDepartments.forEach(dept => {
+        const deptProgs = programs.filter(p => p.department === dept.key)
+        const dHealth = calculateDepartmentHealth(deptProgs, subsetMetrics, subsetInputs, milestoneCompletions, dayFactor)
+        dayRecord[dept.key] = Math.min(Math.round(dHealth.score), 150) // clamp at 150% visually
       })
-    }
-    
-    let runningTotal = 0
-    return datesInRange.map((dateStr) => {
-      const dayTotal = dailyInputs
-        .filter(input => input.date === dateStr)
-        .reduce((sum, input) => sum + Number(input.achievement_rp || 0), 0)
       
-      runningTotal += dayTotal
-      
-      const dateObj = new Date(dateStr)
-      const dayOfMonth = dateObj.getDate()
-      const daysInMonth = new Date(dateObj.getFullYear(), dateObj.getMonth() + 1, 0).getDate()
-
-      return {
-        tanggal: isFilterActive ? dateStr.substring(8, 10) + '/' + dateStr.substring(5, 7) : dayOfMonth,
-        'Pencapaian Akumulatif': runningTotal,
-        'Target Ideal': Math.round((totalTarget / (activePeriod.working_days || daysInMonth)) * dayOfMonth)
-      }
+      return dayRecord
     })
-  }, [dailyInputs, activePeriod, programs, isFilterActive, startDateStr, endDateStr])
+  }, [activePeriod, daysInSelection, dailyInputs, metricValues, milestoneCompletions, activeDepartments, programs])
 
-  // Chart 2: Per-Program Bar Chart Data
-  const chartData = useMemo(() => {
-    return aggregatedData
-      .filter(p => p.target_type === 'quantitative' || p.target_type === 'hybrid')
-      .map(p => ({
-        name: p.name.length > 20 ? p.name.substring(0, 20) + '...' : p.name,
-        Target: Math.round(p.effective_target_rp || 0),
-        Pencapaian: p.cumulative_rp || 0,
-        percentage: p.percentage_rp
-      }))
-  }, [aggregatedData])
+  const chartConfig = useMemo(() => {
+    const cfg: any = {}
+    activeDepartments.forEach((d, idx) => {
+      cfg[d.key] = { label: d.config.label, color: `hsl(var(--chart-${(idx % 5) + 1}))` }
+    })
+    return cfg
+  }, [activeDepartments])
 
-  // Helper formatting for Y Axis
-  const formatYAxis = (tickItem: number) => {
-    if (tickItem === 0) return '0'
-    if (tickItem >= 1000000000) return (tickItem / 1000000000).toFixed(1).replace(/\.0$/, '') + ' M'
-    if (tickItem >= 1000000) return (tickItem / 1000000).toFixed(0) + ' jt'
-    if (tickItem >= 1000) return (tickItem / 1000).toFixed(0) + ' rb'
-    return tickItem.toString()
-  }
-
-  // Motivational Messages
-  const getMotivationalMessage = (status: AggregatedProgram['business_status']) => {
-    if (status === 'TERLAMPAUI') return "MASYAA ALLAH WOW TARGET TERLAMPAUI 🚀"
-    if (status === 'TERCAPAI') return "ALHAMDULILLAH TARGET TERCAPAI 🌟"
-    return "TARGET BELUM TERCAPAI CARI SOLUSINYA SEGERA DAN DAPATKAN BONUSNYA 💪"
-  }
-
-  const getStatusColor = (status: AggregatedProgram['business_status']) => {
-    if (status === 'TERLAMPAUI' || status === 'TERCAPAI') return 'bg-emerald-500'
-    if (status === 'MENUJU TARGET') return 'bg-amber-400'
-    return 'bg-red-500'
-  }
-
-  const getStatusBadge = (status: AggregatedProgram['business_status']) => {
-    if (status === 'TERLAMPAUI') return <span className="inline-flex items-center px-2.5 py-1 rounded-md text-[10px] font-bold leading-5 bg-emerald-100 text-emerald-800 border border-emerald-200">💎 TERLAMPAUI</span>
-    if (status === 'TERCAPAI') return <span className="inline-flex items-center px-2.5 py-1 rounded-md text-[10px] font-bold leading-5 bg-emerald-100 text-emerald-800 border border-emerald-200">✅ TERCAPAI</span>
-    if (status === 'MENUJU TARGET') return <span className="inline-flex items-center px-2.5 py-1 rounded-md text-[10px] font-bold leading-5 bg-amber-100 text-amber-800 border border-amber-200">⚠ MENUJU</span>
-    return <span className="inline-flex items-center px-2.5 py-1 rounded-md text-[10px] font-bold leading-5 bg-rose-100 text-rose-800 border border-rose-200">❌ PERHATIAN</span>
-  }
-
-  const totalTargetRp = aggregatedData.reduce((sum, p) => sum + (p.effective_target_rp || 0), 0)
-  const totalAchievementRp = aggregatedData.reduce((sum, p) => sum + p.cumulative_rp, 0)
-  const globalPercentage = totalTargetRp > 0 ? (totalAchievementRp / totalTargetRp) * 100 : 0
-
-  const totalTargetUser = aggregatedData.reduce((sum, p) => sum + (p.effective_target_user || 0), 0)
-  const totalAchievementUser = aggregatedData.reduce((sum, p) => sum + p.cumulative_user, 0)
-  const globalUserPercentage = totalTargetUser > 0 ? (totalAchievementUser / totalTargetUser) * 100 : 0
+  // 7. Attention List
+  const needAttentionPrograms = programHealths
+    .filter(h => h.healthScore < 50)
+    .sort((a, b) => a.healthScore - b.healthScore)
+    .map(h => ({
+      ...h,
+      program: programs.find(p => p.id === h.programId)!
+    }))
 
   return (
-    <div className="space-y-8 pb-10 text-left">
+    <div className="space-y-6">
       
-      {/* 1. Global Metrics */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-        {/* Card 1: Total Target */}
-        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 relative overflow-hidden flex flex-col justify-between min-h-[220px]">
-          <div className="absolute right-0 top-0 w-32 h-32 bg-blue-50/50 rounded-bl-full -mr-8 -mt-8 opacity-40 z-0 flex items-end justify-center pb-8 pr-8">
-            <Target className="w-12 h-12 text-blue-200" />
-          </div>
-          <div className="relative z-10">
-            <p className="text-xs font-black text-slate-400 uppercase tracking-[0.2em] mb-3">Total Target (RP)</p>
-            <h3 className="text-2xl font-black text-slate-800 mb-1">{formatRupiah(totalTargetRp)}</h3>
-            <p className="text-[10px] font-bold text-slate-400 italic">Target akumulatif periode aktif</p>
-          </div>
-          <div className="relative z-10 mt-auto pt-4 border-t border-slate-50 flex items-center justify-between">
-            <span className="text-[10px] font-bold text-slate-500 uppercase tracking-tighter">Day Pro-rata</span>
-            <span className="text-sm font-black text-blue-600">{formatRupiah(totalTargetRp / (daysInSelection || 30))}</span>
-          </div>
-        </div>
-
-        {/* Card 2: Total Pencapaian */}
-        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 relative overflow-hidden flex flex-col justify-between min-h-[220px]">
-          <div className="absolute right-0 top-0 w-32 h-32 bg-emerald-50/50 rounded-bl-full -mr-8 -mt-8 opacity-40 z-0 flex items-end justify-center pb-8 pr-8">
-            <Coins className="w-12 h-12 text-emerald-200" />
-          </div>
-          <div className="relative z-10">
-            <p className="text-xs font-black text-slate-400 uppercase tracking-[0.2em] mb-3">Total Pencapaian (RP)</p>
-            <h3 className="text-2xl font-black text-slate-800 mb-1">{formatRupiah(totalAchievementRp)}</h3>
-            
-            <div className="mt-4 space-y-1">
-              <div className="flex justify-between items-center text-[10px] font-bold text-slate-500 uppercase">
-                <span>Progres Budget</span>
-                <span className="text-emerald-600">{globalPercentage.toFixed(1)}%</span>
-              </div>
-              <div className="w-full bg-slate-100 rounded-full h-1.5 overflow-hidden">
-                <div 
-                  className="bg-emerald-500 h-full rounded-full transition-all duration-1000" 
-                  style={{ width: `${Math.min(globalPercentage, 100)}%` }}
-                />
-              </div>
-            </div>
-          </div>
-          <div className="relative z-10 mt-auto pt-4 border-t border-slate-50 flex items-center justify-between">
-            <span className="text-[10px] font-bold text-slate-500 uppercase tracking-tighter">Realization / Day</span>
-            <span className="text-sm font-black text-emerald-600">{formatRupiah(totalAchievementRp / (daysInSelection || 30))}</span>
-          </div>
-        </div>
-        
-        {/* Card 3: Agregat Kinerja */}
-        <div className={cn(
-          "rounded-2xl shadow-sm p-6 relative overflow-hidden bg-white flex flex-col justify-between min-h-[220px] transition-all border",
-          globalPercentage >= 100 ? 'border-emerald-500 shadow-emerald-100/50' :
-          globalPercentage >= 50 ? 'border-amber-500 shadow-amber-100/50' :
-          'border-rose-500 shadow-rose-100/50'
-        )}>
-          <div className="absolute right-0 top-0 w-32 h-32 bg-slate-50/30 rounded-bl-full -mr-8 -mt-8 opacity-40 z-0 flex items-end justify-center pb-8 pr-8 text-slate-200">
-            <TrendingUp className="w-12 h-12" />
-          </div>
-          <div className="relative z-10">
-            <p className="text-xs font-black text-slate-400 uppercase tracking-[0.15em] mb-3">Health Score</p>
-            <div className="flex items-baseline gap-1">
-              <h3 className={cn(
-                "text-5xl font-black",
-                globalPercentage >= 100 ? 'text-emerald-600' :
-                globalPercentage >= 50 ? 'text-amber-600' :
-                'text-rose-600'
-              )}>{globalPercentage.toFixed(1)}%</h3>
-            </div>
-          </div>
-          
-          <div className="relative z-10 mt-auto pt-4 border-t border-slate-50">
-             <div className="flex items-center gap-2">
-                <div className={cn(
-                   "w-2 h-2 rounded-full animate-pulse",
-                   globalPercentage >= 100 ? 'bg-emerald-500' :
-                   globalPercentage >= 50 ? 'bg-amber-500' :
-                   'bg-rose-500'
-                )} />
-                <span className="text-[10px] font-black uppercase tracking-widest text-slate-500">
-                   STATUS: {globalPercentage >= 100 ? 'LUAR BIASA' : globalPercentage >= 50 ? 'PADA TREK' : 'KRITIS'}
-                </span>
-             </div>
-          </div>
-        </div>
-
-        <UserRadialChart 
-          percentage={globalUserPercentage} 
-          total={totalAchievementUser} 
-          target={totalTargetUser} 
-        />
-      </div>
-
-      {/* 2. Motivational Message */}
-      <div className={cn(
-        "p-4 rounded-xl border-2 font-bold text-center text-sm transition-all",
-        globalPercentage >= 100 
-          ? 'bg-emerald-50 border-emerald-400 text-emerald-800 shadow-[0_0_15px_rgba(16,185,129,0.3)]' 
-          : 'bg-red-50 border-red-500 text-red-800 shadow-[0_0_15px_rgba(239,68,68,0.2)]'
-      )}>
-        {globalPercentage >= 100 ? getMotivationalMessage('TERCAPAI') : getMotivationalMessage('PERLU PERHATIAN')}
-      </div>
-
-      {/* 3. Global Charts */}
-      <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
-        <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
-          <span className="text-lg font-bold text-slate-800 mb-6 flex items-center gap-2"><ChartNoAxesCombined className="w-5 h-5" />Tren Akumulasi Pencapaian</span>
-          <div className="w-full h-[350px]">
-            <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={dailyTrendData} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
-                <defs>
-                  <linearGradient id="colorAch" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#4f46e5" stopOpacity={0.3}/>
-                    <stop offset="95%" stopColor="#4f46e5" stopOpacity={0}/>
-                  </linearGradient>
-                </defs>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
-                <XAxis dataKey="tanggal" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#64748b' }} />
-                <YAxis tickFormatter={formatYAxis} axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#64748b' }} />
-                <Tooltip content={<CustomTrendTooltip />} />
-                <Area type="monotone" dataKey="Pencapaian Akumulatif" stroke="#4f46e5" strokeWidth={3} fillOpacity={1} fill="url(#colorAch)" />
-                <Area type="monotone" dataKey="Target Ideal" stroke="#94a3b8" strokeWidth={2} strokeDasharray="5 5" fill="transparent" />
-              </AreaChart>
-            </ResponsiveContainer>
-          </div>
-        </div>
-
-        {chartData.length > 0 && (
-          <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
-            <span className="text-lg font-bold text-slate-800 mb-6 flex items-center gap-2"><ChartNoAxesColumn className="w-5 h-5" />Capaian Program Kuantitatif</span>
-            <div className="w-full h-[350px]">
-               <ResponsiveContainer width="100%" height="100%">
-                 <BarChart data={chartData} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
-                   <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
-                   <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#64748b' }} />
-                   <YAxis tickFormatter={formatYAxis} axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#64748b' }} />
-                   <Tooltip content={<CustomTooltip />} cursor={{ fill: '#f8fafc' }} />
-                   <Bar dataKey="Target" fill="#cbd5e1" radius={[4, 4, 0, 0]} barSize={40} />
-                   <Bar dataKey="Pencapaian" radius={[4, 4, 0, 0]} barSize={40}>
-                     {chartData.map((entry, index) => (
-                       <Cell key={`cell-${index}`} fill={
-                         entry.percentage >= 100 ? '#10b981' : 
-                         entry.percentage >= 50 ? '#f59e0b' : '#ef4444'
-                       } />
-                     ))}
-                   </Bar>
-                 </BarChart>
-               </ResponsiveContainer>
-            </div>
-          </div>
-        )}
-      </div>
-
-      {/* 4. Controls */}
-      <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
-        <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-6">
-          <div className="flex items-center gap-3">
-            <div className="p-2 bg-indigo-50 rounded-lg">
-              <CalendarIcon className="w-5 h-5 text-indigo-600" />
-            </div>
-            <div>
-              <h4 className="text-sm font-bold text-slate-800">Filter Jangka Waktu</h4>
-              <p className="text-xs text-slate-500 font-medium tracking-tight">Eksplorasi data periode spesifik secara custom.</p>
-            </div>
-          </div>
-
-          <div className="flex flex-col sm:flex-row items-center gap-4 w-full lg:w-auto">
-            <DatePickerWithRange date={dateRange} setDate={setDateRange} />
-            <div className="flex gap-2 w-full sm:w-auto">
-               <button 
-                onClick={handleApplyFilter} disabled={!dateRange?.from || !dateRange?.to}
-                className="flex-1 sm:flex-none bg-indigo-600 hover:bg-indigo-700 disabled:bg-slate-300 text-white text-xs font-bold px-6 py-3 rounded-xl transition-all shadow-lg shadow-indigo-100"
-               >
-                 Terapkan Filter
+      {/* Filters */}
+      <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-200 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+        <h3 className="font-bold text-slate-800 flex items-center gap-2">
+          <Target className="w-5 h-5 text-indigo-500" /> Executive Overview
+        </h3>
+        <div className="flex flex-col sm:flex-row gap-3 w-full sm:w-auto">
+          <DatePickerWithRange date={dateRange} setDate={setDateRange} />
+          <div className="flex gap-2">
+             <button onClick={handleApplyFilter} className="bg-slate-800 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-slate-700 transition flex-1 sm:flex-none">
+               Terapkan
+             </button>
+             {isFilterActive && (
+               <button onClick={handleResetFilter} className="bg-white border border-slate-200 text-slate-600 px-4 py-2 rounded-lg text-sm font-medium hover:bg-slate-50 transition flex-1 sm:flex-none">
+                 Reset
                </button>
-               {isFilterActive && (
-                 <button onClick={handleResetFilter} className="p-2 text-slate-400 hover:text-rose-500 transition-colors">
-                   <XCircle className="w-6 h-6" />
-                 </button>
-               )}
-            </div>
+             )}
           </div>
         </div>
       </div>
 
-      <div className="flex flex-col sm:flex-row flex-wrap gap-3 items-center bg-white p-4 rounded-xl border border-slate-200 shadow-sm mb-6">
-        <div className="flex items-center gap-2">
-          <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">TIPE:</span>
-          <select 
-            value={filterType} onChange={e => setFilterType(e.target.value)}
-            className="text-xs font-bold border-slate-200 rounded-lg bg-slate-50 px-2 py-1.5 outline-none focus:border-indigo-400"
-          >
-            <option value="all">SEMUA</option>
-            <option value="quantitative">KUANTITATIF</option>
-            <option value="qualitative">KUALITATIF</option>
-            <option value="hybrid">HYBRID</option>
-          </select>
+      {/* Motivational Banner */}
+      <div className={`${bannerInfo.bg} ${bannerInfo.text} p-4 rounded-xl shadow border border-white/20 text-center font-black tracking-widest text-sm sm:text-base animate-in fade-in zoom-in duration-500`}>
+        {bannerInfo.title}
+      </div>
+
+      {/* Row 1: KPI Cards */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        {/* Health Score */}
+        <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm flex flex-col justify-between relative overflow-hidden">
+          <div className="absolute top-0 right-0 p-4 opacity-10"><HeartPulse className="w-16 h-16" /></div>
+          <div className="text-sm font-bold tracking-widest text-slate-400 mb-2">HEALTH SCORE</div>
+          <div className="flex items-end gap-3">
+            <span className="text-4xl font-black text-slate-800">{overallHealthScore.toFixed(1)}%</span>
+            <span className={`text-xs font-bold px-2 py-1 rounded-md mb-1 border ${getStatusColor(overallHealthScore)}`}>
+              {globalStatusLabel}
+            </span>
+          </div>
         </div>
-        <div className="flex items-center gap-2">
-          <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">DEPT:</span>
-          <select 
-            value={filterDepartment} onChange={e => setFilterDepartment(e.target.value)}
-            className="text-xs font-bold border-slate-200 rounded-lg bg-slate-50 px-2 py-1.5 outline-none focus:border-indigo-400"
-          >
-            <option value="all">SEMUA DEPT</option>
-            {DEPARTMENTS.map(d => <option key={d.key} value={d.key}>{d.label}</option>)}
-          </select>
+
+        {/* Program Aktif */}
+        <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm flex flex-col justify-between relative overflow-hidden">
+          <div className="absolute top-0 right-0 p-4 opacity-10"><Layers className="w-16 h-16" /></div>
+          <div className="text-sm font-bold tracking-widest text-slate-400 mb-2">PROGRAM AKTIF</div>
+          <div className="flex items-end gap-3">
+            <span className="text-4xl font-black text-slate-800">{programs.length}</span>
+            <span className="text-sm font-bold text-slate-500 mb-1 border px-2 py-1 bg-slate-50 rounded-md">
+              {activeDepartments.length} Dept
+            </span>
+          </div>
         </div>
-        <div className="flex items-center gap-2">
-          <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">STATUS:</span>
-          <select 
-            value={filterStatus} onChange={e => setFilterStatus(e.target.value)}
-            className="text-xs font-bold border-slate-200 rounded-lg bg-slate-50 px-2 py-1.5 outline-none focus:border-indigo-400"
-          >
-            <option value="all">SEMUA</option>
-            <option value="TERCAPAI">TERCAPAI/LAMP</option>
-            <option value="MENUJU TARGET">PROSES</option>
-            <option value="PERLU PERHATIAN">KRITIS</option>
-          </select>
+
+        {/* Target Tercapai */}
+        <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm flex flex-col justify-between relative overflow-hidden">
+          <div className="absolute top-0 right-0 p-4 opacity-10"><Target className="w-16 h-16" /></div>
+          <div className="text-sm font-bold tracking-widest text-slate-400 mb-2">TARGET TERCAPAI</div>
+          <div className="flex items-end gap-3">
+            <span className="text-4xl font-black text-emerald-600">{targetTercapaiCount}</span>
+            <span className="text-sm font-bold text-slate-500 mb-1 border px-2 py-1 bg-slate-50 rounded-md">
+              / {programs.length} Prog
+            </span>
+          </div>
         </div>
-        <div className="ml-auto text-[10px] font-black text-slate-400 uppercase">
-          Total: <span className="text-indigo-600 text-xs">{filteredData.length}</span> Program
+
+        {/* Milestone Done */}
+        <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm flex flex-col justify-between relative overflow-hidden">
+          <div className="absolute top-0 right-0 p-4 opacity-10"><CheckSquare className="w-16 h-16" /></div>
+          <div className="text-sm font-bold tracking-widest text-slate-400 mb-2">MILESTONE DONE</div>
+          <div className="flex items-end gap-3">
+            <span className="text-4xl font-black text-indigo-600">{completedMilestones}</span>
+            <span className="text-sm font-bold text-slate-500 mb-1 border px-2 py-1 bg-slate-50 rounded-md">
+              / {totalMilestones} Tugas
+            </span>
+          </div>
         </div>
       </div>
 
-      {/* 5. Program Indicator Cards Grid */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
-        {filteredData.map(program => {
-          const isQuant = program.target_type === 'quantitative' || program.target_type === 'hybrid'
-          const isQual = program.target_type === 'qualitative' || program.target_type === 'hybrid'
-          const visualProgress = Math.min(Math.max(program.percentage_rp, 0), 100)
-          const qualProgress = Math.min(Math.max(program.qualitative_percentage, 0), 100)
-          
-          // Custom metrics for this program
-          const programMetrics = (program.program_metric_definitions || [])
-            .filter(m => m.is_target_metric && m.show_on_dashboard)
-            .sort((a, b) => a.display_order - b.display_order)
-          const hasCustomMetrics = programMetrics.length > 0
-          const dept = getDepartmentConfig(program.department || 'general')
-
-          return (
-            <div key={program.id} className="bg-white border border-slate-200 rounded-2xl shadow-sm hover:shadow-xl hover:border-indigo-100 transition-all overflow-hidden flex flex-col group relative">
-              <div className="p-6">
-                <div className="flex justify-between items-start mb-4 gap-2">
-                  <div className="flex flex-col">
-                    <h3 className="font-bold text-slate-900 text-lg leading-tight group-hover:text-indigo-600 transition-colors uppercase tracking-tight">{program.name}</h3>
-                    <div className="flex items-center gap-1.5 mt-1.5">
-                      <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full ${dept.color} ${dept.textColor}`}>{dept.label}</span>
-                      <div className="flex -space-x-1.5 overflow-hidden">
-                        {program.team.map((m, i) => (
-                          <div key={i} title={m.name} className="h-5 w-5 rounded-full ring-2 ring-white bg-indigo-100 flex items-center justify-center text-[8px] font-black text-indigo-700 border border-indigo-200">
-                            {m.name.substring(0,2).toUpperCase()}
-                          </div>
-                        ))}
-                      </div>
-                      <span className="text-[9px] font-bold text-slate-400 uppercase">{program.team.length} PIC</span>
-                    </div>
-                  </div>
-                  {getStatusBadge(program.business_status)}
+      {/* Row 2: Department Progress Bars */}
+      <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm space-y-6">
+        <h3 className="font-bold text-slate-800 mb-2">Progres Kinerja per Departemen</h3>
+        
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {activeDepartments.map(dept => (
+            <div key={dept.key} className="space-y-2 group">
+              <div className="flex justify-between items-end">
+                <div>
+                  <h4 className="font-bold text-slate-700 flex items-center gap-2">
+                     <span className={`w-3 h-3 rounded-full ${getProgressColor(dept.healthScore)}`}></span>
+                     {dept.config.label}
+                  </h4>
+                  <p className="text-xs text-slate-400 font-medium">{dept.programCount} Program</p>
                 </div>
-
-                <div className="space-y-5">
-                  {/* CUSTOM METRIC PROGRESS BARS */}
-                  {hasCustomMetrics && (
-                    <div className="space-y-3">
-                      {programMetrics.map(metric => {
-                        const metricVals = metricValues.filter(mv => mv.metric_definition_id === metric.id && mv.program_id === program.id)
-                        const achieved = metricVals.reduce((sum, mv) => sum + Number(mv.value || 0), 0)
-                        const target = Number(metric.monthly_target || 0) * prorationFactor
-                        const isLower = metric.target_direction === 'lower_is_better'
-                        const rawPct = target > 0 ? (achieved / target) * 100 : 0
-                        const effectivePct = isLower ? (target > 0 ? Math.max(0, 100 - rawPct + 100) : 0) : rawPct
-                        const barPct = Math.min(Math.max(effectivePct, 0), 100)
-                        const barColor = effectivePct >= 100 ? 'bg-emerald-500' : effectivePct >= 50 ? 'bg-amber-400' : 'bg-red-500'
-
-                        return (
-                          <div key={metric.id}>
-                            <div className="flex justify-between items-end mb-1">
-                              <div>
-                                <span className="text-[9px] uppercase font-black text-slate-300 tracking-widest block">{metric.label}</span>
-                                <span className="text-base font-black text-slate-800">
-                                  {metric.data_type === 'currency'
-                                    ? formatRupiah(achieved)
-                                    : formatMetricValue(achieved, metric.data_type, metric.unit_label)}
-                                </span>
-                              </div>
-                              <div className="text-right">
-                                <span className="text-[9px] uppercase font-black text-slate-300 tracking-widest block">Target</span>
-                                <span className="text-xs font-bold text-slate-500">
-                                  {metric.data_type === 'currency'
-                                    ? formatRupiah(target)
-                                    : formatMetricValue(target, metric.data_type, metric.unit_label)}
-                                </span>
-                              </div>
-                            </div>
-                            <div className="relative">
-                              <div className="flex justify-between text-[10px] font-black mb-1 uppercase">
-                                <span className="text-slate-400">{isLower ? '↓ Lower is better' : 'Yield Progress'}</span>
-                                <span className={rawPct >= 100 ? 'text-emerald-600' : 'text-slate-600'}>{rawPct.toFixed(1)}%</span>
-                              </div>
-                              <div className="w-full bg-slate-100 rounded-full h-2 overflow-hidden shadow-inner">
-                                <div className={cn('h-full rounded-full transition-all duration-1000', barColor)} style={{ width: `${barPct}%` }} />
-                              </div>
-                            </div>
-                          </div>
-                        )
-                      })}
-                    </div>
-                  )}
-
-                  {/* LEGACY QUANT PERFORMANCE (no custom metrics) */}
-                  {!hasCustomMetrics && isQuant && (
-                    <div className="space-y-3">
-                      <div className="flex justify-between items-end pb-1">
-                        <div className="flex flex-col">
-                          <span className="text-[9px] uppercase font-black text-slate-300 tracking-widest">Actual Capaian</span>
-                          <span className="text-lg font-black text-slate-800">{formatRupiah(program.cumulative_rp)}</span>
-                        </div>
-                        <div className="flex flex-col text-right">
-                          <span className="text-[9px] uppercase font-black text-slate-300 tracking-widest">Global Target</span>
-                          <span className="text-xs font-bold text-slate-500">{formatRupiah(program.monthly_target_rp || 0)}</span>
-                        </div>
-                      </div>
-
-                      <div className="relative pt-1">
-                        <div className="flex justify-between text-[10px] font-black mb-1.5 uppercase">
-                          <span className="text-slate-400">Yield Progress</span>
-                          <span className={program.percentage_rp >= 100 ? 'text-emerald-600' : 'text-slate-600'}>{program.percentage_rp.toFixed(1)}%</span>
-                        </div>
-                        <div className="w-full bg-slate-100 rounded-full h-2 overflow-hidden shadow-inner">
-                          <div 
-                            className={cn("h-full rounded-full transition-all duration-1000", getStatusColor(program.business_status))}
-                            style={{ width: `${visualProgress}%` }}
-                          />
-                        </div>
-                      </div>
-                      
-                      <div className="flex justify-between items-center bg-indigo-50/30 px-3 py-2 rounded-xl border border-indigo-50/50">
-                         <div className="flex items-center gap-1.5">
-                            <Users className="h-3 w-3 text-indigo-400" />
-                            <span className="text-[10px] font-bold text-slate-500 uppercase">User Flow</span>
-                         </div>
-                         <span className="text-xs font-black text-indigo-700">{program.cumulative_user} <span className="text-slate-400 text-[10px] font-bold">/ {program.monthly_target_user}</span></span>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* QUAL PERFORMANCE */}
-                  {isQual && (
-                    <div className={cn("pt-4 space-y-3", (hasCustomMetrics || isQuant) && "border-t border-slate-100")}>
-                      <div className="flex items-center justify-between">
-                         <h4 className="text-[9px] uppercase font-black text-purple-600 tracking-widest flex items-center gap-1.5">
-                           <CheckCircle2 className="h-3 w-3" /> Misi Kualitatif
-                         </h4>
-                         <span className="text-[10px] font-black text-purple-700 bg-purple-100 px-2 py-0.5 rounded-full">{qualProgress.toFixed(0)}%</span>
-                      </div>
-                      
-                      <div className="w-full bg-slate-100 rounded-full h-1.5 overflow-hidden">
-                        <div className="h-full bg-purple-500 rounded-full transition-all duration-1000" style={{ width: `${qualProgress}%` }} />
-                      </div>
-
-                      <div className="flex items-center gap-2 bg-slate-50 p-2.5 rounded-xl border border-slate-100/50">
-                         <div className="h-7 w-7 rounded-lg bg-white flex items-center justify-center shadow-sm shrink-0">
-                            <Clock className="h-4 w-4 text-slate-400" />
-                         </div>
-                         <div className="flex-1 min-w-0">
-                            <p className="text-[11px] font-bold text-slate-700 truncate">&quot;{program.qualitative_description || 'No focus set'}&quot;</p>
-                            <p className="text-[9px] text-slate-400 font-bold uppercase">{program.completed_milestones} / {program.total_milestones} Tugas Selesai</p>
-                         </div>
-                      </div>
-                    </div>
-                  )}
+                <div className="text-right">
+                  <span className="font-black text-lg text-slate-800">{dept.healthScore.toFixed(0)}%</span>
                 </div>
               </div>
-              <div className="mt-auto px-6 py-4 bg-slate-50/50 border-t border-slate-50 flex justify-between items-center text-[10px] font-black uppercase text-slate-400">
-                {hasCustomMetrics 
-                  ? <span>{programMetrics.length} KPI Aktif · Custom Metrics</span>
-                  : <span>Daily Pro-rata: {formatRupiah(program.per_day_target_rp)}</span>
-                }
-                <span className="text-indigo-400">Team Active</span>
+              
+              {/* Progress Bar Container */}
+              <Link href={`/dashboard/${dept.key}`} className="block relative h-3 bg-slate-100 rounded-full overflow-hidden cursor-pointer hover:ring-2 hover:ring-indigo-300 transition-all">
+                <div 
+                  className={`absolute top-0 left-0 h-full rounded-full ${getProgressColor(dept.healthScore)} transition-all duration-1000`}
+                  style={{ width: `${Math.min(dept.healthScore, 100)}%` }}
+                ></div>
+              </Link>
+              <div className="text-right">
+                 <Link href={`/dashboard/${dept.key}`} className="text-xs font-bold text-indigo-600 hover:text-indigo-800 inline-flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                    Lihat Detail <ArrowRight className="w-3 h-3" />
+                 </Link>
               </div>
             </div>
-          )
-        })}
+          ))}
+        </div>
       </div>
+
+      {/* Row 3: Charts & Attention */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Left: Trend Line Chart */}
+        <div className="lg:col-span-2 bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
+           <h3 className="font-bold text-slate-800 mb-6">Tren Health Score Harian (%)</h3>
+           <div className="h-[300px] w-full">
+             <ChartContainer config={chartConfig} className="w-full h-full">
+               <ResponsiveContainer width="100%" height="100%">
+                 <LineChart data={trendData} margin={{ top: 5, right: 30, left: -20, bottom: 5 }}>
+                   <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
+                   <XAxis dataKey="day" axisLine={false} tickLine={false} tick={{fill: '#94a3b8', fontSize: 12}} />
+                   <YAxis axisLine={false} tickLine={false} tick={{fill: '#94a3b8', fontSize: 12}} domain={[0, 150]} />
+                   <Tooltip 
+                     contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }}
+                     labelStyle={{ fontWeight: 'bold', color: '#1e293b', marginBottom: '8px' }}
+                     itemStyle={{ fontWeight: 'bold', fontSize: '14px' }}
+                     formatter={(value: any) => [`${value}%`]}
+                   />
+                   <ReferenceLine y={100} stroke="#10b981" strokeDasharray="3 3" label={{ position: 'top', value: 'Target 100%', fill: '#10b981', fontSize: 10, fontWeight: 'bold' }} />
+                   
+                   {activeDepartments.map(d => (
+                     <Line 
+                       key={d.key}
+                       type="monotone"
+                       dataKey={d.key}
+                       name={d.config.label}
+                       stroke={chartConfig[d.key as keyof typeof chartConfig].color}
+                       strokeWidth={3}
+                       dot={false}
+                       activeDot={{ r: 6 }}
+                     />
+                   ))}
+                 </LineChart>
+               </ResponsiveContainer>
+             </ChartContainer>
+           </div>
+        </div>
+
+        {/* Right: Attention List */}
+        <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm flex flex-col">
+           <h3 className="font-bold text-slate-800 mb-6 flex items-center gap-2">
+             <AlertTriangle className="w-5 h-5 text-amber-500" /> Perlu Perhatian
+           </h3>
+           
+           <div className="flex-1 overflow-y-auto pr-2 space-y-4">
+             {needAttentionPrograms.length === 0 ? (
+               <div className="flex flex-col items-center justify-center h-full text-slate-500 gap-3 py-12">
+                 <div className="bg-emerald-100 p-3 rounded-full"><HeartPulse className="w-8 h-8 text-emerald-600" /></div>
+                 <p className="font-bold text-center">Hebat! Semua program sehat (≥ 50%).</p>
+               </div>
+             ) : (
+               needAttentionPrograms.map((item) => {
+                 const deptName = getDepartmentConfig(item.program.department).label
+                 
+                 return (
+                   <div key={item.programId} className="group p-4 bg-slate-50 border border-slate-200 rounded-xl hover:border-slate-300 transition-colors relative overflow-hidden">
+                     <div className={`absolute left-0 top-0 bottom-0 w-1 ${getProgressColor(item.healthScore)}`}></div>
+                     <div className="flex justify-between items-start gap-2 mb-2">
+                       <div>
+                         <h4 className="font-bold text-slate-700 leading-tight mb-1">{item.program.name}</h4>
+                         <span className="text-[10px] font-bold tracking-wider uppercase text-slate-400 bg-white border border-slate-200 px-2 py-0.5 rounded-md">
+                           {deptName}
+                         </span>
+                       </div>
+                       <div className="text-right">
+                         <span className={`text-lg font-black ${getProgressColor(item.healthScore).replace('bg-', 'text-')}`}>
+                           {item.healthScore.toFixed(0)}%
+                         </span>
+                       </div>
+                     </div>
+                     <Link href={`/dashboard/${item.program.department}`} className="text-xs font-bold text-indigo-600 hover:text-indigo-800 flex items-center gap-1 mt-3">
+                       Lihat Detail Program <ArrowRight className="w-3 h-3" />
+                     </Link>
+                   </div>
+                 )
+               })
+             )}
+           </div>
+        </div>
+      </div>
+
+      {/* Row 4: Detail Program Preview (Globally Filtered) */}
+      <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-4 mt-8 space-y-6">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-slate-50 p-3 rounded-xl border border-slate-200">
+          <div className="flex flex-wrap gap-4 items-center w-full md:w-auto text-sm font-bold text-slate-500">
+            <div className="flex items-center gap-2">
+              <label>TIPE:</label>
+              <select 
+                value={filterType} 
+                onChange={(e) => setFilterType(e.target.value)}
+                className="bg-white border border-slate-200 rounded-md px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              >
+                <option value="all">SEMUA</option>
+                <option value="quantitative">KUANTITATIF (TARGET ANGKA)</option>
+                <option value="qualitative">KUALITATIF (MILESTONE)</option>
+              </select>
+            </div>
+            
+            <div className="flex items-center gap-2">
+              <label>DEPT:</label>
+              <select 
+                value={filterDepartment} 
+                onChange={(e) => setFilterDepartment(e.target.value)}
+                className="bg-white border border-slate-200 rounded-md px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              >
+                <option value="all">SEMUA DEPT</option>
+                {activeDepartments.map(d => (
+                  <option key={d.key} value={d.key}>{d.config.label.toUpperCase()}</option>
+                ))}
+              </select>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <label>STATUS:</label>
+              <select 
+                value={filterStatus} 
+                onChange={(e) => setFilterStatus(e.target.value)}
+                className="bg-white border border-slate-200 rounded-md px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              >
+                <option value="all">SEMUA</option>
+                <option value="tercapai">TERCAPAI (≥100%)</option>
+                <option value="perhatian">PERLU PERHATIAN (&lt;100%)</option>
+              </select>
+            </div>
+          </div>
+          
+          <div className="text-right text-sm font-bold tracking-tight text-slate-500 min-w-max">
+            TOTAL: <span className="text-indigo-600">{
+              programHealths.filter(h => {
+                const p = programs.find(prog => prog.id === h.programId)
+                if (!p) return false
+                if (filterType !== 'all' && p.target_type !== filterType) return false
+                if (filterDepartment !== 'all' && p.department !== filterDepartment) return false
+                if (filterStatus === 'tercapai' && h.healthScore < 100) return false
+                if (filterStatus === 'perhatian' && h.healthScore >= 100) return false
+                return true
+              }).length
+            } PROGRAM</span>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+          {programHealths.filter(h => {
+             const p = programs.find(prog => prog.id === h.programId)
+             if (!p) return false
+             if (filterType !== 'all' && p.target_type !== filterType) return false
+             if (filterDepartment !== 'all' && p.department !== filterDepartment) return false
+             if (filterStatus === 'tercapai' && h.healthScore < 100) return false
+             if (filterStatus === 'perhatian' && h.healthScore >= 100) return false
+             return true
+          }).map(h => {
+            const p = programs.find(prog => prog.id === h.programId)!
+            const deptConfig = getDepartmentConfig(p.department)
+            const isLegacy = p.target_type === 'quantitative' && (p.program_metric_definitions || []).length === 0
+            
+            return (
+               <div key={p.id} className="bg-white rounded-xl border border-slate-200 shadow-sm p-5 flex flex-col justify-between hover:border-indigo-300 transition-colors">
+                  <div className="mb-4">
+                    <div className="flex justify-between items-start gap-2 mb-3">
+                      <h4 className="font-bold text-slate-800 leading-tight flex-1 uppercase tracking-tight">{p.name}</h4>
+                      {h.healthScore < 100 ? (
+                        <span className="text-[10px] font-black uppercase bg-red-100 text-red-600 px-2 py-1 rounded-md shrink-0 flex items-center gap-1 border border-red-200">
+                          <span className="text-red-500">✕</span> PERHATIAN
+                        </span>
+                      ) : (
+                        <span className="text-[10px] font-black uppercase bg-emerald-100 text-emerald-700 px-2 py-1 rounded-md shrink-0 flex items-center gap-1 border border-emerald-200">
+                          <span className="text-emerald-500">✓</span> TERCAPAI
+                        </span>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-2 mb-4">
+                      <span className={`text-[10px] font-black tracking-widest px-2 py-0.5 rounded ${deptConfig.color} ${deptConfig.textColor}`}>{deptConfig.label}</span>
+                      <span className="text-[10px] font-black tracking-widest text-indigo-600 bg-indigo-50 border border-indigo-100 px-1.5 py-0.5 rounded-full flex items-center gap-1">
+                        PI
+                      </span>
+                      <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{p.program_pics?.length || 0} PIC</span>
+                    </div>
+
+                    {isLegacy ? (
+                      // Legacy Layout
+                      <div className="space-y-4">
+                        <div className="flex justify-between items-end border-b border-slate-100 pb-2">
+                           <div className="flex flex-col">
+                             <span className="text-[10px] uppercase font-black text-slate-400 tracking-wider">Actual Capaian</span>
+                             <span className="font-black text-xl text-slate-800">
+                               {formatRupiah(dailyInputs.filter(i => i.program_id === p.id).reduce((s, i) => s + Number(i.achievement_rp || 0), 0))}
+                             </span>
+                           </div>
+                           <div className="flex flex-col text-right">
+                             <span className="text-[10px] uppercase font-black text-slate-400 tracking-wider">Global Target</span>
+                             <span className="font-bold text-sm text-slate-600">
+                               {formatRupiah((p.monthly_target_rp || 0) * prorationFactor)}
+                             </span>
+                           </div>
+                        </div>
+
+                        <div>
+                           <div className="flex justify-between items-center mb-1">
+                             <span className="text-[9px] uppercase font-black tracking-widest text-slate-400">Yield Progress</span>
+                             <span className="text-[10px] font-black text-slate-800">{h.healthScore.toFixed(1)}%</span>
+                           </div>
+                           <div className="h-1.5 w-full bg-slate-100 rounded-full overflow-hidden">
+                             <div className={`h-full ${getProgressColor(h.healthScore)}`} style={{width: `${Math.min(h.healthScore, 100)}%`}}></div>
+                           </div>
+                        </div>
+
+                        <div className="flex justify-between items-center bg-slate-50 p-2 rounded-lg mt-2">
+                           <span className="text-[10px] uppercase font-bold text-slate-500 flex items-center gap-1"><Layers className="w-3 h-3" /> User Flow</span>
+                           <span className="text-xs font-black text-slate-800">
+                             {dailyInputs.filter(i => i.program_id === p.id).reduce((s, i) => s + Number(i.achievement_user || 0), 0)}
+                             <span className="text-slate-400 font-bold"> / {(p.monthly_target_user || 0) * prorationFactor}</span>
+                           </span>
+                        </div>
+                      </div>
+                    ) : p.target_type === 'qualitative' ? (
+                      // Qualitative Layout
+                      <div className="space-y-4">
+                        <div className="flex justify-between items-end border-b border-slate-100 pb-2">
+                           <div className="flex flex-col">
+                             <span className="text-[10px] uppercase font-black text-slate-400 tracking-wider">Milestone Selesai</span>
+                             <span className="font-black text-xl text-slate-800">
+                               {p.program_milestones?.filter(ms => milestoneCompletions.find(c => c.milestone_id === ms.id && c.is_completed)).length || 0}
+                             </span>
+                           </div>
+                           <div className="flex flex-col text-right">
+                             <span className="text-[10px] uppercase font-black text-slate-400 tracking-wider">Total Milestone</span>
+                             <span className="font-bold text-sm text-slate-600">
+                               {p.program_milestones?.length || 0}
+                             </span>
+                           </div>
+                        </div>
+
+                        <div>
+                           <div className="flex justify-between items-center mb-1">
+                             <span className="text-[9px] uppercase font-black tracking-widest text-slate-400">Yield Progress</span>
+                             <span className="text-[10px] font-black text-slate-800">{h.healthScore.toFixed(1)}%</span>
+                           </div>
+                           <div className="h-1.5 w-full bg-slate-100 rounded-full overflow-hidden">
+                             <div className={`h-full ${getProgressColor(h.healthScore)}`} style={{width: `${Math.min(h.healthScore, 100)}%`}}></div>
+                           </div>
+                        </div>
+                      </div>
+                    ) : (
+                      // Custom Metrics Layout
+                      <div className="space-y-4">
+                        {p.program_metric_definitions?.filter(m => m.is_target_metric).slice(0, 2).map((m, idx) => {
+                           const vals = metricValues?.filter(mv => mv.program_id === p.id && mv.metric_definition_id === m.id) || []
+                           const actual = vals.reduce((s, v) => s + (v.value || 0), 0)
+                           let mt = m.monthly_target || 0
+                           if (mt === 0) {
+                              if (m.data_type === 'currency') mt = p.monthly_target_rp || 0
+                              else if (m.data_type === 'integer') mt = p.monthly_target_user || 0
+                           }
+                           const target = mt * prorationFactor
+                           const pct = target > 0 ? (actual / target) * 100 : 0
+                           
+                           return (
+                             <div key={m.id} className={idx > 0 ? "border-t border-slate-100 pt-3" : ""}>
+                               <div className="flex justify-between items-end mb-1">
+                                 <div className="flex flex-col">
+                                   <span className="text-[10px] uppercase font-black text-slate-400 tracking-wider">{m.label}</span>
+                                   <span className="font-black text-sm text-slate-800">
+                                     {formatMetricValue(actual, m.data_type, m.unit_label)}
+                                   </span>
+                                 </div>
+                                 <div className="flex flex-col text-right">
+                                   <span className="text-[9px] uppercase font-black text-slate-300 tracking-wider">Target</span>
+                                   <span className="font-bold text-xs text-slate-500">
+                                     {formatMetricValue(target, m.data_type, m.unit_label)}
+                                   </span>
+                                 </div>
+                               </div>
+
+                               <div>
+                                  <div className="flex justify-between items-center mb-1">
+                                    <span className="text-[8px] uppercase font-bold tracking-widest text-slate-400">Yield Progress</span>
+                                    <span className="text-[9px] font-black text-slate-700">{pct.toFixed(1)}%</span>
+                                  </div>
+                                  <div className="h-1.5 w-full bg-slate-100 rounded-full overflow-hidden">
+                                    <div className={`h-full ${getProgressColor(pct)}`} style={{width: `${Math.min(pct, 100)}%`}}></div>
+                                  </div>
+                               </div>
+                             </div>
+                           )
+                        })}
+                      </div>
+                    )}
+                  </div>
+                  
+                  <div className="pt-3 border-t border-slate-100 flex justify-between items-center mt-auto">
+                    {isLegacy ? (
+                       <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Daily Pro-Rata: {formatRupiah(p.daily_target_rp || ((p.monthly_target_rp || 0)/(activePeriod.working_days || 30)))}</span>
+                    ) : (
+                       <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">{h.totalTargetMetrics} KPI Aktif - Custom Metrics</span>
+                    )}
+                    <span className="text-[9px] font-black text-indigo-500 uppercase tracking-widest">Team Active</span>
+                  </div>
+               </div>
+            )
+          })}
+        </div>
+      </div>
+
     </div>
   )
 }

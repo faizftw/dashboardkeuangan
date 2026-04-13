@@ -38,6 +38,7 @@ export const METRIC_TEMPLATES: MetricTemplate[] = [
         show_on_dashboard: true,
         show_on_tv: true,
         display_order: 1,
+        metric_group: 'leads',
         formula: null,
       },
       {
@@ -52,6 +53,7 @@ export const METRIC_TEMPLATES: MetricTemplate[] = [
         show_on_dashboard: true,
         show_on_tv: true,
         display_order: 2,
+        metric_group: 'ad_spend',
         formula: null,
       },
       {
@@ -66,6 +68,7 @@ export const METRIC_TEMPLATES: MetricTemplate[] = [
         show_on_dashboard: true,
         show_on_tv: true,
         display_order: 3,
+        metric_group: 'user_acquisition',
         formula: null,
       },
       {
@@ -80,6 +83,7 @@ export const METRIC_TEMPLATES: MetricTemplate[] = [
         show_on_dashboard: true,
         show_on_tv: true,
         display_order: 4,
+        metric_group: 'revenue',
         formula: null,
       },
       {
@@ -94,6 +98,7 @@ export const METRIC_TEMPLATES: MetricTemplate[] = [
         show_on_dashboard: true,
         show_on_tv: false,
         display_order: 5,
+        metric_group: 'conversion',
         formula: 'closing / lead_masuk',
       },
       {
@@ -108,6 +113,7 @@ export const METRIC_TEMPLATES: MetricTemplate[] = [
         show_on_dashboard: true,
         show_on_tv: true,
         display_order: 6,
+        metric_group: 'efficiency',
         formula: 'omzet / budget_iklan',
       },
       {
@@ -122,6 +128,7 @@ export const METRIC_TEMPLATES: MetricTemplate[] = [
         show_on_dashboard: true,
         show_on_tv: false,
         display_order: 7,
+        metric_group: null,
         formula: 'budget_iklan / closing',
       },
     ],
@@ -143,6 +150,7 @@ export const METRIC_TEMPLATES: MetricTemplate[] = [
         show_on_dashboard: true,
         show_on_tv: true,
         display_order: 1,
+        metric_group: 'revenue',
         formula: null,
       },
       {
@@ -157,6 +165,7 @@ export const METRIC_TEMPLATES: MetricTemplate[] = [
         show_on_dashboard: true,
         show_on_tv: true,
         display_order: 2,
+        metric_group: 'user_acquisition',
         formula: null,
       },
     ],
@@ -184,6 +193,7 @@ export const METRIC_TEMPLATES: MetricTemplate[] = [
         show_on_dashboard: true,
         show_on_tv: true,
         display_order: 1,
+        metric_group: 'leads',
         formula: null,
       },
       {
@@ -198,6 +208,7 @@ export const METRIC_TEMPLATES: MetricTemplate[] = [
         show_on_dashboard: true,
         show_on_tv: true,
         display_order: 2,
+        metric_group: 'user_acquisition',
         formula: null,
       },
       {
@@ -212,6 +223,7 @@ export const METRIC_TEMPLATES: MetricTemplate[] = [
         show_on_dashboard: true,
         show_on_tv: false,
         display_order: 3,
+        metric_group: 'conversion',
         formula: 'tiket_selesai / tiket_masuk',
       },
     ],
