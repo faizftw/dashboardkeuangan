@@ -78,5 +78,16 @@ export const DEPARTMENT_MAP = Object.fromEntries(
 ) as Record<DepartmentKey, DepartmentConfig>
 
 export function getDepartmentConfig(key: string): DepartmentConfig {
-  return DEPARTMENT_MAP[key as DepartmentKey] ?? DEPARTMENT_MAP['general']
+  const normalizedKey = key.toLowerCase().trim()
+  
+  // 1. Exact match or case-insensitive key match
+  const matchByKey = DEPARTMENTS.find(d => d.key.toLowerCase() === normalizedKey)
+  if (matchByKey) return matchByKey
+
+  // 2. Try matching by Label (common for Excel migrations)
+  const matchByLabel = DEPARTMENTS.find(d => d.label.toLowerCase() === normalizedKey)
+  if (matchByLabel) return matchByLabel
+
+  // 3. Fallback
+  return DEPARTMENT_MAP['general']
 }

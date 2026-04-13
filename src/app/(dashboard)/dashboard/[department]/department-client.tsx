@@ -241,10 +241,18 @@ export function DepartmentClient({
             <div key={ph.programId} className="bg-white rounded-xl border border-slate-200 shadow-sm p-5 hover:border-indigo-200 transition-colors">
                <div className="flex justify-between items-start mb-4 border-b border-slate-100 pb-3">
                  <div>
-                   <h4 className="font-bold text-slate-800">{ph.program.name}</h4>
-                   <p className="text-xs text-slate-500 flex gap-1 mt-0.5">
-                     <span className="font-bold bg-slate-100 px-1 rounded">{ph.program.pic_name}</span>
-                   </p>
+                   <h4 className="font-bold text-slate-800 leading-tight uppercase tracking-tight">{ph.program.name}</h4>
+                   <div className="flex items-center gap-2 mt-2">
+                     <span className={`text-[9px] font-black tracking-widest px-2 py-0.5 rounded-md border ${config.color} ${config.textColor} ${config.color.replace('bg-', 'border-').replace('100', '200')}`}>
+                       {config.label.toUpperCase()}
+                     </span>
+                     <div className="flex items-center gap-1.5">
+                        <span className="text-[10px] font-black tracking-widest text-indigo-600 bg-indigo-50 border border-indigo-100 px-1.5 py-0.5 rounded-full flex items-center justify-center min-w-[24px]">
+                          PIC
+                        </span>
+                        <span className="text-[10px] font-bold text-slate-400 capitalize">{ph.program.pic_name}</span>
+                     </div>
+                   </div>
                  </div>
                  <div className="text-right">
                    <div className={`text-2xl font-black ${getTextColor(ph.healthScore)}`}>{ph.healthScore.toFixed(0)}%</div>

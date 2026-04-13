@@ -504,11 +504,15 @@ export function DashboardClient({
                       )}
                     </div>
                     <div className="flex items-center gap-2 mb-4">
-                      <span className={`text-[10px] font-black tracking-widest px-2 py-0.5 rounded ${deptConfig.color} ${deptConfig.textColor}`}>{deptConfig.label}</span>
-                      <span className="text-[10px] font-black tracking-widest text-indigo-600 bg-indigo-50 border border-indigo-100 px-1.5 py-0.5 rounded-full flex items-center gap-1">
-                        PI
+                      <span className={`text-[9px] font-black tracking-widest px-2 py-0.5 rounded-md border ${deptConfig.color} ${deptConfig.textColor} ${deptConfig.color.replace('bg-', 'border-').replace('100', '200')}`}>
+                        {deptConfig.label.toUpperCase()}
                       </span>
-                      <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{p.program_pics?.length || 0} PIC</span>
+                      <div className="flex items-center gap-1.5 ml-1">
+                        <span className="text-[10px] font-black tracking-widest text-indigo-600 bg-indigo-50 border border-indigo-100 px-1.5 py-0.5 rounded-full flex items-center justify-center min-w-[24px]">
+                          PIC
+                        </span>
+                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{p.program_pics?.length || 1} PIC</span>
+                      </div>
                     </div>
 
                     {isLegacy ? (
