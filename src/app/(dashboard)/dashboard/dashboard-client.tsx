@@ -201,8 +201,17 @@ export function DashboardClient({
 
   const chartConfig = useMemo(() => {
     const cfg: Record<string, { label: string; color: string }> = {}
+    const defaultColors = [
+      '#4f46e5', // indigo-600
+      '#059669', // emerald-600
+      '#ea580c', // orange-600
+      '#e11d48', // rose-600
+      '#0891b2', // cyan-600
+      '#9333ea', // purple-600
+      '#ca8a04', // yellow-600
+    ]
     activeDepartments.forEach((d, idx) => {
-      cfg[d.key] = { label: d.config.label, color: `hsl(var(--chart-${(idx % 5) + 1}))` }
+      cfg[d.key] = { label: d.config.label, color: defaultColors[idx % defaultColors.length] }
     })
     return cfg
   }, [activeDepartments])
