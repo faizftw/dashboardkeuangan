@@ -149,6 +149,7 @@ export type Database = {
           created_at: string | null
           daily_target_rp: number | null
           daily_target_user: number | null
+          department: string
           id: string
           is_active: boolean | null
           monthly_target_rp: number | null
@@ -164,6 +165,7 @@ export type Database = {
           created_at?: string | null
           daily_target_rp?: number | null
           daily_target_user?: number | null
+          department?: string
           id?: string
           is_active?: boolean | null
           monthly_target_rp?: number | null
@@ -179,6 +181,7 @@ export type Database = {
           created_at?: string | null
           daily_target_rp?: number | null
           daily_target_user?: number | null
+          department?: string
           id?: string
           is_active?: boolean | null
           monthly_target_rp?: number | null
@@ -315,6 +318,123 @@ export type Database = {
             columns: ["period_id"]
             isOneToOne: false
             referencedRelation: "periods"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      program_metric_definitions: {
+        Row: {
+          id: string
+          program_id: string
+          metric_key: string
+          label: string
+          data_type: 'integer' | 'currency' | 'percentage' | 'float' | 'boolean'
+          input_type: 'manual' | 'calculated'
+          formula: string | null
+          is_target_metric: boolean
+          monthly_target: number | null
+          target_direction: 'higher_is_better' | 'lower_is_better'
+          unit_label: string | null
+          show_on_dashboard: boolean
+          show_on_tv: boolean
+          display_order: number
+          created_at: string | null
+        }
+        Insert: {
+          id?: string
+          program_id: string
+          metric_key: string
+          label: string
+          data_type: 'integer' | 'currency' | 'percentage' | 'float' | 'boolean'
+          input_type: 'manual' | 'calculated'
+          formula?: string | null
+          is_target_metric?: boolean
+          monthly_target?: number | null
+          target_direction?: 'higher_is_better' | 'lower_is_better'
+          unit_label?: string | null
+          show_on_dashboard?: boolean
+          show_on_tv?: boolean
+          display_order?: number
+          created_at?: string | null
+        }
+        Update: {
+          id?: string
+          program_id?: string
+          metric_key?: string
+          label?: string
+          data_type?: 'integer' | 'currency' | 'percentage' | 'float' | 'boolean'
+          input_type?: 'manual' | 'calculated'
+          formula?: string | null
+          is_target_metric?: boolean
+          monthly_target?: number | null
+          target_direction?: 'higher_is_better' | 'lower_is_better'
+          unit_label?: string | null
+          show_on_dashboard?: boolean
+          show_on_tv?: boolean
+          display_order?: number
+          created_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "program_metric_definitions_program_id_fkey"
+            columns: ["program_id"]
+            isOneToOne: false
+            referencedRelation: "programs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      daily_metric_values: {
+        Row: {
+          id: string
+          period_id: string
+          program_id: string
+          metric_definition_id: string
+          date: string
+          value: number | null
+          created_by: string | null
+          created_at: string | null
+        }
+        Insert: {
+          id?: string
+          period_id: string
+          program_id: string
+          metric_definition_id: string
+          date: string
+          value?: number | null
+          created_by?: string | null
+          created_at?: string | null
+        }
+        Update: {
+          id?: string
+          period_id?: string
+          program_id?: string
+          metric_definition_id?: string
+          date?: string
+          value?: number | null
+          created_by?: string | null
+          created_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "daily_metric_values_period_id_fkey"
+            columns: ["period_id"]
+            isOneToOne: false
+            referencedRelation: "periods"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "daily_metric_values_program_id_fkey"
+            columns: ["program_id"]
+            isOneToOne: false
+            referencedRelation: "programs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "daily_metric_values_metric_definition_id_fkey"
+            columns: ["metric_definition_id"]
+            isOneToOne: false
+            referencedRelation: "program_metric_definitions"
             referencedColumns: ["id"]
           },
         ]
