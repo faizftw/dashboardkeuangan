@@ -3,7 +3,7 @@
 import { TVDashboardData } from '../actions'
 import { formatRupiah } from '@/lib/utils'
 import { DigitalClock } from './DigitalClock'
-import { TrendingUp, Users, Target } from 'lucide-react'
+import { TrendingUp, Users, Target, Activity, HeartPulse } from 'lucide-react'
 
 interface Slide1Props {
   data: TVDashboardData
@@ -16,10 +16,23 @@ export function Slide1Total({ data }: Slide1Props) {
     return new Intl.DateTimeFormat('id-ID', { month: 'long' }).format(new Date(2024, month - 1, 1))
   }
 
+  // Define display config for metric groups
+  const groupConfig: Record<string, { label: string, icon: any, color: string, isCurrency: boolean }> = {
+    revenue: { label: 'Total Pendapatan', icon: Target, color: 'text-indigo-400', isCurrency: true },
+    user_acquisition: { label: 'Total User/Closing', icon: Users, color: 'text-cyan-400', isCurrency: false },
+    leads: { label: 'Total Leads', icon: TrendingUp, color: 'text-emerald-400', isCurrency: false },
+    ad_spend: { label: 'Total Ad Spend', icon: Activity, color: 'text-rose-400', isCurrency: true },
+    efficiency: { label: 'Rata-rata ROAS', icon: Activity, color: 'text-amber-400', isCurrency: false },
+  }
+
+  const activeGroups = Object.keys(aggregate.metricGroups)
+    .filter(key => groupConfig[key])
+    .slice(0, 4); // Show top 4 groups
+
   return (
     <div className="h-full flex flex-col p-12">
       {/* Header */}
-      <div className="flex justify-between items-start mb-16">
+      <div className="flex justify-between items-start mb-12">
         <div>
           <h1 className="text-6xl font-black text-slate-100 uppercase tracking-tighter mb-2">
             Ringkasan Performa
@@ -31,111 +44,119 @@ export function Slide1Total({ data }: Slide1Props) {
         <DigitalClock />
       </div>
 
-      {/* KPI Cards Grid */}
-      <div className="grid grid-cols-2 gap-10 flex-grow mb-12">
-        {/* Total Target Rp */}
-        <div className="bg-slate-900/50 rounded-3xl p-10 border border-slate-800 shadow-2xl relative overflow-hidden group">
-          <div className="absolute -right-8 -top-8 w-40 h-40 bg-indigo-500/10 rounded-full blur-3xl group-hover:bg-indigo-500/20 transition-all duration-700" />
-          <div className="flex items-center gap-6 mb-6">
-            <div className="p-5 bg-indigo-500/10 rounded-2xl text-indigo-400">
-              <Target size={48} />
-            </div>
-            <span className="text-2xl font-bold text-slate-200 uppercase tracking-widest">Total Target (Rp)</span>
+      <div className="grid grid-cols-12 gap-10 flex-grow mb-12 min-h-0">
+        {/* Left Side: Large Health Score */}
+        <div className="col-span-5 flex flex-col items-center justify-center bg-slate-900/50 rounded-3xl p-10 border border-slate-800 shadow-2xl relative overflow-hidden">
+          <div className="absolute inset-0 opacity-5 pointer-events-none flex items-center justify-center">
+             <HeartPulse className="w-96 h-96" />
           </div>
-          <div className="text-7xl font-black text-slate-200">{formatRupiah(aggregate.totalTargetRp)}</div>
+          <h3 className="text-2xl font-bold text-slate-400 uppercase tracking-[0.3em] mb-8 relative z-10">Overall Health Score</h3>
+          <div className="relative flex items-center justify-center z-10">
+            <svg className="w-80 h-80 transform -rotate-90">
+              <circle
+                cx="160" cy="160" r="140"
+                stroke="currentColor" strokeWidth="24" fill="transparent"
+                className="text-slate-800"
+              />
+              <circle
+                cx="160" cy="160" r="140"
+                stroke="currentColor" strokeWidth="24" fill="transparent"
+                strokeDasharray={2 * Math.PI * 140}
+                strokeDashoffset={2 * Math.PI * 140 * (1 - Math.min(aggregate.healthScore, 100) / 100)}
+                strokeLinecap="round"
+                className="text-indigo-500 transition-all duration-1000 ease-out"
+                style={{ filter: 'drop-shadow(0 0 12px rgba(99,102,241,0.5))' }}
+              />
+            </svg>
+            <div className="absolute flex flex-col items-center">
+              <span className="text-9xl font-black text-slate-50">{aggregate.healthScore.toFixed(0)}%</span>
+              <span className="text-xl font-bold text-indigo-400 uppercase tracking-widest mt-[-10px]">Performa</span>
+            </div>
+          </div>
         </div>
 
-        {/* Total Pencapaian Rp */}
-        <div className="bg-slate-900/50 rounded-3xl p-10 border border-slate-800 shadow-2xl relative overflow-hidden group">
-          <div className="absolute -right-8 -top-8 w-40 h-40 bg-emerald-500/10 rounded-full blur-3xl group-hover:bg-emerald-500/20 transition-all duration-700" />
-          <div className="flex items-center gap-6 mb-6">
-            <div className="p-5 bg-emerald-500/10 rounded-2xl text-emerald-400">
-              <TrendingUp size={48} />
-            </div>
-            <span className="text-2xl font-bold text-slate-200 uppercase tracking-widest">Total Pencapaian (Rp)</span>
-          </div>
-          <div className="text-7xl font-black text-emerald-400">{formatRupiah(aggregate.totalAchievementRp)}</div>
-        </div>
+        {/* Right Side: Primary Metrics Grid */}
+        <div className="col-span-7 grid grid-cols-2 gap-8 min-h-0">
+          {activeGroups.map(key => {
+            const group = aggregate.metricGroups[key];
+            const config = groupConfig[key];
+            const pct = group.target > 0 ? (group.actual / group.target) * 100 : 0;
+            const Icon = config.icon;
 
-        {/* Total Target User */}
-        <div className="bg-slate-900/50 rounded-3xl p-10 border border-slate-800 shadow-2xl relative overflow-hidden group">
-          <div className="absolute -right-8 -top-8 w-40 h-40 bg-blue-500/10 rounded-full blur-3xl group-hover:bg-blue-500/20 transition-all duration-700" />
-          <div className="flex items-center gap-6 mb-6">
-            <div className="p-5 bg-blue-500/10 rounded-2xl text-blue-400">
-              <Users size={48} />
-            </div>
-            <span className="text-2xl font-bold text-slate-200 uppercase tracking-widest">Total Target User</span>
-          </div>
-          <div className="text-7xl font-black text-slate-200">{aggregate.totalTargetUser.toLocaleString()}</div>
-        </div>
+            return (
+              <div key={key} className="bg-slate-900/50 rounded-3xl p-8 border border-slate-800 shadow-xl flex flex-col justify-between group">
+                <div className="flex items-center gap-4 mb-4">
+                  <div className={`p-4 rounded-2xl bg-slate-950 border border-slate-800 ${config.color}`}>
+                    <Icon size={32} />
+                  </div>
+                  <span className="text-lg font-bold text-slate-200 uppercase tracking-widest">{config.label}</span>
+                </div>
+                
+                <div className="mb-4">
+                  <div className="text-5xl font-black text-slate-50 truncate">
+                    {config.isCurrency ? formatRupiah(group.actual) : group.actual.toLocaleString()}
+                    {!config.isCurrency && key === 'efficiency' && 'x'}
+                  </div>
+                  {group.target > 0 && (
+                    <div className="text-sm font-bold text-slate-500 uppercase mt-1">
+                      Target: {config.isCurrency ? formatRupiah(group.target) : group.target.toLocaleString()}
+                    </div>
+                  )}
+                </div>
 
-        {/* Total Pencapaian User */}
-        <div className="bg-slate-900/50 rounded-3xl p-10 border border-slate-800 shadow-2xl relative overflow-hidden group">
-          <div className="absolute -right-8 -top-8 w-40 h-40 bg-cyan-500/10 rounded-full blur-3xl group-hover:bg-cyan-500/20 transition-all duration-700" />
-          <div className="flex items-center gap-6 mb-6">
-            <div className="p-5 bg-cyan-500/10 rounded-2xl text-cyan-400">
-              <Users size={48} />
-            </div>
-            <span className="text-2xl font-bold text-slate-200 uppercase tracking-widest">Total Pencapaian User</span>
-          </div>
-          <div className="text-7xl font-black text-cyan-400">{aggregate.totalAchievementUser.toLocaleString()}</div>
+                {group.target > 0 && (
+                  <div className="space-y-2">
+                    <div className="flex justify-between text-xs font-black">
+                      <span className="text-slate-400 uppercase">Progres</span>
+                      <span className={config.color}>{pct.toFixed(1)}%</span>
+                    </div>
+                    <div className="h-2.5 bg-slate-950 rounded-full border border-slate-800 overflow-hidden">
+                      <div 
+                        className={`h-full rounded-full transition-all duration-1000 bg-indigo-500`}
+                        style={{ width: `${Math.min(pct, 100)}%` }}
+                      />
+                    </div>
+                  </div>
+                )}
+              </div>
+            );
+          })}
+          
+          {/* Fallback Metrics if less than 4 groups */}
+          {activeGroups.length < 4 && Array.from({ length: 4 - activeGroups.length }).map((_, i) => (
+             <div key={`empty-${i}`} className="bg-slate-900/20 rounded-3xl border border-dashed border-slate-800 flex items-center justify-center">
+                <span className="text-slate-700 font-bold uppercase tracking-widest text-xs">Waiting for data...</span>
+             </div>
+          ))}
         </div>
       </div>
 
-      {/* Footer Progress & Status */}
-      <div className="grid grid-cols-3 gap-12 items-end">
-        <div className="col-span-2 space-y-8">
-          {/* Progress Rp */}
-          <div className="space-y-3">
-            <div className="flex justify-between items-end">
-               <span className="text-xl font-bold text-slate-200 uppercase tracking-widest">Akumulasi Kinerja (Rp)</span>
-               <span className="text-4xl font-black text-indigo-400">{aggregate.percentageRp.toFixed(1)}%</span>
-            </div>
-            <div className="h-10 bg-slate-900 rounded-2xl border border-slate-800 p-1.5 overflow-hidden">
-              <div 
-                className="h-full rounded-xl bg-gradient-to-r from-indigo-600 to-indigo-400 transition-all duration-1000 shadow-[0_0_20px_rgba(99,102,241,0.4)]"
-                style={{ width: `${Math.min(aggregate.percentageRp, 100)}%` }}
-              />
-            </div>
-          </div>
-
-          {/* Progress User */}
-          <div className="space-y-3">
-            <div className="flex justify-between items-end">
-               <span className="text-xl font-bold text-slate-200 uppercase tracking-widest">Akumulasi Kinerja (User)</span>
-               <span className="text-4xl font-black text-cyan-400">{aggregate.percentageUser.toFixed(1)}%</span>
-            </div>
-            <div className="h-10 bg-slate-900 rounded-2xl border border-slate-800 p-1.5 overflow-hidden">
-              <div 
-                className="h-full rounded-xl bg-gradient-to-r from-cyan-600 to-cyan-400 transition-all duration-1000 shadow-[0_0_20px_rgba(34,211,238,0.4)]"
-                style={{ width: `${Math.min(aggregate.percentageUser, 100)}%` }}
-              />
-            </div>
-          </div>
-        </div>
-
-        {/* Status Breakdown */}
-        <div className="bg-slate-900/80 rounded-3xl p-8 border border-slate-800 shadow-2xl h-full flex flex-col justify-center gap-6">
-           <div className="flex items-center justify-between">
-              <div className="flex items-center gap-4">
-                 <div className="w-4 h-4 rounded-full bg-emerald-500 shadow-[0_0_10px_rgba(16,185,129,0.5)]" />
-                 <span className="text-lg font-bold text-slate-100 uppercase">Tercapai</span>
+      {/* Footer Status Breakdown */}
+      <div className="bg-slate-900/80 rounded-3xl p-8 border border-slate-800 shadow-2xl flex items-center justify-around gap-12">
+        <div className="flex flex-col items-center gap-2">
+           <span className="text-sm font-bold text-slate-500 uppercase tracking-[0.2em]">Program Health</span>
+           <div className="flex gap-16">
+              <div className="flex items-center gap-6">
+                 <div className="w-5 h-5 rounded-full bg-emerald-500 shadow-[0_0_15px_rgba(16,185,129,0.5)]" />
+                 <div className="flex flex-col">
+                    <span className="text-4xl font-black text-emerald-400">{aggregate.tercapai}</span>
+                    <span className="text-xs font-bold text-slate-400 uppercase">Tercapai (≥100%)</span>
+                 </div>
               </div>
-              <span className="text-3xl font-black text-emerald-400">{aggregate.tercapai}</span>
-           </div>
-           <div className="flex items-center justify-between">
-              <div className="flex items-center gap-4">
-                 <div className="w-4 h-4 rounded-full bg-amber-500 shadow-[0_0_10px_rgba(245,158,11,0.5)]" />
-                 <span className="text-lg font-bold text-slate-100 uppercase">Menuju Target</span>
+              <div className="flex items-center gap-6">
+                 <div className="w-5 h-5 rounded-full bg-amber-500 shadow-[0_0_15px_rgba(245,158,11,0.5)]" />
+                 <div className="flex flex-col">
+                    <span className="text-4xl font-black text-amber-400">{aggregate.menujuTarget}</span>
+                    <span className="text-xs font-bold text-slate-400 uppercase">Berjalan (60-99%)</span>
+                 </div>
               </div>
-              <span className="text-3xl font-black text-amber-400">{aggregate.menujuTarget}</span>
-           </div>
-           <div className="flex items-center justify-between">
-              <div className="flex items-center gap-4">
-                 <div className="w-4 h-4 rounded-full bg-rose-500 shadow-[0_0_10px_rgba(244,63,94,0.5)]" />
-                 <span className="text-lg font-bold text-slate-100 uppercase">Perlu Perhatian</span>
+              <div className="flex items-center gap-6">
+                 <div className="w-5 h-5 rounded-full bg-rose-500 shadow-[0_0_15px_rgba(244,63,94,0.5)]" />
+                 <div className="flex flex-col">
+                    <span className="text-4xl font-black text-rose-400">{aggregate.perluPerhatian}</span>
+                    <span className="text-xs font-bold text-slate-400 uppercase">Tertinggal (&lt;60%)</span>
+                 </div>
               </div>
-              <span className="text-3xl font-black text-rose-400">{aggregate.perluPerhatian}</span>
            </div>
         </div>
       </div>

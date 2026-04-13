@@ -135,27 +135,6 @@ export function SlideProgramDetail({ program, inputs, metricDefinitions = [], me
     return () => clearInterval(id)
   }, [])
 
-  // ── Chart data ──────────────────────────────────────────────────────────────
-  const sortedInputs = [...inputs].sort(
-    (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()
-  )
-
-  let cumulativeRp = 0
-  const chartData = sortedInputs.map(input => {
-    cumulativeRp += Number(input.achievement_rp || 0)
-    return {
-      date:        input.date,
-      displayDate: new Intl.DateTimeFormat('id-ID', { day: 'numeric', month: 'short' }).format(new Date(input.date)),
-      pencapaian:  cumulativeRp,
-    }
-  })
-
-  const targetPerDay     = (program.monthly_target_rp || 0) / 30
-  const chartDataWithTarget = chartData.map((d, i) => ({
-    ...d,
-    targetIdeal: targetPerDay * (i + 1),
-  }))
-
   // ── Derived values ──────────────────────────────────────────────────────────
   const isQualitative = program.target_type === 'qualitative'
   const isHybrid      = program.target_type === 'hybrid'
@@ -166,22 +145,90 @@ export function SlideProgramDetail({ program, inputs, metricDefinitions = [], me
     .sort((a, b) => a.display_order - b.display_order)
   const hasCustomMetrics = tvMetrics.length > 0
 
-  const capPct  = Math.min(((program.achievementRp || 0)   / (program.monthly_target_rp   || 1)) * 100, 100)
-  const userPct = Math.min(((program.achievementUser || 0) / (program.monthly_target_user || 1)) * 100, 100)
-  const gapRp   = Math.max(0, (program.monthly_target_rp   || 0) - program.achievementRp)
-  const gapUser = Math.max(0, (program.monthly_target_user || 0) - program.achievementUser)
+  // ── Chart data ──────────────────────────────────────────────────────────────
+  // Select the primary metric for the trend chart
+  const primaryMetric = 
+    tvMetrics.find(m => m.metric_group === 'revenue') || 
+    tvMetrics.find(m => m.metric_group === 'user_acquisition') ||
+    tvMetrics[0]
+
+  let chartDataWithTarget: any[] = []
+  let chartMaxTarget = 0
+  let chartLabel = "Cumulative Analytics"
+
+  if (primaryMetric) {
+    chartLabel = `Tren Capaian ${primaryMetric.label}`
+    chartMaxTarget = primaryMetric.monthly_target || 0
+    const mValues = (metricValues || []).filter(mv => mv.metric_definition_id === primaryMetric.id)
+    const sortedMValues = [...mValues].sort((a,b) => new Date(a.date).getTime() - new Date(b.date).getTime())
+
+    let cumulative = 0
+    const rawChartData = sortedMValues.map(mv => {
+      cumulative += Number(mv.value || 0)
+      return {
+        date:        mv.date,
+        displayDate: new Intl.DateTimeFormat('id-ID', { day: 'numeric', month: 'short' }).format(new Date(mv.date)),
+        pencapaian:  cumulative,
+      }
+    })
+
+    const targetPerDay = chartMaxTarget / 30
+    chartDataWithTarget = rawChartData.map((d, i) => ({
+      ...d,
+      targetIdeal: targetPerDay * (i + 1),
+    }))
+  } else {
+    // Legacy fallback using inputs
+    const sortedInputs = [...inputs].sort(
+      (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()
+    )
+
+    let cumulativeRp = 0
+    const rawChartData = sortedInputs.map(input => {
+      cumulativeRp += Number(input.achievement_rp || 0)
+      return {
+        date:        input.date,
+        displayDate: new Intl.DateTimeFormat('id-ID', { day: 'numeric', month: 'short' }).format(new Date(input.date)),
+        pencapaian:  cumulativeRp,
+      }
+    })
+
+    chartMaxTarget = program.monthly_target_rp || 0
+    const targetPerDay = chartMaxTarget / 30
+    chartDataWithTarget = rawChartData.map((d, i) => ({
+      ...d,
+      targetIdeal: targetPerDay * (i + 1),
+    }))
+  }
+
+  // ── Derived values ──────────────────────────────────────────────────────────
+  // Gap calculations based on metric groups if available
+  const revenueMetric = tvMetrics.find(m => m.metric_group === 'revenue' && m.is_target_metric)
+  const userAcqMetric = tvMetrics.find(m => m.metric_group === 'user_acquisition' && m.is_target_metric)
+
+  const gapRp = revenueMetric 
+    ? Math.max(0, (revenueMetric.monthly_target || 0) - program.achievementRp)
+    : Math.max(0, (program.monthly_target_rp || 0) - program.achievementRp)
+
+  const gapUser = userAcqMetric
+    ? Math.max(0, (userAcqMetric.monthly_target || 0) - program.achievementUser)
+    : Math.max(0, (program.monthly_target_user || 0) - program.achievementUser)
+
+  const targetUserTotal = userAcqMetric ? (userAcqMetric.monthly_target || 0) : (program.monthly_target_user || 0)
 
   const motivationalMessage =
-    program.percentageRp >= 100
+    program.health.healthScore >= 100
       ? 'MASYAA ALLAH WOW TARGET TERLAMPAUI 🚀'
-      : program.percentageRp >= 50
+      : program.health.healthScore >= 60
         ? 'ALHAMDULILLAH TERUS BERJUANG MENUJU TARGET 🌟'
         : 'CAPAI TARGET SEKARANG DAN DAPATKAN REWARDNYA 💪'
 
   const statusTheme: Record<string, string> = {
-    'TERCAPAI':       'text-emerald-400 border-emerald-500/30 bg-emerald-500/10',
-    'MENUJU TARGET':  'text-amber-400   border-amber-500/30  bg-amber-500/10',
-    'PERLU PERHATIAN':'text-rose-400    border-rose-500/30   bg-rose-500/10',
+    'EXCELLENT':       'text-emerald-400 border-emerald-500/30 bg-emerald-500/10',
+    'BAIK':            'text-emerald-400 border-emerald-500/30 bg-emerald-500/10',
+    'CUKUP':           'text-amber-400   border-amber-500/30  bg-amber-500/10',
+    'PERLU PERHATIAN': 'text-rose-400    border-rose-500/30   bg-rose-500/10',
+    'KRITIS':          'text-rose-400    border-rose-600/50   bg-rose-600/15',
   }
 
   // ── Format helper ───────────────────────────────────────────────────────────
@@ -234,10 +281,10 @@ export function SlideProgramDetail({ program, inputs, metricDefinitions = [], me
             <span
               className={cn(
                 'px-4 py-1.5 rounded-lg border text-xs font-black uppercase tracking-widest shrink-0',
-                statusTheme[program.status] ?? 'text-slate-400 border-slate-700 bg-slate-800/40'
+                statusTheme[program.health.status] ?? 'text-slate-400 border-slate-700 bg-slate-800/40'
               )}
             >
-              {program.status}
+              {program.health.status}
             </span>
             <span className="text-xs font-black text-indigo-400 uppercase tracking-widest bg-indigo-500/5 px-4 py-1.5 rounded-lg border border-indigo-500/20 shrink-0">
               {isHybrid ? 'Misi & Angka' : isQualitative ? 'Fokus Misi' : 'Target Kuantitas'}
@@ -305,10 +352,8 @@ export function SlideProgramDetail({ program, inputs, metricDefinitions = [], me
               color: isQualitative ? '#a78bfa' : '#ffffff',
             }}
           >
-            {isQualitative
-              ? program.qualitativePercentage.toFixed(0)
-              : program.percentageRp.toFixed(1)}
-            <span className="text-3xl" style={{ color: isQualitative ? '#7c3aed' : '#64748b' }}>%</span>
+            {program.health.healthScore.toFixed(1)}
+            <span className="text-3xl" style={{ color: '#64748b' }}>%</span>
           </div>
         </div>
       </header>
@@ -331,7 +376,7 @@ export function SlideProgramDetail({ program, inputs, metricDefinitions = [], me
           </div>
 
           <div className="flex-1 overflow-y-auto space-y-3 pr-1 min-h-0">
-            {program.program_milestones.length === 0 ? (
+            {!program.program_milestones || program.program_milestones.length === 0 ? (
               <div className="h-full flex flex-col items-center justify-center opacity-25 gap-4">
                 <Target className="h-16 w-16 text-cyan-500" />
                 <p className="text-sm font-bold uppercase tracking-widest text-center">
@@ -420,46 +465,50 @@ export function SlideProgramDetail({ program, inputs, metricDefinitions = [], me
                 ) : (
                   <>
                     {/* Legacy Capital */}
-                    <Card className="p-5" accentColor="#00d4ff">
-                      <div className="text-[10px] font-black text-cyan-400 uppercase tracking-widest mb-3">
-                        Target Capital (RP)
-                      </div>
-                      <div
-                        className="text-3xl font-black text-white mb-1"
-                        style={{ fontFamily: "'Barlow Condensed', sans-serif" }}
-                      >
-                        {formatRupiah(program.achievementRp)}
-                      </div>
-                      <div className="text-[10px] text-slate-500 uppercase mb-3">
-                        Budget: {formatRupiah(program.monthly_target_rp || 0)}
-                      </div>
-                      <ProgressBar pct={capPct} color="linear-gradient(90deg, #00aacc, #00d4ff)" />
-                      <div className="text-[10px] text-slate-500 mt-1.5">
-                        Pencapaian:{' '}
-                        <span className="text-cyan-400 font-bold">{capPct.toFixed(1)}%</span>
-                      </div>
-                    </Card>
+                    {(program.monthly_target_rp || 0) > 0 && (
+                      <Card className="p-5" accentColor="#00d4ff">
+                        <div className="text-[10px] font-black text-cyan-400 uppercase tracking-widest mb-3">
+                          Target Capital (RP)
+                        </div>
+                        <div
+                          className="text-3xl font-black text-white mb-1"
+                          style={{ fontFamily: "'Barlow Condensed', sans-serif" }}
+                        >
+                          {formatRupiah(program.achievementRp)}
+                        </div>
+                        <div className="text-[10px] text-slate-500 uppercase mb-3">
+                          Budget: {formatRupiah(program.monthly_target_rp || 0)}
+                        </div>
+                        <ProgressBar pct={(program.achievementRp / (program.monthly_target_rp || 1)) * 100} color="linear-gradient(90deg, #00aacc, #00d4ff)" />
+                        <div className="text-[10px] text-slate-500 mt-1.5">
+                          Pencapaian:{' '}
+                          <span className="text-cyan-400 font-bold">{((program.achievementRp / (program.monthly_target_rp || 1)) * 100).toFixed(1)}%</span>
+                        </div>
+                      </Card>
+                    )}
 
                     {/* Legacy Users */}
-                    <Card className="p-5" accentColor="#00ff9d">
-                      <div className="text-[10px] font-black text-emerald-400 uppercase tracking-widest mb-3">
-                        User Density
-                      </div>
-                      <div
-                        className="text-3xl font-black mb-1"
-                        style={{ fontFamily: "'Barlow Condensed', sans-serif", color: '#00ff9d' }}
-                      >
-                        {program.achievementUser.toLocaleString()}
-                      </div>
-                      <div className="text-[10px] text-slate-500 uppercase mb-3">
-                        Goal: {(program.monthly_target_user || 0).toLocaleString()} peserta
-                      </div>
-                      <ProgressBar pct={userPct} color="linear-gradient(90deg, #00cc7e, #00ff9d)" />
-                      <div className="text-[10px] text-slate-500 mt-1.5">
-                        Pencapaian:{' '}
-                        <span className="text-emerald-400 font-bold">{userPct.toFixed(1)}%</span>
-                      </div>
-                    </Card>
+                    {(program.monthly_target_user || 0) > 0 && (
+                      <Card className="p-5" accentColor="#00ff9d">
+                        <div className="text-[10px] font-black text-emerald-400 uppercase tracking-widest mb-3">
+                          User Acquisition
+                        </div>
+                        <div
+                          className="text-3xl font-black mb-1"
+                          style={{ fontFamily: "'Barlow Condensed', sans-serif", color: '#00ff9d' }}
+                        >
+                          {program.achievementUser.toLocaleString()}
+                        </div>
+                        <div className="text-[10px] text-slate-500 uppercase mb-3">
+                          Goal: {(program.monthly_target_user || 0).toLocaleString()} user
+                        </div>
+                        <ProgressBar pct={(program.achievementUser / (program.monthly_target_user || 1)) * 100} color="linear-gradient(90deg, #00cc7e, #00ff9d)" />
+                        <div className="text-[10px] text-slate-500 mt-1.5">
+                          Pencapaian:{' '}
+                          <span className="text-emerald-400 font-bold">{((program.achievementUser / (program.monthly_target_user || 1)) * 100).toFixed(1)}%</span>
+                        </div>
+                      </Card>
+                    )}
                   </>
                 )}
               </div>
@@ -469,7 +518,7 @@ export function SlideProgramDetail({ program, inputs, metricDefinitions = [], me
                 <div className="flex items-center justify-between mb-4 shrink-0">
                   <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
                     <TrendingUp className="h-4 w-4 text-amber-400" />
-                    Cumulative Analytics
+                    {chartLabel}
                   </h3>
                   <div className="flex gap-4">
                     <div className="flex items-center gap-1.5 text-[10px] font-bold text-slate-500">
@@ -508,7 +557,7 @@ export function SlideProgramDetail({ program, inputs, metricDefinitions = [], me
                       <YAxis
                         hide
                         domain={[0, (dataMax: number) =>
-                          Math.max(dataMax, program.monthly_target_rp || 0)
+                          Math.max(dataMax, chartMaxTarget)
                         ]}
                       />
                       <Tooltip
@@ -580,10 +629,17 @@ export function SlideProgramDetail({ program, inputs, metricDefinitions = [], me
                       />
 
                       <ReferenceLine
-                        y={program.monthly_target_rp || 0}
+                        y={chartMaxTarget}
                         stroke="#ef4444"
                         strokeDasharray="5 5"
                         opacity={0.35}
+                        label={{ 
+                          value: 'TARGET', 
+                          position: 'right', 
+                          fill: '#ef4444', 
+                          fontSize: 10, 
+                          fontWeight: 900 
+                        }}
                       />
                     </AreaChart>
                   </ResponsiveContainer>
@@ -635,7 +691,7 @@ export function SlideProgramDetail({ program, inputs, metricDefinitions = [], me
           {/* Gap Capital */}
           <Card className="p-5 shrink-0" accentColor="#ff4d88">
             <div className="text-[10px] text-slate-500 uppercase tracking-widest mb-1">
-              Gap Target Capital
+              Gap Revenue Target
             </div>
             <div
               className="text-3xl font-black"
@@ -649,7 +705,7 @@ export function SlideProgramDetail({ program, inputs, metricDefinitions = [], me
           {/* Gap Peserta */}
           <Card className="p-5 shrink-0" accentColor="#ffcc44">
             <div className="text-[10px] text-slate-500 uppercase tracking-widest mb-1">
-              Gap Peserta
+              Gap Acquisition Target
             </div>
             <div
               className="text-3xl font-black"
@@ -658,7 +714,7 @@ export function SlideProgramDetail({ program, inputs, metricDefinitions = [], me
               {gapUser.toLocaleString()}
             </div>
             <div className="text-[10px] text-slate-500 mt-1">
-              Lagi menuju goal {(program.monthly_target_user || 0).toLocaleString()}
+              Lagi menuju goal {targetUserTotal.toLocaleString()}
             </div>
           </Card>
 
@@ -680,12 +736,12 @@ export function SlideProgramDetail({ program, inputs, metricDefinitions = [], me
           {/* Ring progress */}
           <Card className="flex-1 flex flex-col items-center justify-center gap-3 min-h-0">
             <div className="text-[10px] font-black text-cyan-400 uppercase tracking-widest">
-              Progress Keseluruhan
+              Health Status Score
             </div>
             <RingProgress
-              value={isQualitative ? program.qualitativePercentage : program.percentageRp}
+              value={program.health.healthScore}
               max={100}
-              color={isQualitative ? '#a78bfa' : '#00d4ff'}
+              color={program.health.healthScore >= 80 ? '#10b981' : program.health.healthScore >= 60 ? '#f59e0b' : '#f43f5e'}
               size={140}
             />
           </Card>

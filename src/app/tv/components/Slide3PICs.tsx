@@ -40,32 +40,32 @@ export function Slide3PICs({ pics, pagination }: Slide3Props) {
 }
 
 function PICCard({ pic }: { pic: PICPerformance }) {
-  const statusColors = {
-    'TERCAPAI': 'text-emerald-400 bg-emerald-500/10 border-emerald-500/30 shadow-[0_0_15px_rgba(16,185,129,0.2)]',
-    'MENUJU TARGET': 'text-amber-400 bg-amber-500/10 border-amber-500/30 shadow-[0_0_15px_rgba(245,158,11,0.2)]',
-    'PERLU PERHATIAN': 'text-rose-400 bg-rose-500/10 border-rose-500/30 shadow-[0_0_15px_rgba(244,63,94,0.2)]'
+  const statusColors: Record<string, string> = {
+    'EXCELLENT': 'text-emerald-400 bg-emerald-500/10 border-emerald-500/30 shadow-[0_0_15px_rgba(16,185,129,0.2)]',
+    'BAIK': 'text-emerald-400 bg-emerald-500/10 border-emerald-500/30',
+    'CUKUP': 'text-amber-400 bg-amber-500/10 border-amber-500/30 shadow-[0_0_15px_rgba(245,158,11,0.2)]',
+    'PERLU PERHATIAN': 'text-rose-400 bg-rose-500/10 border-rose-500/30 shadow-[0_0_15px_rgba(244,63,94,0.2)]',
+    'KRITIS': 'text-rose-400 bg-rose-600/20 border-rose-600/50 shadow-[0_0_20px_rgba(244,63,94,0.4)]'
   }
 
-  const barColors = {
-    'TERCAPAI': 'bg-emerald-500',
-    'MENUJU TARGET': 'bg-amber-500',
-    'PERLU PERHATIAN': 'bg-rose-500'
+  const barColors: Record<string, string> = {
+    'EXCELLENT': 'bg-emerald-500',
+    'BAIK': 'bg-emerald-500',
+    'CUKUP': 'bg-amber-500',
+    'PERLU PERHATIAN': 'bg-rose-500',
+    'KRITIS': 'bg-rose-600'
   }
 
-  // Grade Logic
-  let grade = 'C'
-  let gradeColor = 'text-rose-400'
-  if (pic.percentageRp >= 100) { grade = 'A+'; gradeColor = 'text-emerald-400'; }
-  else if (pic.percentageRp >= 90) { grade = 'A'; gradeColor = 'text-emerald-400'; }
-  else if (pic.percentageRp >= 70) { grade = 'B'; gradeColor = 'text-amber-400'; }
+  const grade = pic.grade.label
+  const gradeColor = pic.grade.color
 
   return (
     <div className="bg-slate-900/40 rounded-3xl p-8 border border-slate-800/80 flex flex-col justify-between shadow-xl backdrop-blur-sm group hover:bg-slate-900/60 transition-all duration-500 relative overflow-hidden h-full">
       {/* Background Glow */}
       <div className={cn(
         "absolute -top-24 -right-24 w-48 h-48 blur-[80px] opacity-20 transition-all duration-700",
-        pic.status === 'TERCAPAI' ? 'bg-emerald-500 group-hover:opacity-40' : 
-        pic.status === 'MENUJU TARGET' ? 'bg-amber-500 group-hover:opacity-40' : 'bg-rose-500 group-hover:opacity-40'
+        pic.avgHealthScore >= 80 ? 'bg-emerald-500 group-hover:opacity-40' : 
+        pic.avgHealthScore >= 60 ? 'bg-amber-500 group-hover:opacity-40' : 'bg-rose-500 group-hover:opacity-40'
       )} />
 
       <div className="flex justify-between items-start mb-4 relative z-10">
@@ -104,12 +104,12 @@ function PICCard({ pic }: { pic: PICPerformance }) {
                   stroke="currentColor" 
                   strokeWidth="8" 
                   strokeDasharray={2 * Math.PI * 45}
-                  strokeDashoffset={2 * Math.PI * 45 * (1 - Math.min(pic.percentageRp, 100) / 100)}
+                  strokeDashoffset={2 * Math.PI * 45 * (1 - Math.min(pic.avgHealthScore, 100) / 100)}
                   strokeLinecap="round"
                   className={cn(
                     "transition-all duration-[2000ms] ease-out",
-                    pic.status === 'TERCAPAI' ? 'text-emerald-500' : 
-                    pic.status === 'MENUJU TARGET' ? 'text-amber-500' : 'text-rose-400'
+                    pic.avgHealthScore >= 80 ? 'text-emerald-500' : 
+                    pic.avgHealthScore >= 60 ? 'text-amber-500' : 'text-rose-400'
                   )}
                   style={{ filter: `drop-shadow(0 0 8px currentColor)` }}
                />
@@ -123,35 +123,22 @@ function PICCard({ pic }: { pic: PICPerformance }) {
          </div>
       </div>
 
-      <div className="space-y-6 relative z-10">
-        {/* Rp Metric */}
+       <div className="space-y-4 relative z-10 mt-auto">
         <div className="space-y-2">
            <div className="flex justify-between items-end">
-              <span className="text-[10px] font-bold text-slate-200 uppercase tracking-widest">Tanggung Jawab Rp</span>
-              <span className="text-3xl font-black text-slate-100">{pic.percentageRp.toFixed(1)}%</span>
+              <span className="text-[10px] font-bold text-slate-200 uppercase tracking-widest text-opacity-60">Avg Health Score</span>
+              <span className="text-3xl font-black text-slate-100">{pic.avgHealthScore.toFixed(1)}%</span>
            </div>
-           <div className="h-2 bg-slate-950 rounded-full overflow-hidden border border-slate-800 p-0.5">
+           <div className="h-3 bg-slate-950 rounded-full overflow-hidden border border-slate-800 p-0.5">
              <div 
-               className={cn("h-full transition-all duration-1000 rounded-full shadow-[0_0_10px_rgba(0,0,0,0.5)]", barColors[pic.status])}
-               style={{ width: `${Math.min(pic.percentageRp, 100)}%` }}
+               className={cn("h-full transition-all duration-1000 rounded-full shadow-[0_0_10px_rgba(0,0,0,0.5)]", barColors[pic.status] || barColors['CUKUP'])}
+               style={{ width: `${Math.min(pic.avgHealthScore, 100)}%` }}
              />
            </div>
         </div>
-
-        {/* User Metric */}
-        <div className="space-y-2">
-           <div className="flex justify-between items-end">
-              <span className="text-[10px] font-bold text-slate-200 uppercase tracking-widest">Tanggung Jawab User</span>
-              <span className="text-xl font-black text-cyan-400">
-                {pic.totalTargetUser > 0 ? ((pic.totalAchievementUser / pic.totalTargetUser) * 100).toFixed(0) : 0}%
-              </span>
-           </div>
-           <div className="h-2 bg-slate-950 rounded-full overflow-hidden border border-slate-800 p-0.5">
-             <div 
-               className="h-full bg-cyan-500 transition-all duration-1000 rounded-full overflow-hidden"
-               style={{ width: `${Math.min(pic.totalTargetUser > 0 ? (pic.totalAchievementUser / pic.totalTargetUser) * 100 : 0, 100)}%` }}
-             />
-           </div>
+        <div className="flex justify-between items-center text-[10px] font-bold text-slate-500 uppercase tracking-[0.2em] pt-2 border-t border-slate-800/50">
+           <span>{pic.programCount} Programs Assigned</span>
+           <span className={gradeColor}>Grade {grade}</span>
         </div>
       </div>
     </div>

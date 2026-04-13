@@ -230,3 +230,16 @@ export function aggregateByMetricGroup(
 
   return result
 }
+
+/**
+ * Standard performance grading for TV Dashboard
+ * Returns label and color mapping
+ */
+export function getPerformanceGrade(score: number): { label: string, color: string } {
+  if (score >= 100) return { label: 'S', color: 'text-emerald-400' }
+  if (score >= 90)  return { label: 'A', color: 'text-emerald-400' }
+  if (score >= 80)  return { label: 'B', color: 'text-emerald-400' }
+  if (score >= 60)  return { label: 'C', color: 'text-amber-400' }
+  if (score >= 40)  return { label: 'D', color: 'text-rose-400' }
+  return { label: 'E', color: 'text-rose-600' }
+}

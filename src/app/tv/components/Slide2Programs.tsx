@@ -43,16 +43,20 @@ function ProgramCard({ program }: { program: ProgramPerformance }) {
   const isQualitative = program.target_type === 'qualitative'
   const isHybrid = program.target_type === 'hybrid'
 
-  const statusColors = {
-    'TERCAPAI': 'text-emerald-400 bg-emerald-500/10 border-emerald-500/30 shadow-[0_0_15px_rgba(16,185,129,0.2)]',
-    'MENUJU TARGET': 'text-amber-400 bg-amber-500/10 border-amber-500/30 shadow-[0_0_15px_rgba(245,158,11,0.2)]',
-    'PERLU PERHATIAN': 'text-rose-400 bg-rose-500/10 border-rose-500/30 shadow-[0_0_15px_rgba(244,63,94,0.2)]'
+  const statusColors: Record<string, string> = {
+    'EXCELLENT': 'text-emerald-400 bg-emerald-500/10 border-emerald-500/30 shadow-[0_0_15px_rgba(16,185,129,0.2)]',
+    'BAIK': 'text-emerald-400 bg-emerald-500/10 border-emerald-500/30',
+    'CUKUP': 'text-amber-400 bg-amber-500/10 border-amber-500/30 shadow-[0_0_15px_rgba(245,158,11,0.2)]',
+    'PERLU PERHATIAN': 'text-rose-400 bg-rose-500/10 border-rose-500/30 shadow-[0_0_15px_rgba(244,63,94,0.2)]',
+    'KRITIS': 'text-rose-400 bg-rose-600/20 border-rose-600/50 shadow-[0_0_20px_rgba(244,63,94,0.4)]'
   }
 
-  const barColors = {
-    'TERCAPAI': 'bg-emerald-500',
-    'MENUJU TARGET': 'bg-amber-500',
-    'PERLU PERHATIAN': 'bg-rose-500'
+  const barColors: Record<string, string> = {
+    'EXCELLENT': 'bg-emerald-500',
+    'BAIK': 'bg-emerald-500',
+    'CUKUP': 'bg-amber-500',
+    'PERLU PERHATIAN': 'bg-rose-500',
+    'KRITIS': 'bg-rose-600'
   }
 
   return (
@@ -80,84 +84,74 @@ function ProgramCard({ program }: { program: ProgramPerformance }) {
           </div>
         </div>
         <div className="flex flex-col gap-2 items-end">
+          <div className="flex items-baseline gap-1">
+             <span className="text-4xl font-black text-slate-50">{program.health.healthScore.toFixed(0)}</span>
+             <span className="text-lg font-bold text-slate-500">%</span>
+          </div>
           <div className={cn(
-            "px-4 py-2 rounded-xl border text-sm font-black uppercase tracking-tighter whitespace-nowrap",
-            statusColors[program.status]
+            "px-4 py-1.5 rounded-xl border text-[10px] font-black uppercase tracking-widest whitespace-nowrap",
+            statusColors[program.health.status] || statusColors['PERLU PERHATIAN']
           )}>
-            {program.status}
+            {program.health.status}
           </div>
         </div>
       </div>
 
-      <div className="space-y-6 relative z-10">
-        {/* Progress Display */}
-        {isQualitative ? (
-          <div className="space-y-4">
-             <div className="flex justify-between items-end">
-                <span className="text-sm font-bold text-slate-200 uppercase tracking-[0.2em]">Misi Kualitatif</span>
-                <span className="text-2xl font-black text-purple-400">{program.qualitativePercentage.toFixed(0)}%</span>
-             </div>
-             <div className="h-4 bg-slate-950 rounded-full overflow-hidden border border-slate-800 p-0.5">
-               <div 
-                 className="h-full bg-purple-500 transition-all duration-1000 rounded-full shadow-[0_0_15px_rgba(168,85,247,0.4)]"
-                 style={{ width: `${Math.min(program.qualitativePercentage, 100)}%` }}
-               />
-             </div>
-             <p className="text-sm text-slate-400 font-medium line-clamp-2 italic">
-               &quot;{program.qualitative_description}&quot;
-             </p>
-          </div>
+      <div className="space-y-4 relative z-10">
+        {/* Dynamic Metrics */}
+        {program.program_metric_definitions && program.program_metric_definitions.length > 0 ? (
+          program.program_metric_definitions
+            .filter(m => m.is_target_metric)
+            .slice(0, 2) // Max 2 metrics for grid card
+            .map(metric => (
+              <div key={metric.id} className="space-y-1.5">
+                <div className="flex justify-between items-end">
+                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{metric.label}</span>
+                  <span className="text-lg font-black text-slate-200">
+                    {metric.unit_label === 'Rp' ? formatRupiah((metric as any).achieved || 0) : ((metric as any).achieved || 0)}
+                    <span className="text-[10px] text-slate-500 ml-1">/ {metric.unit_label === 'Rp' ? formatRupiah(metric.monthly_target || 0) : (metric.monthly_target || 0)}</span>
+                  </span>
+                </div>
+                <div className="h-2 bg-slate-950 rounded-full overflow-hidden border border-slate-800 p-0.5">
+                  <div 
+                    className={cn("h-full transition-all duration-1000 rounded-full", barColors[program.health.status])}
+                    style={{ width: `${Math.min((metric as any).percentage || 0, 100)}%` }}
+                  />
+                </div>
+              </div>
+            ))
         ) : (
-          <>
-            {/* Rp Metric */}
-            <div className="space-y-2">
+          /* Fallback for Legacy or Qualitative */
+          isQualitative ? (
+            <div className="space-y-3">
                <div className="flex justify-between items-end">
-                  <span className="text-sm font-bold text-slate-200 uppercase tracking-widest">Target Rp Bulanan</span>
-                  <div className="flex items-baseline gap-2">
-                     <span className="text-2xl font-black text-slate-100">{formatRupiah(program.achievementRp)}</span>
-                     <span className="text-xs font-bold text-slate-400 text-opacity-50">/ {formatRupiah(program.monthly_target_rp || 0)}</span>
-                  </div>
+                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Misi Kualitatif</span>
+                  <span className="text-xl font-black text-purple-400">{program.qualitativePercentage.toFixed(0)}%</span>
                </div>
-               <div className="h-4 bg-slate-950 rounded-full overflow-hidden border border-slate-800 p-0.5">
+               <div className="h-2.5 bg-slate-950 rounded-full overflow-hidden border border-slate-800 p-0.5">
                  <div 
-                   className={cn("h-full transition-all duration-1000 rounded-full shadow-[0_0_15px_rgba(0,0,0,0.5)]", barColors[program.status])}
+                   className="h-full bg-purple-500 transition-all duration-1000 rounded-full"
+                   style={{ width: `${Math.min(program.qualitativePercentage, 100)}%` }}
+                 />
+               </div>
+               <p className="text-xs text-slate-500 font-medium line-clamp-1 italic">
+                 &quot;{program.qualitative_description}&quot;
+               </p>
+            </div>
+          ) : (
+            <div className="space-y-3">
+               <div className="flex justify-between items-end">
+                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Target Rp</span>
+                  <span className="text-lg font-black text-slate-200">{formatRupiah(program.achievementRp)}</span>
+               </div>
+               <div className="h-2 bg-slate-950 rounded-full overflow-hidden border border-slate-800 p-0.5">
+                 <div 
+                   className={cn("h-full transition-all duration-1000 rounded-full", barColors[program.health.status])}
                    style={{ width: `${Math.min(program.percentageRp, 100)}%` }}
                  />
                </div>
             </div>
-
-            {isHybrid && (
-               <div className="pt-2">
-                  <div className="flex justify-between items-center text-[10px] font-black uppercase text-purple-400 tracking-widest mb-1.5">
-                     <span>Milestone Persisten</span>
-                     <span>{program.qualitativePercentage.toFixed(0)}%</span>
-                  </div>
-                  <div className="h-1.5 bg-slate-950 rounded-full overflow-hidden border border-slate-800">
-                     <div 
-                        className="h-full bg-purple-500 transition-all duration-1000"
-                        style={{ width: `${Math.min(program.qualitativePercentage, 100)}%` }}
-                     />
-                  </div>
-               </div>
-            )}
-
-            {/* User Metric */}
-            <div className="space-y-2">
-               <div className="flex justify-between items-end">
-                  <span className="text-sm font-bold text-slate-200 uppercase tracking-widest">Target User</span>
-                  <div className="flex items-baseline gap-2">
-                     <span className="text-2xl font-black text-slate-100">{program.achievementUser.toLocaleString()}</span>
-                     <span className="text-xs font-bold text-slate-400 text-opacity-50">/ {(program.monthly_target_user || 0).toLocaleString()}</span>
-                  </div>
-               </div>
-               <div className="h-4 bg-slate-950 rounded-full overflow-hidden border border-slate-800 p-0.5">
-                 <div 
-                   className="h-full bg-cyan-500 transition-all duration-1000 rounded-full"
-                   style={{ width: `${Math.min(program.percentageUser, 100)}%` }}
-                 />
-               </div>
-            </div>
-          </>
+          )
         )}
       </div>
     </div>
