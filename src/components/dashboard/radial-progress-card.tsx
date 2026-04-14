@@ -2,6 +2,7 @@
 
 import {
   Label,
+  PolarAngleAxis,
   PolarGrid,
   PolarRadiusAxis,
   RadialBar,
@@ -64,21 +65,27 @@ export function RadialProgressCard({
       <CardContent className="flex-1 pb-0">
         <ChartContainer
           config={chartConfig}
-          className="mx-auto aspect-square max-h-[180px]"
+          className="mx-auto aspect-square max-h-[200px]"
         >
           <RadialBarChart
             data={chartData}
             startAngle={90}
-            endAngle={90 - (3.6 * Math.min(percentage, 100))}
-            innerRadius={70}
-            outerRadius={100}
+            endAngle={-270}
+            innerRadius={65}
+            outerRadius={95}
           >
+            <PolarAngleAxis
+              type="number"
+              domain={[0, 100]}
+              angleAxisId={0}
+              tick={false}
+            />
             <PolarGrid
               gridType="circle"
               radialLines={false}
               stroke="none"
-              className="first:fill-slate-100 last:fill-white"
-              polarRadius={[70, 100]}
+              className="first:fill-slate-100 last:fill-slate-50"
+              polarRadius={[65, 95]}
             />
             <RadialBar 
               dataKey="value" 

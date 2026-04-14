@@ -60,9 +60,8 @@ export async function updateSession(request: NextRequest) {
 
   // Determine paths
   const isAuthPage = request.nextUrl.pathname.startsWith('/login')
-  const isDashboardPage = request.nextUrl.pathname.startsWith('/dashboard') || request.nextUrl.pathname === '/'
 
-  if (isDashboardPage && !user) {
+  if (!isAuthPage && !user) {
     // Redirect to login if accessing protected route without session
     const url = request.nextUrl.clone()
     url.pathname = '/login'

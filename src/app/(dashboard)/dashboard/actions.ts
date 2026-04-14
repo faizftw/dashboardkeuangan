@@ -8,6 +8,7 @@ type DailyInput = Database['public']['Tables']['daily_inputs']['Row']
 type MilestoneCompletion = Database['public']['Tables']['milestone_completions']['Row']
 type Period = Database['public']['Tables']['periods']['Row']
 
+import { redirect } from 'next/navigation'
 import { getUnifiedDashboardData, ProgramWithRelations as InternalProgramWithRelations, DashboardSummary } from '@/lib/dashboard-service'
 
 // Re-export type if needed or keep existing
@@ -41,7 +42,9 @@ export async function getDashboardData(
   const supabase = createClient()
 
   const { data: { user } } = await supabase.auth.getUser()
-  if (!user) throw new Error('Unauthenticated')
+  if (!user) {
+    redirect('/login')
+  }
 
   const { data: profile } = await supabase
     .from('profiles')
