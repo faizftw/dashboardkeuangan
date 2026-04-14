@@ -6,7 +6,7 @@ import { formatMetricValue, evaluateFormula } from '@/lib/formula-evaluator'
 import { formatRupiah, cn } from '@/lib/utils'
 import { upsertSingleMetricValue } from './actions'
 import { toast } from 'sonner'
-import { Loader2, Calculator, LayoutGrid } from 'lucide-react'
+import { Loader2, Calculator } from 'lucide-react'
 
 type MetricDefinition = Database['public']['Tables']['program_metric_definitions']['Row']
 type MetricValue = Database['public']['Tables']['daily_metric_values']['Row']
@@ -23,7 +23,6 @@ interface PivotTableClientProps {
   activePeriod?: Period
   allPeriodMetricValues: MetricValue[]
   pastInputs?: DailyInput[]
-  isAdmin?: boolean
 }
 
 export function PivotTableClient({
@@ -31,7 +30,6 @@ export function PivotTableClient({
   activePeriod,
   allPeriodMetricValues,
   pastInputs,
-  isAdmin
 }: PivotTableClientProps) {
   const [selectedProgramId, setSelectedProgramId] = useState<string>(programs[0]?.id || '')
 

@@ -3,7 +3,6 @@
 import { useMemo } from 'react'
 import { ProgramWithRelations } from '../actions'
 import { Database } from '@/types/database'
-import { calculateProgramHealth, ProgramWithRelations as CalcProgramWithRelations } from '@/lib/dashboard-calculator'
 import { formatRupiah, cn } from '@/lib/utils'
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid,
@@ -22,7 +21,6 @@ interface TargetClientProps {
   activePeriod: Period
   milestoneCompletions: MilestoneCompletion[]
   metricValues: MetricValue[]
-  prorationFactor: number
 }
 
 function KpiCard({ label, value, sub, subColor, icon: Icon, accent }: {
@@ -51,7 +49,6 @@ export function TargetClient({
   activePeriod,
   milestoneCompletions,
   metricValues,
-  prorationFactor,
 }: TargetClientProps) {
   // ── Collect primary revenue + user metrics from all programs ────────────
   const summary = useMemo(() => {

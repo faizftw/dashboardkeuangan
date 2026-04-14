@@ -12,7 +12,7 @@ import {
 } from 'recharts'
 import {
   HeartPulse, Layers, Target, CheckSquare,
-  Search, ChevronDown, ChevronUp
+  Search
 } from 'lucide-react'
 
 type MilestoneCompletion = Database['public']['Tables']['milestone_completions']['Row']

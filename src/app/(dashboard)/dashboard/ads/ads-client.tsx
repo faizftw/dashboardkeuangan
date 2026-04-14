@@ -9,7 +9,7 @@ import {
   ComposedChart, Bar, Line, XAxis, YAxis, CartesianGrid,
   Tooltip, ResponsiveContainer, Legend
 } from 'recharts'
-import { DollarSign, Target, TrendingUp, Users } from 'lucide-react'
+import { TrendingUp } from 'lucide-react'
 
 type MetricValue = Database['public']['Tables']['daily_metric_values']['Row']
 type Period = Database['public']['Tables']['periods']['Row']
@@ -61,16 +61,6 @@ export function AdsClient({ programs, metricValues, profiles }: AdsClientProps) 
     [programs]
   )
 
-  if (adsPrograms.length === 0) {
-    return (
-      <div className="bg-slate-50 border border-dashed border-slate-300 rounded-2xl p-16 text-center text-slate-500">
-        <TrendingUp className="h-12 w-12 mx-auto mb-4 opacity-30" />
-        <p className="font-bold text-base">Tidak ada program Ads terdeteksi</p>
-        <p className="text-sm mt-2">Tambahkan program dengan template Advertising untuk melihat Ads Performance.</p>
-      </div>
-    )
-  }
-
   // ── Selected program(s) ──────────────────────────────────────────────────
   const targetPrograms = selectedProgramId === 'all'
     ? adsPrograms
@@ -100,6 +90,16 @@ export function AdsClient({ programs, metricValues, profiles }: AdsClientProps) 
     }),
     [adsPrograms, metricValues, profiles]
   )
+
+  if (adsPrograms.length === 0) {
+    return (
+      <div className="bg-slate-50 border border-dashed border-slate-300 rounded-2xl p-16 text-center text-slate-500">
+        <TrendingUp className="h-12 w-12 mx-auto mb-4 opacity-30" />
+        <p className="font-bold text-base">Tidak ada program Ads terdeteksi</p>
+        <p className="text-sm mt-2">Tambahkan program dengan template Advertising untuk melihat Ads Performance.</p>
+      </div>
+    )
+  }
 
   return (
     <div className="space-y-6">

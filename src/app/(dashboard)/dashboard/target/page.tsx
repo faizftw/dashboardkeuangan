@@ -55,7 +55,6 @@ export default async function TargetPage({
             activePeriod={data.activePeriod}
             milestoneCompletions={data.milestoneCompletions}
             metricValues={data.metricValues}
-            prorationFactor={data.prorationFactor}
           />
         </Suspense>
       )}
