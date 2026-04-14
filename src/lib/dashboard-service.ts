@@ -178,7 +178,7 @@ export async function getUnifiedDashboardData(options: {
       perluPerhatian: programHealths.filter(ph => ph.healthScore < 60).length
     }
 
-    const aggregates = aggregateByMetricGroup(programs, values, prorationFactor, workingDays)
+    const aggregates = aggregateByMetricGroup(programs, values, inputs, prorationFactor, workingDays)
 
     return {
       overallHealth,

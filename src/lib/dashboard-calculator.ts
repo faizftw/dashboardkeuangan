@@ -205,6 +205,7 @@ export function calculateDepartmentHealth(
 export function aggregateByMetricGroup(
   programs: ProgramWithRelations[],
   metricValues: MetricValue[],
+  dailyInputs: DailyInput[],
   prorationFactor: number,
   workingDaysInPeriod: number
 ) {
@@ -219,7 +220,12 @@ export function aggregateByMetricGroup(
 
   programs.forEach(prog => {
     const definitions = prog.program_metric_definitions || []
+    
+    // Check if we have primary metrics for the key groups
+    const hasPrimaryRevenue = definitions.some(m => m.metric_group === 'revenue' && m.is_primary)
+    const hasPrimaryAcquisition = definitions.some(m => m.metric_group === 'user_acquisition' && m.is_primary)
 
+    // 1. Process Custom Metrics
     definitions.forEach(m => {
       const g = m.metric_group
       if (g && (g === 'revenue' || g === 'user_acquisition' || g === 'ad_spend' || g === 'leads')) {
@@ -250,6 +256,32 @@ export function aggregateByMetricGroup(
         existingGroups.add(g)
       }
     })
+
+    // 2. Fallback to Legacy for Revenue & User Acquisition if no custom metrics defined
+    const progInputs = dailyInputs.filter(i => i.program_id === prog.id)
+    const daysInSelection = prorationFactor * workingDaysInPeriod
+
+    if (!hasPrimaryRevenue && (prog.monthly_target_rp || 0) > 0) {
+      existingGroups.add('revenue')
+      const sumActual = progInputs.reduce((sum, i) => sum + (Number(i.achievement_rp) || 0), 0)
+      const monthlyTarget = prog.monthly_target_rp || 0
+      const manualDaily = prog.daily_target_rp || 0
+      
+      groupRawTotals.revenue.actual += sumActual
+      groupRawTotals.revenue.target += manualDaily > 0 ? (manualDaily * daysInSelection) : (monthlyTarget * prorationFactor)
+      groupRawTotals.revenue.totalTarget += monthlyTarget
+    }
+
+    if (!hasPrimaryAcquisition && (prog.monthly_target_user || 0) > 0) {
+      existingGroups.add('user_acquisition')
+      const sumActual = progInputs.reduce((sum, i) => sum + (Number(i.achievement_user) || 0), 0)
+      const monthlyTarget = prog.monthly_target_user || 0
+      const manualDaily = prog.daily_target_user || 0
+
+      groupRawTotals.user_acquisition.actual += sumActual
+      groupRawTotals.user_acquisition.target += manualDaily > 0 ? (manualDaily * daysInSelection) : (monthlyTarget * prorationFactor)
+      groupRawTotals.user_acquisition.totalTarget += monthlyTarget
+    }
   })
 
   const result: Record<string, { actual: number, target: number, totalTarget: number, isComputed: boolean }> = {}
