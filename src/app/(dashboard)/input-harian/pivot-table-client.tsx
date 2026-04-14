@@ -258,9 +258,12 @@ export function PivotTableClient({
         const days = daysWithDataFn[m.id].size
         computedAverages[m.id] = days > 0 ? total / days : 0
       } else {
-         computedAverages[m.id] = null // Averages don't map clean to totals for formula, but wait! We can leave it empty or show "-"
+         computedAverages[m.id] = null
       }
     })
+
+    return { total: computedTotals, average: computedAverages, daysCount: maxDaysWithData }
+  }, [daysArray, metrics, localValues, buildDateString])
 
   // Daily Targets for Legacy Programs
   const dailyTargetRp = useMemo(() => {
@@ -272,9 +275,6 @@ export function PivotTableClient({
     if (!activeProgram || !activePeriod || !activePeriod.working_days) return 0
     return (activeProgram.monthly_target_user || 0) / activePeriod.working_days
   }, [activeProgram, activePeriod])
-
-  return { total: computedTotals, average: computedAverages, daysCount: maxDaysWithData }
-}, [daysArray, metrics, localValues, buildDateString])
 
   if (!activeProgram) {
     return <div className="text-center py-8 text-slate-500">Pilih program untuk melihat detail.</div>
