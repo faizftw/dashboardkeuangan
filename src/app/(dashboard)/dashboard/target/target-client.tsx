@@ -7,6 +7,7 @@ import {
   Tooltip, ResponsiveContainer, BarChart, Bar, Cell, ReferenceLine
 } from 'recharts'
 import { TrendingUp, Users, Target, CheckSquare } from 'lucide-react'
+import { RadialProgressCard } from '@/components/dashboard/radial-progress-card'
 
 import { Database } from '@/types/database'
 import { ProgramWithRelations } from '../actions'
@@ -248,61 +249,43 @@ export function TargetClient({
         />
       </div>
 
-      {/* ── Progress bars summary ─────────────────────────────── */}
+      {/* ── Progress charts summary ─────────────────────────────── */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        {/* Rp bar */}
-        <div className="md:col-span-1 bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
-          <p className="text-xs font-black text-slate-400 uppercase tracking-widest mb-4">Capaian Pendapatan</p>
-          <div className="flex justify-between text-sm font-bold mb-2">
-            <span className="text-slate-600">{formatRupiah(summary.totalAchievedRp)}</span>
-            <span className="text-slate-400">{summary.rpPct.toFixed(1)}%</span>
-          </div>
-          <div className="h-3 bg-slate-100 rounded-full overflow-hidden">
-            <div
-              className={cn("h-full rounded-full transition-all duration-700",
-                summary.rpPct >= 100 ? 'bg-emerald-500' : summary.rpPct >= 60 ? 'bg-indigo-500' : 'bg-amber-500'
-              )}
-              style={{ width: `${Math.min(summary.rpPct, 100)}%` }}
-            />
-          </div>
-          <p className="text-xs text-slate-400 mt-2">Target: {formatRupiah(summary.totalTargetRp)}</p>
-        </div>
+        {/* Rp chart */}
+        <RadialProgressCard
+          title="Capaian Pendapatan"
+          value={summary.totalAchievedRp}
+          target={summary.totalTargetRp}
+          percentage={summary.rpPct}
+          displayValue={formatRupiah(summary.totalAchievedRp)}
+          displayTarget={formatRupiah(summary.totalTargetRp)}
+          unitLabel=""
+          color={summary.rpPct >= 100 ? '#10b981' : summary.rpPct >= 60 ? '#6366f1' : '#f59e0b'}
+        />
 
-        {/* User bar */}
-        <div className="md:col-span-1 bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
-          <p className="text-xs font-black text-slate-400 uppercase tracking-widest mb-4">Capaian User/Peserta</p>
-          <div className="flex justify-between text-sm font-bold mb-2">
-            <span className="text-slate-600">{summary.totalAchievedUser.toLocaleString()} user</span>
-            <span className="text-slate-400">{summary.userPct.toFixed(1)}%</span>
-          </div>
-          <div className="h-3 bg-slate-100 rounded-full overflow-hidden">
-            <div
-              className={cn("h-full rounded-full transition-all duration-700",
-                summary.userPct >= 100 ? 'bg-emerald-500' : summary.userPct >= 60 ? 'bg-violet-500' : 'bg-amber-500'
-              )}
-              style={{ width: `${Math.min(summary.userPct, 100)}%` }}
-            />
-          </div>
-          <p className="text-xs text-slate-400 mt-2">Target: {summary.totalTargetUser.toLocaleString()} user</p>
-        </div>
+        {/* User chart */}
+        <RadialProgressCard
+          title="Capaian User/Peserta"
+          value={summary.totalAchievedUser}
+          target={summary.totalTargetUser}
+          percentage={summary.userPct}
+          displayValue={`${summary.totalAchievedUser.toLocaleString()} user`}
+          displayTarget={summary.totalTargetUser.toLocaleString()}
+          unitLabel="user"
+          color={summary.userPct >= 100 ? '#10b981' : summary.userPct >= 60 ? '#8b5cf6' : '#f59e0b'}
+        />
 
-        {/* Milestone bar */}
-        <div className="md:col-span-1 bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
-          <p className="text-xs font-black text-slate-400 uppercase tracking-widest mb-4">Milestone Selesai</p>
-          <div className="flex justify-between text-sm font-bold mb-2">
-            <span className="text-slate-600">{summary.completedMilestones} selesai</span>
-            <span className="text-slate-400">
-              {summary.totalMilestones > 0 ? ((summary.completedMilestones / summary.totalMilestones) * 100).toFixed(0) : 0}%
-            </span>
-          </div>
-          <div className="h-3 bg-slate-100 rounded-full overflow-hidden">
-            <div
-              className="h-full rounded-full bg-teal-500 transition-all duration-700"
-              style={{ width: `${summary.totalMilestones > 0 ? (summary.completedMilestones / summary.totalMilestones) * 100 : 0}%` }}
-            />
-          </div>
-          <p className="text-xs text-slate-400 mt-2">Total: {summary.totalMilestones} milestone</p>
-        </div>
+        {/* Milestone chart */}
+        <RadialProgressCard
+          title="Milestone Selesai"
+          value={summary.completedMilestones}
+          target={summary.totalMilestones}
+          percentage={summary.totalMilestones > 0 ? (summary.completedMilestones / summary.totalMilestones) * 100 : 0}
+          displayValue={`${summary.completedMilestones} selesai`}
+          displayTarget={String(summary.totalMilestones)}
+          unitLabel="milestone"
+          color="#14b8a6"
+        />
       </div>
 
       {/* ── Charts ───────────────────────────────────────────── */}
