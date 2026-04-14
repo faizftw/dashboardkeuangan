@@ -1,12 +1,12 @@
-import { getDashboardData } from './actions'
-import { OverviewClient } from './dashboard-client'
+import { getDashboardData } from '../actions'
+import { TargetClient } from './target-client'
 import { Suspense } from 'react'
-import { HeartPulse } from 'lucide-react'
+import { Target } from 'lucide-react'
 import { DashboardDateFilter } from '@/components/dashboard-date-filter'
 
 export const dynamic = 'force-dynamic'
 
-export default async function DashboardPage({
+export default async function TargetPage({
   searchParams,
 }: {
   searchParams: { startDate?: string; endDate?: string }
@@ -19,15 +19,14 @@ export default async function DashboardPage({
 
   return (
     <div className="space-y-6 mb-20">
-      {/* Header */}
       <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
         <div className="flex flex-col gap-1">
           <div className="flex items-center gap-2 text-slate-400">
-            <HeartPulse className="h-4 w-4" />
+            <Target className="h-4 w-4" />
             <span className="text-xs font-bold uppercase tracking-widest">Dashboard KPI</span>
           </div>
-          <h1 className="text-2xl font-black text-slate-900 tracking-tight">Ringkasan Kinerja</h1>
-          <p className="text-sm text-slate-500">Pantau progres kinerja bisnis secara global.</p>
+          <h1 className="text-2xl font-black text-slate-900 tracking-tight">Metrik Utama</h1>
+          <p className="text-sm text-slate-500">Target Rp, User, dan Milestone kuantitatif semua program.</p>
         </div>
 
         {data.activePeriod && (
@@ -43,26 +42,19 @@ export default async function DashboardPage({
         )}
       </div>
 
-      {/* Content */}
       {!data.activePeriod ? (
         <div className="bg-amber-50 border border-amber-200 rounded-2xl p-10 text-center text-amber-800">
           <h3 className="font-bold text-lg mb-2">Belum Ada Periode Aktif</h3>
-          <p className="text-sm">Admin harus mengatur periode aktif di Master Data agar dashboard dapat menampilkan kalkulasi.</p>
-        </div>
-      ) : data.programs.length === 0 ? (
-        <div className="bg-slate-50 border border-slate-200 rounded-2xl p-12 text-center text-slate-500">
-          <p className="font-semibold text-lg">Tidak ada program aktif.</p>
-          {!data.isAdmin && <p className="text-sm mt-2">Belum ada program aktif yang ditugaskan kepada Anda.</p>}
+          <p className="text-sm">Admin harus mengatur periode aktif di Master Data.</p>
         </div>
       ) : (
         <Suspense fallback={<div className="h-96 w-full animate-pulse bg-slate-100 rounded-2xl" />}>
-          <OverviewClient
+          <TargetClient
             programs={data.programs}
             dailyInputs={data.dailyInputs}
             activePeriod={data.activePeriod}
             milestoneCompletions={data.milestoneCompletions}
             metricValues={data.metricValues}
-            profiles={data.profiles}
             prorationFactor={data.prorationFactor}
           />
         </Suspense>

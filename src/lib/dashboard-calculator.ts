@@ -30,6 +30,16 @@ export function getHealthStatus(score: number): ProgramHealthResult['status'] {
 
 /**
  * Calculates the overall health score of a single program.
+ * 
+ * Rules (from redesign-flow.md Part 2):
+ * - Case 1: Program punya is_primary = true metrics
+ *   → Health Score = rata-rata % capaian primary metrics
+ * - Case 2: Program kualitatif only (tidak ada primary metrics)
+ *   → Health Score = (milestone selesai / total milestone) * 100
+ * - Case 3: Program dengan is_primary metrics DAN milestones (hybrid)
+ *   → Health Score dari primary metrics saja, milestone ditampilkan terpisah
+ * - Secondary metrics (is_primary = false) TIDAK masuk Health Score
+ * - Legacy (no custom metrics): gunakan monthly_target_rp dan monthly_target_user
  */
 export function calculateProgramHealth(
   program: ProgramWithRelations,
@@ -40,79 +50,98 @@ export function calculateProgramHealth(
 ): ProgramHealthResult {
   const metrics = program.program_metric_definitions || []
   const hasCustomMetrics = metrics.length > 0
-  let healthScore = 0
-  let totalValidMetrics = 0
 
-  // 1. Program Kualitatif (Milestone Only)
-  if (program.target_type === 'qualitative' || (!hasCustomMetrics && program.monthly_target_rp === 0 && program.monthly_target_user === 0)) {
-    const milestones = program.program_milestones || []
-    if (milestones.length > 0) {
-      const completed = milestones.filter(ms => 
-        milestoneCompletions.find(c => c.milestone_id === ms.id && c.is_completed)
-      ).length
-      
+  // ── Case 1 & 3: Program with custom metrics — use PRIMARY metrics only ──────
+  if (hasCustomMetrics) {
+    // Filter to primary metrics only (basis of Health Score)
+    const primaryMetrics = metrics.filter(m => m.is_primary && m.is_target_metric)
+
+    if (primaryMetrics.length > 0) {
+      let sumPercentage = 0
+      let validMetrics = 0
+
+      primaryMetrics.forEach(m => {
+        const vals = metricValues.filter(mv => mv.program_id === program.id && mv.metric_definition_id === m.id)
+        const sumActual = vals.reduce((sum, v) => sum + (v.value || 0), 0)
+
+        let monthlyTarget = m.monthly_target || 0
+        // Fallback to legacy fields if no explicit target set
+        if (monthlyTarget === 0) {
+          if (m.data_type === 'currency') monthlyTarget = program.monthly_target_rp || 0
+          else if (m.data_type === 'integer') monthlyTarget = program.monthly_target_user || 0
+        }
+
+        const effectiveTarget = monthlyTarget * prorationFactor
+
+        if (effectiveTarget > 0) {
+          let pct = (sumActual / effectiveTarget) * 100
+          if (m.target_direction === 'lower_is_better') {
+            pct = (effectiveTarget / (sumActual || 1)) * 100
+          }
+          sumPercentage += pct
+          validMetrics++
+        }
+      })
+
+      const healthScore = validMetrics > 0 ? sumPercentage / validMetrics : 0
       return {
         programId: program.id,
-        healthScore: (completed / milestones.length) * 100,
-        status: getHealthStatus((completed / milestones.length) * 100),
+        healthScore,
+        status: getHealthStatus(healthScore),
+        totalTargetMetrics: validMetrics,
+        isQualitativeOnly: false
+      }
+    }
+
+    // Has custom metrics but none are primary — check if qualitative only
+    // Fall through to qualitative check below
+  }
+
+  // ── Case 2: Qualitative only (milestone-based) ────────────────────────────
+  const isExplicitlyQualitative = program.target_type === 'qualitative'
+  const hasNoLegacyTargets = (program.monthly_target_rp || 0) === 0 && (program.monthly_target_user || 0) === 0
+
+  if (isExplicitlyQualitative || (hasCustomMetrics && hasNoLegacyTargets) || (!hasCustomMetrics && hasNoLegacyTargets)) {
+    const milestones = program.program_milestones || []
+    if (milestones.length > 0) {
+      const completed = milestones.filter(ms =>
+        milestoneCompletions.find(c => c.milestone_id === ms.id && c.is_completed)
+      ).length
+
+      const healthScore = (completed / milestones.length) * 100
+      return {
+        programId: program.id,
+        healthScore,
+        status: getHealthStatus(healthScore),
         totalTargetMetrics: milestones.length,
         isQualitativeOnly: true
       }
     }
-  }
-
-  // 2. Program dengan Custom Metrics
-  if (hasCustomMetrics) {
-    const targetMetrics = metrics.filter(m => m.is_target_metric)
-    let sumPercentage = 0
-
-    targetMetrics.forEach(m => {
-      // Find values for this metric
-      const vals = metricValues.filter(mv => mv.program_id === program.id && mv.metric_definition_id === m.id)
-      const sumActual = vals.reduce((sum, v) => sum + (v.value || 0), 0)
-      
-      // Determine target (using definition monthly_target, fallback to program legacy fields based on type)
-      let monthlyTarget = m.monthly_target || 0
-      if (monthlyTarget === 0) {
-        if (m.data_type === 'currency') monthlyTarget = program.monthly_target_rp || 0
-        else if (m.data_type === 'integer') monthlyTarget = program.monthly_target_user || 0
-      }
-
-      const effectiveTarget = monthlyTarget * prorationFactor
-      
-      if (effectiveTarget > 0) {
-        let pct = (sumActual / effectiveTarget) * 100
-        if (m.target_direction === 'lower_is_better') {
-           // For lower is better, being under is over 100%. E.g. actual 50 / target 100 = 200% health
-           pct = (effectiveTarget / (sumActual || 1)) * 100 // Prevent infinity
-        }
-        sumPercentage += pct
-        totalValidMetrics++
-      }
-    })
-
-    if (totalValidMetrics > 0) {
-      healthScore = sumPercentage / totalValidMetrics
-    }
-  } 
-  // 3. Program Legacy (Hanya Rp dan User)
-  else {
-    const inputs = dailyInputs.filter(i => i.program_id === program.id)
-    const cumulativeRp = inputs.reduce((sum, i) => sum + Number(i.achievement_rp || 0), 0)
-    const cumulativeUser = inputs.reduce((sum, i) => sum + Number(i.achievement_user || 0), 0)
-
-    const effectiveRp = (program.monthly_target_rp || 0) * prorationFactor
-    const effectiveUser = (program.monthly_target_user || 0) * prorationFactor
-
-    let scoreRp = 0, scoreUser = 0
-    
-    if (effectiveRp > 0) { scoreRp = (cumulativeRp / effectiveRp) * 100; totalValidMetrics++; }
-    if (effectiveUser > 0) { scoreUser = (cumulativeUser / effectiveUser) * 100; totalValidMetrics++; }
-
-    if (totalValidMetrics > 0) {
-      healthScore = (scoreRp + scoreUser) / totalValidMetrics
+    // Qualitative with zero milestones → 0%
+    return {
+      programId: program.id,
+      healthScore: 0,
+      status: 'KRITIS',
+      totalTargetMetrics: 0,
+      isQualitativeOnly: true
     }
   }
+
+  // ── Legacy: program with no custom metrics, has Rp/User targets ──────────
+  const inputs = dailyInputs.filter(i => i.program_id === program.id)
+  const cumulativeRp = inputs.reduce((sum, i) => sum + Number(i.achievement_rp || 0), 0)
+  const cumulativeUser = inputs.reduce((sum, i) => sum + Number(i.achievement_user || 0), 0)
+
+  const effectiveRp = (program.monthly_target_rp || 0) * prorationFactor
+  const effectiveUser = (program.monthly_target_user || 0) * prorationFactor
+
+  let scoreRp = 0, scoreUser = 0
+  let totalValidMetrics = 0
+
+  if (effectiveRp > 0) { scoreRp = (cumulativeRp / effectiveRp) * 100; totalValidMetrics++ }
+  if (effectiveUser > 0) { scoreUser = (cumulativeUser / effectiveUser) * 100; totalValidMetrics++ }
+
+  const healthScore = totalValidMetrics > 0 ? (scoreRp + scoreUser) / totalValidMetrics : 0
 
   return {
     programId: program.id,
@@ -124,7 +153,8 @@ export function calculateProgramHealth(
 }
 
 /**
- * Recalculates department health (average of its programs' health scores)
+ * Calculates average health across a set of programs.
+ * Used by TV Dashboard and department-level overview.
  */
 export function calculateDepartmentHealth(
   programs: ProgramWithRelations[],
@@ -133,9 +163,9 @@ export function calculateDepartmentHealth(
   milestoneCompletions: MilestoneCompletion[],
   prorationFactor: number
 ) {
-  if (programs.length === 0) return { score: 0, status: 'KRITIS' }
+  if (programs.length === 0) return { score: 0, status: 'KRITIS' as const }
   let sumHealth = 0
-  
+
   programs.forEach(p => {
     const health = calculateProgramHealth(p, metricValues, dailyInputs, milestoneCompletions, prorationFactor)
     sumHealth += health.healthScore
@@ -149,17 +179,14 @@ export function calculateDepartmentHealth(
 }
 
 /**
- * Aggregates all metrics in a given program array grouped by metric_group.
- * Supports special formulas:
- * - conversion = user_acquisition / leads
- * - efficiency = revenue / ad_spend
+ * Aggregates all metrics grouped by metric_group across programs.
+ * Used by TV Dashboard Slide 1 (Summary).
  */
 export function aggregateByMetricGroup(
   programs: ProgramWithRelations[],
   metricValues: MetricValue[],
   prorationFactor: number
 ) {
-  // 1. First, we need to collect all custom metric definitions that belong to these programs
   const groupRawTotals: Record<string, { actual: number, target: number }> = {
     revenue: { actual: 0, target: 0 },
     user_acquisition: { actual: 0, target: 0 },
@@ -167,64 +194,52 @@ export function aggregateByMetricGroup(
     leads: { actual: 0, target: 0 }
   }
 
-  // To know if a group exists in the department
   const existingGroups = new Set<string>()
 
   programs.forEach(prog => {
     const definitions = prog.program_metric_definitions || []
-    
+
     definitions.forEach(m => {
       const g = m.metric_group
       if (g && (g === 'revenue' || g === 'user_acquisition' || g === 'ad_spend' || g === 'leads')) {
         existingGroups.add(g)
-        
-        // Sum Actuals
+
         const vals = metricValues.filter(mv => mv.program_id === prog.id && mv.metric_definition_id === m.id)
         const sumActual = vals.reduce((sum, v) => sum + (v.value || 0), 0)
         groupRawTotals[g].actual += sumActual
 
-        // Sum Targets
         let monthlyTarget = m.monthly_target || 0
         if (monthlyTarget === 0) {
           if (m.data_type === 'currency') monthlyTarget = prog.monthly_target_rp || 0
           else if (m.data_type === 'integer') monthlyTarget = prog.monthly_target_user || 0
         }
-        
+
         groupRawTotals[g].target += (monthlyTarget * prorationFactor)
       } else if (g === 'conversion' || g === 'efficiency') {
-        // Just flag that it exists so we yield the computed result later
         existingGroups.add(g)
       }
     })
-  });
+  })
 
-  // Calculate generic return payload
   const result: Record<string, { actual: number, target: number, isComputed: boolean }> = {}
 
-  // Push raw sums
   Object.keys(groupRawTotals).forEach(g => {
     if (existingGroups.has(g)) {
       result[g] = { ...groupRawTotals[g], isComputed: false }
     }
   })
 
-  // Push computed weighted averages (Conversion and Efficiency)
   if (existingGroups.has('conversion')) {
-    // Conversion = user_acquisition / leads
     const acq = groupRawTotals['user_acquisition']?.actual || 0
     const lds = groupRawTotals['leads']?.actual || 0
     const actual = lds > 0 ? (acq / lds) * 100 : 0
-    
-    // We don't really have a global "target conversion", so we can just leave target as 0
     result['conversion'] = { actual, target: 0, isComputed: true }
   }
 
   if (existingGroups.has('efficiency')) {
-    // Efficiency (ROAS) = revenue / ad_spend
     const rev = groupRawTotals['revenue']?.actual || 0
     const spd = groupRawTotals['ad_spend']?.actual || 0
     const actual = spd > 0 ? (rev / spd) : 0
-    
     result['efficiency'] = { actual, target: 0, isComputed: true }
   }
 
@@ -233,7 +248,6 @@ export function aggregateByMetricGroup(
 
 /**
  * Standard performance grading for TV Dashboard
- * Returns label and color mapping
  */
 export function getPerformanceGrade(score: number): { label: string, color: string } {
   if (score >= 100) return { label: 'S', color: 'text-emerald-400' }
@@ -242,4 +256,134 @@ export function getPerformanceGrade(score: number): { label: string, color: stri
   if (score >= 60)  return { label: 'C', color: 'text-amber-400' }
   if (score >= 40)  return { label: 'D', color: 'text-rose-400' }
   return { label: 'E', color: 'text-rose-600' }
+}
+
+// ─── Ads Performance Utilities ────────────────────────────────────────────────
+
+const ADS_METRIC_KEYS = ['ads_spent', 'budget_iklan', 'leads', 'lead_masuk', 'roas', 'cpp', 'cpp_real', 'cpm', 'cpc', 'adds_to_cart', 'conversion_rate']
+
+/**
+ * Detects if a program is an "Ads Program" — has at least one ad-related metric.
+ */
+export function isAdsProgram(metricDefinitions: MetricDefinition[]): boolean {
+  return metricDefinitions.some(
+    m => m.metric_group === 'ad_spend' || ADS_METRIC_KEYS.includes(m.metric_key)
+  )
+}
+
+export interface AdsAggregateResult {
+  totalAdsSpent: number
+  totalRevenue: number
+  totalGoals: number
+  totalLeads: number
+  avgRoas: number   // total_revenue / total_ads_spent (weighted)
+  avgCpp: number    // total_ads_spent / total_goals (weighted)
+  avgCr: number     // total_goals / total_leads (weighted)
+}
+
+/**
+ * Aggregates ads metrics across programs using weighted averages.
+ */
+export function aggregateAdsMetrics(
+  programs: ProgramWithRelations[],
+  metricValues: MetricValue[]
+): AdsAggregateResult {
+  let totalAdsSpent = 0
+  let totalRevenue = 0
+  let totalGoals = 0
+  let totalLeads = 0
+
+  programs.forEach(prog => {
+    const defs = prog.program_metric_definitions || []
+
+    defs.forEach(m => {
+      const vals = metricValues.filter(mv => mv.program_id === prog.id && mv.metric_definition_id === m.id)
+      const sum = vals.reduce((acc, v) => acc + (Number(v.value) || 0), 0)
+
+      if (m.metric_group === 'ad_spend' || m.metric_key === 'budget_iklan' || m.metric_key === 'ads_spent') {
+        totalAdsSpent += sum
+      } else if (m.metric_group === 'revenue' || m.metric_key === 'omzet' || m.metric_key === 'revenue') {
+        totalRevenue += sum
+      } else if (m.metric_group === 'user_acquisition' && m.is_primary) {
+        totalGoals += sum
+      } else if (m.metric_group === 'leads' || m.metric_key === 'lead_masuk' || m.metric_key === 'leads') {
+        totalLeads += sum
+      }
+    })
+  })
+
+  return {
+    totalAdsSpent,
+    totalRevenue,
+    totalGoals,
+    totalLeads,
+    avgRoas: totalAdsSpent > 0 ? totalRevenue / totalAdsSpent : 0,
+    avgCpp: totalGoals > 0 ? totalAdsSpent / totalGoals : 0,
+    avgCr: totalLeads > 0 ? (totalGoals / totalLeads) * 100 : 0,
+  }
+}
+
+export interface AdsDailyPoint {
+  date: string
+  displayDate: string
+  x: number   // metric for bar (e.g. ads_spent)
+  y: number   // metric for line overlay (e.g. roas)
+}
+
+/**
+ * Builds daily time series for dual-axis ads chart.
+ * metricX → bar chart (e.g. 'budget_iklan')
+ * metricY → line overlay. 'roas' and 'cpp_real' are calculated on the fly.
+ */
+export function buildAdsDailySeries(
+  programs: ProgramWithRelations[],
+  metricValues: MetricValue[],
+  metricX: string,
+  metricY: string
+): AdsDailyPoint[] {
+  // Group all relevant metric values by date
+  const byDate = new Map<string, { xSum: number; revSum: number; spendSum: number; goalsSum: number; leadsSum: number }>()
+
+  programs.forEach(prog => {
+    const defs = prog.program_metric_definitions || []
+    const xDef = defs.find(m => m.metric_key === metricX)
+    const revDef = defs.find(m => m.metric_group === 'revenue' || m.metric_key === 'omzet' || m.metric_key === 'revenue')
+    const spendDef = defs.find(m => m.metric_group === 'ad_spend' || m.metric_key === 'budget_iklan')
+    const goalsDef = defs.find(m => m.is_primary && (m.metric_group === 'user_acquisition' || m.metric_key === 'closing'))
+    const leadsDef = defs.find(m => m.metric_group === 'leads' || m.metric_key === 'lead_masuk')
+
+    metricValues
+      .filter(mv => mv.program_id === prog.id)
+      .forEach(mv => {
+        const d = mv.date
+        const entry = byDate.get(d) || { xSum: 0, revSum: 0, spendSum: 0, goalsSum: 0, leadsSum: 0 }
+        const val = Number(mv.value) || 0
+
+        if (xDef && mv.metric_definition_id === xDef.id) entry.xSum += val
+        if (revDef && mv.metric_definition_id === revDef.id) entry.revSum += val
+        if (spendDef && mv.metric_definition_id === spendDef.id) entry.spendSum += val
+        if (goalsDef && mv.metric_definition_id === goalsDef.id) entry.goalsSum += val
+        if (leadsDef && mv.metric_definition_id === leadsDef.id) entry.leadsSum += val
+
+        byDate.set(d, entry)
+      })
+  })
+
+  return Array.from(byDate.entries())
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([date, entry]) => {
+      let yVal = 0
+      if (metricY === 'roas') yVal = entry.spendSum > 0 ? entry.revSum / entry.spendSum : 0
+      else if (metricY === 'cpp_real' || metricY === 'cpp') yVal = entry.goalsSum > 0 ? entry.spendSum / entry.goalsSum : 0
+      else if (metricY === 'conversion_rate') yVal = entry.leadsSum > 0 ? (entry.goalsSum / entry.leadsSum) * 100 : 0
+      // For non-calculated Y, look up directly (goals, leads, etc.)
+      // xSum already has the raw value from the xDef definition
+
+      return {
+        date,
+        displayDate: new Intl.DateTimeFormat('id-ID', { day: 'numeric', month: 'short' }).format(new Date(date)),
+        x: entry.xSum,
+        y: yVal,
+      }
+    })
 }

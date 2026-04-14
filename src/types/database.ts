@@ -332,6 +332,7 @@ export type Database = {
           input_type: 'manual' | 'calculated'
           formula: string | null
           is_target_metric: boolean
+          is_primary: boolean
           monthly_target: number | null
           target_direction: 'higher_is_better' | 'lower_is_better'
           unit_label: string | null
@@ -350,6 +351,7 @@ export type Database = {
           input_type: 'manual' | 'calculated'
           formula?: string | null
           is_target_metric?: boolean
+          is_primary?: boolean
           monthly_target?: number | null
           target_direction?: 'higher_is_better' | 'lower_is_better'
           unit_label?: string | null
@@ -368,6 +370,7 @@ export type Database = {
           input_type?: 'manual' | 'calculated'
           formula?: string | null
           is_target_metric?: boolean
+          is_primary?: boolean
           monthly_target?: number | null
           target_direction?: 'higher_is_better' | 'lower_is_better'
           unit_label?: string | null

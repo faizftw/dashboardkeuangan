@@ -94,6 +94,7 @@ export function InputHarianContainer(props: InputHarianContainerProps) {
               programs={pivotPrograms}
               activePeriod={props.activePeriod}
               allPeriodMetricValues={props.allPeriodMetricValues || []}
+              pastInputs={props.pastInputs}
               isAdmin={props.isAdmin}
             />
           )}

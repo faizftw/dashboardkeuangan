@@ -4,6 +4,9 @@
  * Preset configurations for common program types.
  * These templates populate program_metric_definitions when
  * creating a new program via the metric builder UI.
+ * 
+ * is_primary = true  → Basis Health Score calculation & primary progress bar
+ * is_primary = false → Secondary/informational metric, shown as chips
  */
 
 import { Database } from '@/types/database'
@@ -31,6 +34,7 @@ export const METRIC_TEMPLATES: MetricTemplate[] = [
         label: 'Lead Masuk',
         data_type: 'integer',
         input_type: 'manual',
+        is_primary: false,
         is_target_metric: false,
         monthly_target: null,
         target_direction: 'higher_is_better',
@@ -46,6 +50,7 @@ export const METRIC_TEMPLATES: MetricTemplate[] = [
         label: 'Budget Iklan + PPn',
         data_type: 'currency',
         input_type: 'manual',
+        is_primary: false,
         is_target_metric: false,
         monthly_target: null,
         target_direction: 'lower_is_better',
@@ -61,6 +66,7 @@ export const METRIC_TEMPLATES: MetricTemplate[] = [
         label: 'Closing',
         data_type: 'integer',
         input_type: 'manual',
+        is_primary: true,         // PRIMARY: basis Health Score
         is_target_metric: true,
         monthly_target: null,
         target_direction: 'higher_is_better',
@@ -76,6 +82,7 @@ export const METRIC_TEMPLATES: MetricTemplate[] = [
         label: 'Omzet',
         data_type: 'currency',
         input_type: 'manual',
+        is_primary: true,         // PRIMARY: basis Health Score
         is_target_metric: true,
         monthly_target: null,
         target_direction: 'higher_is_better',
@@ -91,6 +98,7 @@ export const METRIC_TEMPLATES: MetricTemplate[] = [
         label: 'Conversion Rate',
         data_type: 'percentage',
         input_type: 'calculated',
+        is_primary: false,
         is_target_metric: false,
         monthly_target: null,
         target_direction: 'higher_is_better',
@@ -106,6 +114,7 @@ export const METRIC_TEMPLATES: MetricTemplate[] = [
         label: 'ROAS',
         data_type: 'float',
         input_type: 'calculated',
+        is_primary: false,
         is_target_metric: false,
         monthly_target: null,
         target_direction: 'higher_is_better',
@@ -121,6 +130,7 @@ export const METRIC_TEMPLATES: MetricTemplate[] = [
         label: 'CPP Real',
         data_type: 'currency',
         input_type: 'calculated',
+        is_primary: false,
         is_target_metric: false,
         monthly_target: null,
         target_direction: 'lower_is_better',
@@ -143,6 +153,7 @@ export const METRIC_TEMPLATES: MetricTemplate[] = [
         label: 'Pendapatan',
         data_type: 'currency',
         input_type: 'manual',
+        is_primary: true,         // PRIMARY: basis Health Score
         is_target_metric: true,
         monthly_target: null,
         target_direction: 'higher_is_better',
@@ -158,6 +169,7 @@ export const METRIC_TEMPLATES: MetricTemplate[] = [
         label: 'Jumlah Peserta',
         data_type: 'integer',
         input_type: 'manual',
+        is_primary: true,         // PRIMARY: basis Health Score
         is_target_metric: true,
         monthly_target: null,
         target_direction: 'higher_is_better',
@@ -186,6 +198,7 @@ export const METRIC_TEMPLATES: MetricTemplate[] = [
         label: 'Tiket Masuk',
         data_type: 'integer',
         input_type: 'manual',
+        is_primary: false,
         is_target_metric: false,
         monthly_target: null,
         target_direction: 'higher_is_better',
@@ -201,6 +214,7 @@ export const METRIC_TEMPLATES: MetricTemplate[] = [
         label: 'Tiket Diselesaikan',
         data_type: 'integer',
         input_type: 'manual',
+        is_primary: false,
         is_target_metric: true,
         monthly_target: null,
         target_direction: 'higher_is_better',
@@ -216,6 +230,7 @@ export const METRIC_TEMPLATES: MetricTemplate[] = [
         label: 'Resolution Rate',
         data_type: 'percentage',
         input_type: 'calculated',
+        is_primary: false,
         is_target_metric: false,
         monthly_target: null,
         target_direction: 'higher_is_better',
