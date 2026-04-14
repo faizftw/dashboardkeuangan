@@ -147,7 +147,8 @@ export async function getTVDashboardData(): Promise<TVDashboardData> {
       metricValues, 
       inputs, 
       completions, 
-      prorationFactor
+      prorationFactor,
+      totalDays
     )
 
     const progInputs = inputs.filter(i => i.program_id === prog.id)
@@ -233,7 +234,8 @@ export async function getTVDashboardData(): Promise<TVDashboardData> {
   const metricGroups = aggregateByMetricGroup(
     rawPrograms as ProgramWithRelations[],
     metricValues,
-    prorationFactor
+    prorationFactor,
+    totalDays
   )
 
   return {

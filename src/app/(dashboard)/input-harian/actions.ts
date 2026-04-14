@@ -259,3 +259,152 @@ export async function upsertSingleMetricValue(params: {
   revalidatePath('/input-harian')
   return { success: true }
 }
+
+export async function upsertDailyMetricTarget(params: {
+  programId: string;
+  metricDefinitionId: string;
+  date: string;
+  targetValue: number | null;
+}): Promise<ActionResponse> {
+  const supabase = createClient()
+  
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { error: 'Unauthorized' }
+
+  // Check role
+  const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).single()
+  if (profile?.role !== 'admin') return { error: 'Hanya Admin yang dapat mengatur target' }
+
+  const { data: period } = await supabase
+    .from('periods')
+    .select('id, is_locked')
+    .eq('is_active', true)
+    .single()
+
+  if (!period) return { error: 'Tidak ada periode aktif saat ini.' }
+
+  // Note: we allow editing targets even if period is locked (Admin only)
+  // because targets are plans, not achievements.
+
+  const { error } = await supabase
+    .from('daily_metric_values')
+    .upsert({
+      period_id: period.id,
+      program_id: params.programId,
+      metric_definition_id: params.metricDefinitionId,
+      date: params.date,
+      target_value: params.targetValue,
+    }, {
+      onConflict: 'period_id,program_id,metric_definition_id,date'
+    })
+
+  if (error) {
+    console.error('Upsert Target Error:', error)
+    return { error: error.message }
+  }
+
+  revalidatePath('/input-harian')
+  revalidatePath('/dashboard')
+  return { success: true }
+}
+
+export async function autoDistributeTargets(params: {
+  programId: string;
+  metricDefinitionId: string;
+}): Promise<ActionResponse> {
+  const supabase = createClient()
+  
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { error: 'Unauthorized' }
+
+  // Check role
+  const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).single()
+  if (profile?.role !== 'admin') return { error: 'Hanya Admin yang dapat melakukan distribusi otomatis' }
+
+  // 1. Get Active Period, Metric Definition, and Program
+  const { data: period } = await supabase
+    .from('periods')
+    .select('*')
+    .eq('is_active', true)
+    .single()
+
+  if (!period) return { error: 'Tidak ada periode aktif.' }
+
+  const { data: metricDef } = await supabase
+    .from('program_metric_definitions')
+    .select('*')
+    .eq('id', params.metricDefinitionId)
+    .single()
+
+  if (!metricDef) return { error: 'Metrik tidak ditemukan.' }
+
+  const { data: program } = await supabase
+    .from('programs')
+    .select('*')
+    .eq('id', params.programId)
+    .single()
+
+  if (!program) return { error: 'Program tidak ditemukan.' }
+
+  // 2. Identify Mon-Fri dates in the period
+  const totalDaysInMonth = new Date(period.year, period.month, 0).getDate()
+  const workingDates: string[] = []
+
+  for (let d = 1; d <= totalDaysInMonth; d++) {
+    const date = new Date(period.year, period.month - 1, d)
+    const dayOfWeek = date.getDay() 
+    
+    if (dayOfWeek >= 1 && dayOfWeek <= 5) {
+      workingDates.push(`${period.year}-${String(period.month).padStart(2, '0')}-${String(d).padStart(2, '0')}`)
+    }
+  }
+
+  if (workingDates.length === 0) return { error: 'Tidak ada hari kerja ditemukan pada periode ini.' }
+
+  // 3. Determine Daily Target
+  // Priority: 
+  // 1. Manual daily_target from programs table (for revenue/user_count)
+  // 2. Pro-rata from monthly_target
+  
+  let dailyTarget = 0
+  const isRevenue = metricDef.metric_key === 'revenue'
+  const isUser = metricDef.metric_key === 'user_count'
+
+  if (isRevenue && program.daily_target_rp !== null) {
+    dailyTarget = Number(program.daily_target_rp)
+  } else if (isUser && program.daily_target_user !== null) {
+    dailyTarget = Number(program.daily_target_user)
+  } else if (metricDef.monthly_target) {
+    const targetCount = period.working_days || workingDates.length
+    dailyTarget = Number(metricDef.monthly_target) / targetCount
+  } else {
+    return { error: 'Target tidak ditemukan (bulanan maupun harian).' }
+  }
+  
+  // 4. Distribute
+  const targetCount = period.working_days || workingDates.length
+  const datesToFill = workingDates.slice(0, targetCount)
+  
+  const rows = datesToFill.map(date => ({
+    period_id: period.id,
+    program_id: params.programId,
+    metric_definition_id: params.metricDefinitionId,
+    date,
+    target_value: dailyTarget,
+  }))
+
+  const { error } = await supabase
+    .from('daily_metric_values')
+    .upsert(rows, {
+      onConflict: 'period_id,program_id,metric_definition_id,date'
+    })
+
+  if (error) {
+    console.error('Auto Distribute Error:', error)
+    return { error: error.message }
+  }
+
+  revalidatePath('/input-harian')
+  revalidatePath('/dashboard')
+  return { success: true }
+}

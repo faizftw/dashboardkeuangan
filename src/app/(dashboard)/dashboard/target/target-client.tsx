@@ -1,9 +1,8 @@
 'use client'
 
 import { useMemo } from 'react'
-import { ProgramWithRelations } from '../actions'
-import { Database } from '@/types/database'
 import { formatRupiah, cn } from '@/lib/utils'
+import { calculateProgramHealth, aggregateByMetricGroup, ProgramWithRelations as CalcProgramWithRelations } from '@/lib/dashboard-calculator'
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid,
   Tooltip, ResponsiveContainer, BarChart, Bar, Cell, ReferenceLine
@@ -69,66 +68,43 @@ export function TargetClient({
   metricValues,
   previousMetricValues = [],
   previousDailyInputs = [],
-  isCustomDateRange
+  isCustomDateRange,
+  prorationFactor = 1
 }: TargetClientProps) {
   // ── Collect primary revenue + user metrics from all programs ────────────
   const summary = useMemo(() => {
-    let totalTargetRp = 0, totalAchievedRp = 0, prevAchievedRp = 0
-    let totalTargetUser = 0, totalAchievedUser = 0, prevAchievedUser = 0
+    const workingDays = activePeriod.working_days || 30
+    const agg = aggregateByMetricGroup(programs as CalcProgramWithRelations[], metricValues, prorationFactor, workingDays)
+    const prevAgg = isCustomDateRange ? aggregateByMetricGroup(programs as CalcProgramWithRelations[], previousMetricValues, prorationFactor, workingDays) : null
+
+    const totalTargetRp = agg.revenue?.target || 0
+    const totalAchievedRp = agg.revenue?.actual || 0
+    const prevAchievedRp = prevAgg?.revenue?.actual || 0
+
+    const totalTargetUser = agg.user_acquisition?.target || 0
+    const totalAchievedUser = agg.user_acquisition?.actual || 0
+    const prevAchievedUser = prevAgg?.user_acquisition?.actual || 0
+
+    // Milestones
     let totalMilestones = 0, completedMilestones = 0
-
     programs.forEach(prog => {
-      const defs = prog.program_metric_definitions || []
-      const primaryDefs = defs.filter(m => m.is_primary && m.is_target_metric)
-
-      if (primaryDefs.length > 0) {
-        // Custom metric-based
-        primaryDefs.forEach(m => {
-          const vals = metricValues.filter(mv => mv.metric_definition_id === m.id && mv.program_id === prog.id)
-          const achieved = vals.reduce((s, v) => s + Number(v.value || 0), 0)
-          
-          let prevAchieved = 0
-          if (isCustomDateRange) {
-            const pVals = previousMetricValues.filter(mv => mv.metric_definition_id === m.id && mv.program_id === prog.id)
-            prevAchieved = pVals.reduce((s, v) => s + Number(v.value || 0), 0)
-          }
-
-          const target = m.monthly_target || 0
-          if (m.data_type === 'currency') {
-            totalTargetRp += target
-            totalAchievedRp += achieved
-            prevAchievedRp += prevAchieved
-          } else if (m.data_type === 'integer' || m.data_type === 'float') {
-            totalTargetUser += target
-            totalAchievedUser += achieved
-            prevAchievedUser += prevAchieved
-          }
-        })
-      } else {
-        // Legacy
-        totalTargetRp += prog.monthly_target_rp || 0
-        totalTargetUser += prog.monthly_target_user || 0
-        
-        const inputs = dailyInputs.filter(i => i.program_id === prog.id)
-        totalAchievedRp += inputs.reduce((s, i) => s + Number(i.achievement_rp || 0), 0)
-        totalAchievedUser += inputs.reduce((s, i) => s + Number(i.achievement_user || 0), 0)
-
-        if (isCustomDateRange) {
-          const pInputs = previousDailyInputs.filter(i => i.program_id === prog.id)
-          prevAchievedRp += pInputs.reduce((s, i) => s + Number(i.achievement_rp || 0), 0)
-          prevAchievedUser += pInputs.reduce((s, i) => s + Number(i.achievement_user || 0), 0)
-        }
-      }
-
-      // Milestones
       const msIds = prog.program_milestones?.map(m => m.id) || []
       totalMilestones += msIds.length
       completedMilestones += milestoneCompletions.filter(c => msIds.includes(c.milestone_id) && c.is_completed).length
     })
 
-    const today = new Date().getDate()
-    const daysInMonth = activePeriod.working_days || 30
-    const pctDay = today / daysInMonth
+    // Pro-rata calculations need to respect manual daily targets
+    let proRataRp = 0
+    let proRataUser = 0
+    
+    programs.forEach(prog => {
+      const dayCount = isCustomDateRange ? (prorationFactor * workingDays) : new Date().getDate()
+      const dailyRp = prog.daily_target_rp !== null ? Number(prog.daily_target_rp) : (Number(prog.monthly_target_rp || 0) / workingDays)
+      const dailyUser = prog.daily_target_user !== null ? Number(prog.daily_target_user) : (Number(prog.monthly_target_user || 0) / workingDays)
+      
+      proRataRp += dailyRp * dayCount
+      proRataUser += dailyUser * dayCount
+    })
 
     return {
       totalTargetRp, totalAchievedRp,
@@ -136,20 +112,25 @@ export function TargetClient({
       totalMilestones, completedMilestones,
       rpPct: totalTargetRp > 0 ? (totalAchievedRp / totalTargetRp) * 100 : 0,
       userPct: totalTargetUser > 0 ? (totalAchievedUser / totalTargetUser) * 100 : 0,
-      proRataRp: totalTargetRp * pctDay,
-      proRataUser: totalTargetUser * pctDay,
+      proRataRp,
+      proRataUser,
       rpGrowth: prevAchievedRp > 0 ? ((totalAchievedRp - prevAchievedRp) / prevAchievedRp) * 100 : 0,
       userGrowth: prevAchievedUser > 0 ? ((totalAchievedUser - prevAchievedUser) / prevAchievedUser) * 100 : 0,
       hasPrevData: prevAchievedRp > 0 || prevAchievedUser > 0,
     }
-  }, [programs, metricValues, dailyInputs, previousMetricValues, previousDailyInputs, milestoneCompletions, activePeriod, isCustomDateRange])
+  }, [programs, metricValues, dailyInputs, previousMetricValues, previousDailyInputs, milestoneCompletions, activePeriod, isCustomDateRange, prorationFactor])
 
   // ── Revenue cumulative trend ─────────────────────────────────────────────
   const rpTrend = useMemo(() => {
     const today = new Date().getDate()
     const daysInMonth = activePeriod.working_days || 30
-    const targetPerDay = summary.totalTargetRp / daysInMonth
     let cumulative = 0
+    let cumulativeTarget = 0
+
+    // Per-program daily target sum
+    const totalDailyTarget = programs.reduce((sum, p) => {
+      return sum + (p.daily_target_rp !== null ? Number(p.daily_target_rp) : (Number(p.monthly_target_rp || 0) / daysInMonth))
+    }, 0)
 
     // Flatten all daily metric values with revenue group
     const revenueMetricIds = new Set<string>()
@@ -158,7 +139,6 @@ export function TargetClient({
       defs.filter(d => d.metric_group === 'revenue' && d.is_primary).forEach(d => revenueMetricIds.add(d.id))
     })
 
-    // Also include legacy daily_inputs
     const rpByDate = new Map<string, number>()
     metricValues
       .filter(mv => revenueMetricIds.has(mv.metric_definition_id))
@@ -175,13 +155,15 @@ export function TargetClient({
       const day = i + 1
       const dateStr = `${activePeriod.year}-${String(activePeriod.month).padStart(2, '0')}-${String(day).padStart(2, '0')}`
       cumulative += rpByDate.get(dateStr) || 0
+      cumulativeTarget += totalDailyTarget
+      
       return {
         day: String(day),
         realisasi: cumulative,
-        targetIdeal: targetPerDay * day
+        targetIdeal: cumulativeTarget
       }
     })
-  }, [activePeriod, programs, metricValues, dailyInputs, summary.totalTargetRp])
+  }, [activePeriod, programs, metricValues, dailyInputs])
 
   // ── Bar chart: Rp per program ────────────────────────────────────────────
   const rpBarData = useMemo(() => {

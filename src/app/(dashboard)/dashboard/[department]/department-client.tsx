@@ -125,13 +125,13 @@ export function DepartmentClient({
 
   // 1. Setup Aggregations
   const aggregations = useMemo(() => {
-    return aggregateByMetricGroup(programs, metricValues, prorationFactor)
+    return aggregateByMetricGroup(programs, metricValues, prorationFactor, activePeriod.working_days || 0)
   }, [programs, metricValues, prorationFactor])
 
   // 2. Program Details
   const programHealths = useMemo(() => {
     return programs.map(p => {
-      const h = calculateProgramHealth(p, metricValues, dailyInputs, milestoneCompletions, prorationFactor)
+      const h = calculateProgramHealth(p, metricValues, dailyInputs, milestoneCompletions, prorationFactor, activePeriod.working_days || 0)
       return { ...h, program: p }
     }).sort((a, b) => b.healthScore - a.healthScore)
   }, [programs, metricValues, dailyInputs, milestoneCompletions, prorationFactor])

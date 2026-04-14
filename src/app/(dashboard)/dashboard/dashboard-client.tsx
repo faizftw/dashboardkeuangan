@@ -269,7 +269,8 @@ export function OverviewClient({
         metricValues,
         dailyInputs,
         milestoneCompletions,
-        prorationFactor
+        prorationFactor,
+        activePeriod.working_days || 0
       )
     })),
     [programs, metricValues, dailyInputs, milestoneCompletions, prorationFactor]
@@ -288,7 +289,8 @@ export function OverviewClient({
         previousMetricValues,
         previousDailyInputs,
         milestoneCompletions,
-        prorationFactor
+        prorationFactor,
+        activePeriod.working_days || 0
       )
     )
     return prevHealths.reduce((sum, ph) => sum + ph.healthScore, 0) / prevHealths.length
@@ -313,7 +315,8 @@ export function OverviewClient({
         previousMetricValues,
         previousDailyInputs,
         milestoneCompletions,
-        prorationFactor
+        prorationFactor,
+        activePeriod.working_days || 0
       )
     )
     return prevHealths.filter(h => h.healthScore >= 100).length
@@ -356,7 +359,7 @@ export function OverviewClient({
       const subMetrics = metricValues.filter(mv => mv.date <= dateStr)
       const dayFactor = day / (activePeriod.working_days || 30)
       const dayHealths = programs.map(p =>
-        calculateProgramHealth(p as CalcProgramWithRelations, subMetrics, subInputs, milestoneCompletions, dayFactor)
+        calculateProgramHealth(p as CalcProgramWithRelations, subMetrics, subInputs, milestoneCompletions, dayFactor, activePeriod.working_days || 0)
       )
       const avg = dayHealths.length > 0 ? dayHealths.reduce((s, h) => s + h.healthScore, 0) / dayHealths.length : 0
       return { day: String(day), health: Math.min(Math.round(avg), 150) }

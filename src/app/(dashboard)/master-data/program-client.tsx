@@ -58,6 +58,11 @@ export function ProgramClient({
   // Auto-calc states
   const [monthlyRp, setMonthlyRp] = useState<string>('')
   const [monthlyUser, setMonthlyUser] = useState<string>('')
+  
+  // Daily Target Manual Override
+  const [isDailyTargetManual, setIsDailyTargetManual] = useState(false)
+  const [dailyRp, setDailyRp] = useState<string>('')
+  const [dailyUser, setDailyUser] = useState<string>('')
 
 
   const handleOpenCreate = () => {
@@ -66,6 +71,9 @@ export function ProgramClient({
     setSelectedDepartment('general')
     setMonthlyRp('')
     setMonthlyUser('')
+    setIsDailyTargetManual(false)
+    setDailyRp('')
+    setDailyUser('')
     setSelectedPicIds([])
     setIsModalOpen(true)
   }
@@ -76,6 +84,12 @@ export function ProgramClient({
     setSelectedDepartment(program.department || 'general')
     setMonthlyRp(program.monthly_target_rp ? program.monthly_target_rp.toString() : '')
     setMonthlyUser(program.monthly_target_user ? program.monthly_target_user.toString() : '')
+    
+    const isManual = !!(program.daily_target_rp || program.daily_target_user)
+    setIsDailyTargetManual(isManual)
+    setDailyRp(program.daily_target_rp ? program.daily_target_rp.toString() : '')
+    setDailyUser(program.daily_target_user ? program.daily_target_user.toString() : '')
+    
     setSelectedPicIds(program.program_pics.map(p => p.profile_id))
     setIsModalOpen(true)
   }
@@ -128,10 +142,10 @@ export function ProgramClient({
       department: selectedDepartment,
       pic_ids: selectedPicIds,
       target_type: selectedTargetType,
-      monthly_target_rp: (selectedTargetType === 'quantitative' || selectedTargetType === 'hybrid') ? Number(formData.get('monthly_target_rp')) : null,
-      monthly_target_user: (selectedTargetType === 'quantitative' || selectedTargetType === 'hybrid') ? Number(formData.get('monthly_target_user')) : null,
-      daily_target_rp: (selectedTargetType === 'quantitative' || selectedTargetType === 'hybrid') ? Number(formData.get('daily_target_rp')) : null,
-      daily_target_user: (selectedTargetType === 'quantitative' || selectedTargetType === 'hybrid') ? Number(formData.get('daily_target_user')) : null,
+      monthly_target_rp: (selectedTargetType === 'quantitative' || selectedTargetType === 'hybrid') ? Number(monthlyRp) : null,
+      monthly_target_user: (selectedTargetType === 'quantitative' || selectedTargetType === 'hybrid') ? Number(monthlyUser) : null,
+      daily_target_rp: (isDailyTargetManual && (selectedTargetType === 'quantitative' || selectedTargetType === 'hybrid')) ? Number(dailyRp) : null,
+      daily_target_user: (isDailyTargetManual && (selectedTargetType === 'quantitative' || selectedTargetType === 'hybrid')) ? Number(dailyUser) : null,
       qualitative_description: (selectedTargetType === 'qualitative' || selectedTargetType === 'hybrid') ? formData.get('qualitative_description') as string : null,
     }
 
@@ -465,22 +479,70 @@ export function ProgramClient({
                       <h4 className="text-xs font-extrabold text-indigo-600 uppercase tracking-widest flex items-center gap-2">
                          <Target className="h-4 w-4" /> Kuantitatif Detail
                       </h4>
-                      <div className="grid grid-cols-1 gap-4">
-                        <div className="space-y-2">
-                          <label className="text-[10px] font-bold text-slate-500 uppercase">Target Bulanan (RP)</label>
-                          <input 
-                            name="monthly_target_rp" type="number" min="0" value={monthlyRp} onChange={(e) => setMonthlyRp(e.target.value)}
-                            className="w-full text-sm font-bold rounded-xl border border-slate-200 px-4 py-3 outline-none focus:border-indigo-500 bg-white"
-                          />
+                        <div className="grid grid-cols-2 gap-4">
+                          <div className="space-y-2">
+                            <label className="text-[10px] font-bold text-slate-500 uppercase">Target Bulanan (RP)</label>
+                            <input 
+                              name="monthly_target_rp" type="number" min="0" value={monthlyRp} onChange={(e) => setMonthlyRp(e.target.value)}
+                              className="w-full text-sm font-bold rounded-xl border border-slate-200 px-4 py-3 outline-none focus:border-indigo-500 bg-white"
+                            />
+                          </div>
+                          <div className="space-y-2">
+                            <label className="text-[10px] font-bold text-slate-500 uppercase">Target Bulanan (USER)</label>
+                            <input 
+                              name="monthly_target_user" type="number" min="0" value={monthlyUser} onChange={(e) => setMonthlyUser(e.target.value)}
+                              className="w-full text-sm font-bold rounded-xl border border-slate-200 px-4 py-3 outline-none focus:border-indigo-500 bg-white"
+                            />
+                          </div>
                         </div>
-                        <div className="space-y-2">
-                          <label className="text-[10px] font-bold text-slate-500 uppercase">Target Bulanan (USER)</label>
-                          <input 
-                            name="monthly_target_user" type="number" min="0" value={monthlyUser} onChange={(e) => setMonthlyUser(e.target.value)}
-                            className="w-full text-sm font-bold rounded-xl border border-slate-200 px-4 py-3 outline-none focus:border-indigo-500 bg-white"
-                          />
+
+                        {/* Toggle Manual/Otomatis */}
+                        <div className="pt-2">
+                          <label className="text-[10px] font-bold text-slate-500 uppercase block mb-3">Distribusi Target Harian</label>
+                          <div className="flex bg-white border border-slate-200 p-1 rounded-xl">
+                            <button
+                              type="button"
+                              onClick={() => setIsDailyTargetManual(false)}
+                              className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all ${!isDailyTargetManual ? 'bg-indigo-600 text-white shadow-md' : 'text-slate-500 hover:bg-slate-50'}`}
+                            >
+                              Otomatis (Pro-rata)
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setIsDailyTargetManual(true)}
+                              className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all ${isDailyTargetManual ? 'bg-indigo-600 text-white shadow-md' : 'text-slate-500 hover:bg-slate-50'}`}
+                            >
+                              Manual (Fixed)
+                            </button>
+                          </div>
+                          {!isDailyTargetManual && (
+                            <p className="text-[9px] text-slate-400 mt-2 italic px-1">
+                              * Target harian dihitung otomatis: Target Bulanan ÷ Hari Kerja per periode.
+                            </p>
+                          )}
                         </div>
-                      </div>
+
+                        {/* Manual Daily Fields */}
+                        {isDailyTargetManual && (
+                          <div className="grid grid-cols-2 gap-4 p-4 bg-indigo-50/50 rounded-xl border border-indigo-100 animate-in fade-in slide-in-from-top-2">
+                            <div className="space-y-2">
+                              <label className="text-[9px] font-bold text-indigo-600 uppercase">Target Harian (RP)</label>
+                              <input 
+                                name="daily_target_rp" type="number" min="0" value={dailyRp} onChange={(e) => setDailyRp(e.target.value)}
+                                placeholder="Rp"
+                                className="w-full text-sm font-bold rounded-lg border border-indigo-200 px-3 py-2 outline-none focus:border-indigo-500 bg-white"
+                              />
+                            </div>
+                            <div className="space-y-2">
+                              <label className="text-[9px] font-bold text-indigo-600 uppercase">Target Harian (USER)</label>
+                              <input 
+                                name="daily_target_user" type="number" min="0" value={dailyUser} onChange={(e) => setDailyUser(e.target.value)}
+                                placeholder="User"
+                                className="w-full text-sm font-bold rounded-lg border border-indigo-200 px-3 py-2 outline-none focus:border-indigo-500 bg-white"
+                              />
+                            </div>
+                          </div>
+                        )}
                     </div>
                   )}
 

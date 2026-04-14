@@ -398,6 +398,7 @@ export type Database = {
           metric_definition_id: string
           date: string
           value: number | null
+          target_value: number | null
           created_by: string | null
           created_at: string | null
         }
@@ -408,6 +409,7 @@ export type Database = {
           metric_definition_id: string
           date: string
           value?: number | null
+          target_value?: number | null
           created_by?: string | null
           created_at?: string | null
         }
@@ -418,6 +420,7 @@ export type Database = {
           metric_definition_id?: string
           date?: string
           value?: number | null
+          target_value?: number | null
           created_by?: string | null
           created_at?: string | null
         }

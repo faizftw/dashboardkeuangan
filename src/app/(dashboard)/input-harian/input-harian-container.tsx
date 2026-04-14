@@ -95,6 +95,7 @@ export function InputHarianContainer(props: InputHarianContainerProps) {
               activePeriod={props.activePeriod}
               allPeriodMetricValues={props.allPeriodMetricValues || []}
               pastInputs={props.pastInputs}
+              isAdmin={props.isAdmin}
             />
           )}
         </div>

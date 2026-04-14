@@ -4,9 +4,9 @@ import { useState, useMemo, useRef, useEffect, KeyboardEvent, useCallback } from
 import { Database } from '@/types/database'
 import { formatMetricValue, evaluateFormula } from '@/lib/formula-evaluator'
 import { formatRupiah, cn } from '@/lib/utils'
-import { upsertSingleMetricValue } from './actions'
+import { upsertSingleMetricValue, upsertDailyMetricTarget, autoDistributeTargets } from './actions'
 import { toast } from 'sonner'
-import { Loader2, Calculator } from 'lucide-react'
+import { Loader2, Calculator, Target, Info, Sparkles } from 'lucide-react'
 
 type MetricDefinition = Database['public']['Tables']['program_metric_definitions']['Row']
 type MetricValue = Database['public']['Tables']['daily_metric_values']['Row']
@@ -23,6 +23,7 @@ interface PivotTableClientProps {
   activePeriod?: Period
   allPeriodMetricValues: MetricValue[]
   pastInputs?: DailyInput[]
+  isAdmin?: boolean
 }
 
 export function PivotTableClient({
@@ -30,8 +31,10 @@ export function PivotTableClient({
   activePeriod,
   allPeriodMetricValues,
   pastInputs,
+  isAdmin,
 }: PivotTableClientProps) {
   const [selectedProgramId, setSelectedProgramId] = useState<string>(programs[0]?.id || '')
+  const [viewMode, setViewMode] = useState<'actual' | 'target'>('actual')
 
   // Get active program and sort metrics
   const activeProgram = useMemo(() => programs.find(p => p.id === selectedProgramId), [programs, selectedProgramId])
@@ -68,11 +71,11 @@ export function PivotTableClient({
       allPeriodMetricValues
         .filter(mv => mv.program_id === activeProgram.id)
         .forEach(mv => {
-          initVals[`${mv.date}_${mv.metric_definition_id}`] = mv.value
+          initVals[`${mv.date}_${mv.metric_definition_id}`] = viewMode === 'actual' ? mv.value : mv.target_value
         })
     }
     setLocalValues(initVals)
-  }, [activeProgram, allPeriodMetricValues])
+  }, [activeProgram, allPeriodMetricValues, viewMode])
 
   // Computed row values helper
   // For a specific date, we evaluate all formulas
@@ -113,15 +116,21 @@ export function PivotTableClient({
   }, [editingCell])
 
   const handleCellClick = (dateStr: string, metric: MetricDefinition, currentVal: number | null) => {
-    if (activePeriod?.is_locked) {
+    if (activePeriod?.is_locked && viewMode === 'actual') {
       toast.error('Periode terkunci (Read-only)')
       return
     }
+
+    if (viewMode === 'target' && !isAdmin) {
+      toast.error('Hanya Admin yang dapat mengubah target')
+      return
+    }
+
     if (metric.input_type === 'calculated') return // Cannot edit calculated
 
     // Check if it's a future date
     const todayStr = new Date().toISOString().split('T')[0]
-    if (dateStr > todayStr) return // Cannot edit future dates efficiently
+    if (dateStr > todayStr && viewMode === 'actual') return // Cannot edit future achievements
 
     const cellKey = `${dateStr}_${metric.id}`
     if (isSaving === cellKey) return
@@ -152,17 +161,47 @@ export function PivotTableClient({
 
     // Save to Database
     try {
-      const res = await upsertSingleMetricValue({
-        programId: activeProgram.id,
-        metricDefinitionId: metricId,
-        date: date,
-        value: newVal
-      })
-      if ('error' in res && res.error) throw new Error(res.error)
+      if (viewMode === 'actual') {
+        const res = await upsertSingleMetricValue({
+          programId: activeProgram.id,
+          metricDefinitionId: metricId,
+          date: date,
+          value: newVal
+        })
+        if ('error' in res && res.error) throw new Error(res.error)
+      } else {
+        const res = await upsertDailyMetricTarget({
+          programId: activeProgram.id,
+          metricDefinitionId: metricId,
+          date: date,
+          targetValue: newVal
+        })
+        if ('error' in res && res.error) throw new Error(res.error)
+        toast.success(`Target diperbarui untuk tanggal ${date}`)
+      }
     } catch (e: unknown) {
       toast.error(`Gagal menyimpan: ${e instanceof Error ? e.message : 'Unknown Error'}`)
       // Rollback
       setLocalValues(prev => ({ ...prev, [cellKey]: originalVal }))
+    } finally {
+      setIsSaving(null)
+    }
+  }
+
+  const handleAutoDistribute = async (metricId: string, metricLabel: string) => {
+    if (!isAdmin) return
+    if (!confirm(`Konfirmasi distribusi otomatis target bulanan ke seluruh hari kerja (Senin-Jumat) untuk metrik "${metricLabel}"? Override manual sebelumnya akan tertimpa.`)) return
+
+    setIsSaving('bulk')
+    try {
+      const res = await autoDistributeTargets({
+        programId: activeProgram!.id,
+        metricDefinitionId: metricId
+      })
+      if ('error' in res && res.error) throw new Error(res.error)
+      toast.success('Distribusi target berhasil dilakukan')
+    } catch (e) {
+      toast.error(`Gagal melakukan distribusi: ${e instanceof Error ? e.message : 'Unknown'}`)
     } finally {
       setIsSaving(null)
     }
@@ -236,28 +275,70 @@ export function PivotTableClient({
     <div className="flex flex-col gap-4 animate-in fade-in slide-in-from-bottom-2 duration-300">
       
       {/* Detail Header Control */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-slate-50 p-4 rounded-xl border border-slate-200">
-        <div>
-          <h3 className="text-sm font-bold text-slate-500 uppercase tracking-widest mb-1">Pilih Program Detail</h3>
-          <select 
-            value={selectedProgramId} 
-            onChange={(e) => setSelectedProgramId(e.target.value)}
-            className="bg-white border border-slate-300 text-slate-900 text-sm rounded-lg focus:ring-indigo-500 focus:border-indigo-500 block w-full p-2.5 font-bold shadow-sm"
-          >
-            {programs.map(p => (
-              <option key={p.id} value={p.id}>{p.name}</option>
-            ))}
-          </select>
+      <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 bg-slate-50 p-4 rounded-xl border border-slate-200">
+        <div className="flex flex-col sm:flex-row gap-4 items-end w-full lg:w-auto">
+          <div className="w-full sm:w-64">
+            <h3 className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-1.5 ml-1">Pilih Program Detail</h3>
+            <select 
+              value={selectedProgramId} 
+              onChange={(e) => setSelectedProgramId(e.target.value)}
+              className="bg-white border border-slate-300 text-slate-900 text-sm rounded-lg focus:ring-indigo-500 focus:border-indigo-500 block w-full p-2.5 font-bold shadow-sm"
+            >
+              {programs.map(p => (
+                <option key={p.id} value={p.id}>{p.name}</option>
+              ))}
+            </select>
+          </div>
+
+          <div className="flex bg-slate-200/50 p-1 rounded-xl w-full sm:w-auto mr-auto">
+            <button
+              onClick={() => setViewMode('actual')}
+              className={`flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition-all ${
+                viewMode === 'actual' 
+                  ? 'bg-white text-indigo-700 shadow-sm' 
+                  : 'text-slate-500 hover:text-slate-700 hover:bg-slate-200/40'
+              }`}
+            >
+              <Sparkles className="w-3.5 h-3.5" />
+              Realisasi
+            </button>
+            <button
+              onClick={() => setViewMode('target')}
+              className={`flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition-all ${
+                viewMode === 'target' 
+                  ? 'bg-indigo-600 text-white shadow-sm' 
+                  : 'text-slate-500 hover:text-slate-700 hover:bg-slate-200/40'
+              }`}
+            >
+              <Target className="w-3.5 h-3.5" />
+              Target Harian
+            </button>
+          </div>
         </div>
-        <div className="text-right flex flex-col items-end">
-          <span className="text-[10px] uppercase font-bold text-slate-400 bg-white px-2 py-1 rounded shadow-sm border border-slate-200">Mode Pivot Table</span>
+
+        <div className="text-right flex flex-col items-end w-full lg:w-auto">
+          <div className="flex items-center gap-2 mb-1">
+            <span className="text-[10px] uppercase font-bold text-indigo-500 bg-indigo-50 px-2 py-1 rounded border border-indigo-100">
+               {viewMode === 'actual' ? 'Mode Realisasi' : 'Mode Target'}
+            </span>
+          </div>
           {activePeriod?.is_locked && (
-            <span className="text-xs font-medium text-amber-600 bg-amber-50 px-2 py-1 rounded border border-amber-200 mt-1">
+            <span className="text-xs font-medium text-amber-600 bg-amber-50 px-2 py-1 rounded border border-amber-200">
               Periode Terkunci (Read-Only)
             </span>
           )}
         </div>
       </div>
+
+      {viewMode === 'target' && (
+        <div className="bg-indigo-50 border border-indigo-100 rounded-xl p-4 flex gap-3 text-indigo-700 animate-in fade-in slide-in-from-top-2">
+          <Info className="w-5 h-5 flex-shrink-0 mt-0.5" />
+          <div className="text-sm">
+            <p className="font-bold mb-0.5">Pengaturan Target Harian (Eksperimental)</p>
+            <p className="opacity-80">Gunakan tombol <strong>Distribusi Otomatis</strong> pada header kolom untuk membagi target bulanan secara rata ke hari kerja (Mon-Fri). Anda juga dapat mengubah nilai per hari secara manual.</p>
+          </div>
+        </div>
+      )}
 
       {metrics.length === 0 ? (
         <div className="relative overflow-x-auto rounded-xl border border-slate-200 shadow-sm bg-white">
@@ -340,14 +421,26 @@ export function PivotTableClient({
               <tr>
                 <th className="px-4 py-3 sticky left-0 z-10 bg-slate-800 border-r border-slate-700 w-24">Tanggal</th>
                 {metrics.map(m => (
-                  <th key={m.id} className="px-4 py-3 text-right whitespace-nowrap border-l border-slate-700 min-w-[110px]">
+                  <th key={m.id} className="px-4 py-3 text-right whitespace-nowrap border-l border-slate-700 min-w-[130px]">
                     <div className="flex flex-col items-end">
                       <span className="flex items-center gap-1">
                         {m.input_type === 'calculated' && <Calculator className="w-3 h-3 text-slate-400" />}
                         {m.label}
                       </span>
-                      {m.is_target_metric && (
+                      {m.is_target_metric && viewMode === 'actual' && (
                         <span className="text-[9px] text-emerald-400 font-medium">Target Metric</span>
+                      )}
+                      {viewMode === 'target' && isAdmin && m.input_type === 'manual' && m.is_target_metric && (
+                        <button 
+                          onClick={() => handleAutoDistribute(m.id, m.label)}
+                          className={cn(
+                            "mt-1 text-[9px] flex items-center gap-1 px-1.5 py-0.5 rounded transition-all",
+                            isSaving === 'bulk' ? "bg-slate-700 text-slate-500 pointer-events-none" : "bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500/40"
+                          )}
+                        >
+                          <Sparkles className="w-2.5 h-2.5" />
+                          Auto Distribusi
+                        </button>
                       )}
                     </div>
                   </th>
@@ -394,7 +487,12 @@ export function PivotTableClient({
                       return (
                         <td 
                           key={m.id} 
-                          className={`px-4 py-2 text-right border-l border-slate-100 transition-colors ${isCalc ? 'bg-slate-50/50 text-slate-600' : 'cursor-text hover:bg-slate-100/80'} ${saving ? 'opacity-50' : ''}`}
+                          className={cn(
+                            "px-4 py-2 text-right border-l border-slate-100 transition-colors",
+                            isCalc ? 'bg-slate-50/50 text-slate-600' : 'cursor-text hover:bg-slate-100/80',
+                            viewMode === 'target' && !isCalc && 'bg-indigo-50/20',
+                            saving ? 'opacity-50' : ''
+                          )}
                           onClick={() => !isEditing && handleCellClick(dateStr, m, val)}
                         >
                           {isEditing ? (
@@ -410,7 +508,7 @@ export function PivotTableClient({
                           ) : (
                             <div className="flex items-center justify-end gap-2">
                               {saving && <Loader2 className="w-3 h-3 animate-spin text-indigo-500" />}
-                              <span className={isCalc ? 'font-medium' : colorClass}>
+                              <span className={cn(isCalc ? 'font-medium' : colorClass, viewMode === 'target' && !isCalc && 'text-indigo-600 font-bold')}>
                                 {val === null || val === undefined ? <span className="text-slate-300">&mdash;</span> : formatMetricValue(val, m.data_type, m.unit_label)}
                               </span>
                             </div>

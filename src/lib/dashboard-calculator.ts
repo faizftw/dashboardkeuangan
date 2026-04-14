@@ -46,7 +46,8 @@ export function calculateProgramHealth(
   metricValues: MetricValue[],
   dailyInputs: DailyInput[],
   milestoneCompletions: MilestoneCompletion[],
-  prorationFactor: number // (daysInSelection / period.workingDays)
+  prorationFactor: number, // (daysInSelection / period.workingDays)
+  workingDaysInPeriod: number = 20 // Default if not provided
 ): ProgramHealthResult {
   const metrics = program.program_metric_definitions || []
   const hasCustomMetrics = metrics.length > 0
@@ -63,6 +64,7 @@ export function calculateProgramHealth(
       primaryMetrics.forEach(m => {
         const vals = metricValues.filter(mv => mv.program_id === program.id && mv.metric_definition_id === m.id)
         const sumActual = vals.reduce((sum, v) => sum + (v.value || 0), 0)
+        const sumCustomTarget = vals.reduce((sum, v) => sum + (v.target_value || 0), 0)
 
         let monthlyTarget = m.monthly_target || 0
         // Fallback to legacy fields if no explicit target set
@@ -71,12 +73,22 @@ export function calculateProgramHealth(
           else if (m.data_type === 'integer') monthlyTarget = program.monthly_target_user || 0
         }
 
-        const effectiveTarget = monthlyTarget * prorationFactor
+        // Manual fixed daily target from master data takes priority
+        const daysInSelection = prorationFactor * workingDaysInPeriod
+        const manualDaily = m.metric_key === 'revenue' ? (program.daily_target_rp || 0) : 
+                            m.metric_key === 'user_count' ? (program.daily_target_user || 0) : 0
+
+        // Use custom daily target sum if available (from Pivot Table target cells), 
+        // else use manual fixed daily target (from Master Data), 
+        // else fallback to pro-rata of monthly target.
+        const effectiveTarget = sumCustomTarget > 0 ? sumCustomTarget : 
+                               manualDaily > 0 ? (manualDaily * daysInSelection) : 
+                               (monthlyTarget * prorationFactor)
 
         if (effectiveTarget > 0) {
           let pct = (sumActual / effectiveTarget) * 100
           if (m.target_direction === 'lower_is_better') {
-            pct = (effectiveTarget / (sumActual || 1)) * 100
+            pct = (effectiveTarget / (sumActual || 0.0001)) * 100 // Avoid div by zero
           }
           sumPercentage += pct
           validMetrics++
@@ -132,8 +144,15 @@ export function calculateProgramHealth(
   const cumulativeRp = inputs.reduce((sum, i) => sum + Number(i.achievement_rp || 0), 0)
   const cumulativeUser = inputs.reduce((sum, i) => sum + Number(i.achievement_user || 0), 0)
 
-  const effectiveRp = (program.monthly_target_rp || 0) * prorationFactor
-  const effectiveUser = (program.monthly_target_user || 0) * prorationFactor
+  // Use the new daily_target fields if they were set (from migration 005)
+  // Note: migration 005 set these on the programs table, but we prefer 
+  // the per-date daily_metric_values. However, legacy programs might still use
+  // this. Let's stick to proration for legacy programs unless we want to extend them too.
+  // Actually, Rule #1 says distribute pro-rata by default.
+  
+  const daysInSelection = prorationFactor * workingDaysInPeriod
+  const effectiveRp = program.daily_target_rp ? (program.daily_target_rp * daysInSelection) : (program.monthly_target_rp || 0) * prorationFactor
+  const effectiveUser = program.daily_target_user ? (program.daily_target_user * daysInSelection) : (program.monthly_target_user || 0) * prorationFactor
 
   let scoreRp = 0, scoreUser = 0
   let totalValidMetrics = 0
@@ -161,13 +180,14 @@ export function calculateDepartmentHealth(
   metricValues: MetricValue[],
   dailyInputs: DailyInput[],
   milestoneCompletions: MilestoneCompletion[],
-  prorationFactor: number
+  prorationFactor: number,
+  workingDaysInPeriod: number
 ) {
   if (programs.length === 0) return { score: 0, status: 'KRITIS' as const }
   let sumHealth = 0
 
   programs.forEach(p => {
-    const health = calculateProgramHealth(p, metricValues, dailyInputs, milestoneCompletions, prorationFactor)
+    const health = calculateProgramHealth(p, metricValues, dailyInputs, milestoneCompletions, prorationFactor, workingDaysInPeriod)
     sumHealth += health.healthScore
   })
 
@@ -185,7 +205,8 @@ export function calculateDepartmentHealth(
 export function aggregateByMetricGroup(
   programs: ProgramWithRelations[],
   metricValues: MetricValue[],
-  prorationFactor: number
+  prorationFactor: number,
+  workingDaysInPeriod: number
 ) {
   const groupRawTotals: Record<string, { actual: number, target: number }> = {
     revenue: { actual: 0, target: 0 },
@@ -206,6 +227,8 @@ export function aggregateByMetricGroup(
 
         const vals = metricValues.filter(mv => mv.program_id === prog.id && mv.metric_definition_id === m.id)
         const sumActual = vals.reduce((sum, v) => sum + (v.value || 0), 0)
+        const sumCustomTarget = vals.reduce((sum, v) => sum + (v.target_value || 0), 0)
+        
         groupRawTotals[g].actual += sumActual
 
         let monthlyTarget = m.monthly_target || 0
@@ -214,7 +237,13 @@ export function aggregateByMetricGroup(
           else if (m.data_type === 'integer') monthlyTarget = prog.monthly_target_user || 0
         }
 
-        groupRawTotals[g].target += (monthlyTarget * prorationFactor)
+        const daysInSelection = prorationFactor * workingDaysInPeriod
+        const manualDaily = g === 'revenue' ? (prog.daily_target_rp || 0) : 
+                            g === 'user_acquisition' ? (prog.daily_target_user || 0) : 0
+
+        groupRawTotals[g].target += (sumCustomTarget > 0 ? sumCustomTarget : 
+                                    manualDaily > 0 ? (manualDaily * daysInSelection) : 
+                                    (monthlyTarget * prorationFactor))
       } else if (g === 'conversion' || g === 'efficiency') {
         existingGroups.add(g)
       }
