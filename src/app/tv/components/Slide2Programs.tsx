@@ -138,17 +138,44 @@ function ProgramCard({ program }: { program: ProgramPerformance }) {
                </p>
             </div>
           ) : (
-            <div className="space-y-3">
-               <div className="flex justify-between items-end">
-                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Target Rp</span>
-                  <span className="text-lg font-black text-slate-200">{formatRupiah(program.achievementRp)}</span>
-               </div>
-               <div className="h-2 bg-slate-950 rounded-full overflow-hidden border border-slate-800 p-0.5">
-                 <div 
-                   className={cn("h-full transition-all duration-1000 rounded-full", barColors[program.health.status])}
-                   style={{ width: `${Math.min(program.percentageRp, 100)}%` }}
-                 />
-               </div>
+            <div className="space-y-4">
+               {/* Target Rp */}
+               {(program.monthly_target_rp || 0) > 0 && (
+                 <div className="space-y-1.5">
+                    <div className="flex justify-between items-end">
+                       <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Target Omzet</span>
+                       <span className="text-lg font-black text-slate-200">
+                         {formatRupiah(program.achievementRp)}
+                         <span className="text-[10px] text-slate-500 ml-1">/ {formatRupiah(program.monthly_target_rp || 0)}</span>
+                       </span>
+                    </div>
+                    <div className="h-2 bg-slate-950 rounded-full overflow-hidden border border-slate-800 p-0.5">
+                      <div 
+                        className={cn("h-full transition-all duration-1000 rounded-full", barColors[program.health.status])}
+                        style={{ width: `${Math.min(program.percentageRp, 100)}%` }}
+                      />
+                    </div>
+                 </div>
+               )}
+
+               {/* Target User */}
+               {(program.monthly_target_user || 0) > 0 && (
+                 <div className="space-y-1.5">
+                    <div className="flex justify-between items-end">
+                       <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Target User</span>
+                       <span className="text-lg font-black text-slate-200">
+                         {program.achievementUser.toLocaleString()}
+                         <span className="text-[10px] text-slate-500 ml-1">/ {(program.monthly_target_user || 0).toLocaleString()} user</span>
+                       </span>
+                    </div>
+                    <div className="h-2 bg-slate-950 rounded-full overflow-hidden border border-slate-800 p-0.5">
+                      <div 
+                        className={cn("h-full transition-all duration-1000 rounded-full", barColors[program.health.status])}
+                        style={{ width: `${Math.min(program.percentageUser, 100)}%` }}
+                      />
+                    </div>
+                 </div>
+               )}
             </div>
           )
         )}
