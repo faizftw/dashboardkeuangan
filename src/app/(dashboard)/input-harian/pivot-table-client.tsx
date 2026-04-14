@@ -262,8 +262,19 @@ export function PivotTableClient({
       }
     })
 
-    return { total: computedTotals, average: computedAverages, daysCount: maxDaysWithData }
-  }, [daysArray, metrics, localValues, buildDateString])
+  // Daily Targets for Legacy Programs
+  const dailyTargetRp = useMemo(() => {
+    if (!activeProgram || !activePeriod || !activePeriod.working_days) return 0
+    return (activeProgram.monthly_target_rp || 0) / activePeriod.working_days
+  }, [activeProgram, activePeriod])
+
+  const dailyTargetUser = useMemo(() => {
+    if (!activeProgram || !activePeriod || !activePeriod.working_days) return 0
+    return (activeProgram.monthly_target_user || 0) / activePeriod.working_days
+  }, [activeProgram, activePeriod])
+
+  return { total: computedTotals, average: computedAverages, daysCount: maxDaysWithData }
+}, [daysArray, metrics, localValues, buildDateString])
 
   if (!activeProgram) {
     return <div className="text-center py-8 text-slate-500">Pilih program untuk melihat detail.</div>
@@ -348,8 +359,18 @@ export function PivotTableClient({
                 <th className="px-4 py-3 sticky left-0 z-10 bg-slate-800 border-r border-slate-700 w-24">Tanggal</th>
                 {activeProgram.target_type !== 'qualitative' ? (
                   <>
-                    <th className="px-4 py-3 text-right whitespace-nowrap border-l border-slate-700">Pencapaian (Rp)</th>
-                    <th className="px-4 py-3 text-right whitespace-nowrap border-l border-slate-700">Pencapaian (User)</th>
+                    <th className="px-4 py-3 text-right whitespace-nowrap border-l border-slate-700">
+                      <div className="flex flex-col items-end">
+                        <span>Pencapaian (Rp)</span>
+                        <span className="text-[10px] text-emerald-400 font-medium">Target: {formatRupiah(dailyTargetRp)}/hari</span>
+                      </div>
+                    </th>
+                    <th className="px-4 py-3 text-right whitespace-nowrap border-l border-slate-700">
+                      <div className="flex flex-col items-end">
+                        <span>Pencapaian (User)</span>
+                        <span className="text-[10px] text-emerald-400 font-medium">Target: {dailyTargetUser.toLocaleString()} user/hari</span>
+                      </div>
+                    </th>
                   </>
                 ) : (
                   <th className="px-4 py-3 whitespace-nowrap border-l border-slate-700 w-48">Status Kualitatif</th>
@@ -371,12 +392,20 @@ export function PivotTableClient({
                     {activeProgram.target_type !== 'qualitative' ? (
                       <>
                         <td className="px-4 py-2 text-right border-l border-slate-100">
-                          <span className={cn("font-medium", (input?.achievement_rp || 0) > 0 ? "text-indigo-600" : "text-slate-400")}>
+                          <span className={cn(
+                            "font-medium", 
+                            (input?.achievement_rp || 0) >= dailyTargetRp && dailyTargetRp > 0 ? "text-emerald-600 font-bold" : 
+                            (input?.achievement_rp || 0) > 0 ? "text-indigo-600" : "text-slate-400"
+                          )}>
                             {formatRupiah(input?.achievement_rp || 0)}
                           </span>
                         </td>
                         <td className="px-4 py-2 text-right border-l border-slate-100">
-                          <span className={cn("font-medium", (input?.achievement_user || 0) > 0 ? "text-indigo-600" : "text-slate-400")}>
+                          <span className={cn(
+                            "font-medium", 
+                            (input?.achievement_user || 0) >= dailyTargetUser && dailyTargetUser > 0 ? "text-emerald-600 font-bold" :
+                            (input?.achievement_user || 0) > 0 ? "text-indigo-600" : "text-slate-400"
+                          )}>
                             {(input?.achievement_user || 0).toLocaleString()} user
                           </span>
                         </td>
