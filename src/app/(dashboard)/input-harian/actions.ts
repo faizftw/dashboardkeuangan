@@ -2,10 +2,12 @@
 
 import { createClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
+import { SupabaseClient } from '@supabase/supabase-js'
+import { Database } from '@/types/database'
 
 export type ActionResponse = { error: string } | { success: boolean; data?: unknown }
 
-async function checkAccess(supabase: any, userId: string, programId: string) {
+async function checkAccess(supabase: SupabaseClient<Database>, userId: string, programId: string) {
   const { data: profile } = await supabase.from('profiles').select('role').eq('id', userId).single()
   if (profile?.role === 'admin') return true
 
