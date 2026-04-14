@@ -126,7 +126,7 @@ export function DepartmentClient({
   // 1. Setup Aggregations
   const aggregations = useMemo(() => {
     return aggregateByMetricGroup(programs, metricValues, prorationFactor, activePeriod.working_days || 0)
-  }, [programs, metricValues, prorationFactor])
+  }, [programs, metricValues, prorationFactor, activePeriod.working_days])
 
   // 2. Program Details
   const programHealths = useMemo(() => {

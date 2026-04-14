@@ -3,8 +3,6 @@
 import { createClient } from '@/lib/supabase/server'
 import { Database } from '@/types/database'
 
-type Milestone = Database['public']['Tables']['program_milestones']['Row']
-type MetricDefinition = Database['public']['Tables']['program_metric_definitions']['Row']
 type MetricValue = Database['public']['Tables']['daily_metric_values']['Row']
 type DailyInput = Database['public']['Tables']['daily_inputs']['Row']
 type MilestoneCompletion = Database['public']['Tables']['milestone_completions']['Row']
@@ -65,7 +63,7 @@ export async function getDashboardData(
   const { data: profiles } = await supabase.from('profiles').select('id, name')
 
   return {
-    programs: data.programs as any,
+    programs: data.programs as ProgramWithRelations[],
     dailyInputs: data.dailyInputs,
     previousDailyInputs: data.previousData?.dailyInputs,
     milestoneCompletions: data.milestoneCompletions,

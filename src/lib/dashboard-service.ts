@@ -94,7 +94,7 @@ export async function getUnifiedDashboardData(options: {
     programsQuery = programsQuery.in('id', myProgramIds)
   }
 
-  const { data: programsData } = await (programsQuery as any)
+  const { data: programsData } = await (programsQuery as unknown as { data: ProgramWithRelations[] | null })
   const programs = (programsData || []) as ProgramWithRelations[]
   const programIds = programs.map(p => p.id)
 

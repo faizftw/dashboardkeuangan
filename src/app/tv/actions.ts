@@ -62,7 +62,7 @@ export interface TVDashboardData {
   metricValues: MetricValue[]
 }
 
-import { getUnifiedDashboardData, DashboardSummary } from '@/lib/dashboard-service'
+import { getUnifiedDashboardData } from '@/lib/dashboard-service'
 
 export async function getTVDashboardData(): Promise<TVDashboardData> {
   const supabase = createClient()
@@ -148,7 +148,7 @@ export async function getTVDashboardData(): Promise<TVDashboardData> {
     activePeriod: data.activePeriod,
     aggregate: {
       healthScore: data.summary.overallHealth,
-      metricGroups: data.summary.aggregates as any,
+      metricGroups: data.summary.aggregates as Record<string, { actual: number; target: number; isComputed: boolean }>,
       tercapai: data.summary.statusCounts.tercapai,
       menujuTarget: data.summary.statusCounts.menujuTarget,
       perluPerhatian: data.summary.statusCounts.perluPerhatian

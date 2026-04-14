@@ -254,7 +254,6 @@ export function OverviewClient({
   milestoneCompletions,
   metricValues,
   profiles,
-  prorationFactor,
   summary,
   previousSummary,
   isCustomDateRange
