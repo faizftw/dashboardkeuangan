@@ -36,12 +36,26 @@ export default async function InputHarianPage() {
     .eq('is_active', true)
     .single()
 
-  // 2. Fetch Active Programs with Milestones AND Metric Definitions
-  const { data: activePrograms } = await supabase
+  // 2. Fetch User Role
+  const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).single()
+  const isAdmin = profile?.role === 'admin'
+
+  // 3. Fetch Active Programs with Milestones AND Metric Definitions
+  let programsQuery = supabase
     .from('programs')
     .select('*, program_milestones(*), program_metric_definitions(*)')
     .eq('is_active', true)
-    .order('name')
+
+  if (!isAdmin) {
+    const { data: myAssignments } = await supabase
+      .from('program_pics')
+      .select('program_id')
+      .eq('profile_id', user.id)
+    const myIdList = myAssignments?.map(a => a.program_id) || []
+    programsQuery = programsQuery.in('id', myIdList.length > 0 ? myIdList : ['none'])
+  }
+
+  const { data: activePrograms } = await programsQuery.order('name')
 
   const programsTyped = (activePrograms as unknown as ProgramWithMilestones[]) || []
 
@@ -66,9 +80,6 @@ export default async function InputHarianPage() {
     existingMetricValues = allPeriodMetricValues.filter(m => m.date === today)
   }
 
-  // 5. Fetch User Role
-  const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).single()
-  const isAdmin = profile?.role === 'admin'
 
   // 6. Fetch Past Inputs for the Active Period
   let pastInputs: DailyInputWithDetails[] = []

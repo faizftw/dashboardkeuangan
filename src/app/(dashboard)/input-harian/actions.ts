@@ -5,6 +5,20 @@ import { revalidatePath } from 'next/cache'
 
 export type ActionResponse = { error: string } | { success: boolean; data?: unknown }
 
+async function checkAccess(supabase: any, userId: string, programId: string) {
+  const { data: profile } = await supabase.from('profiles').select('role').eq('id', userId).single()
+  if (profile?.role === 'admin') return true
+
+  const { data } = await supabase
+    .from('program_pics')
+    .select('id')
+    .eq('program_id', programId)
+    .eq('profile_id', userId)
+    .single()
+  
+  return !!data
+}
+
 export async function submitDailyInput(data: {
   program_id: string
   date: string
@@ -18,6 +32,10 @@ export async function submitDailyInput(data: {
   // Verify User
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return { error: 'Unauthorized' }
+
+  // Verify access to program
+  const hasAccess = await checkAccess(supabase, user.id, data.program_id)
+  if (!hasAccess) return { error: 'Anda tidak ditugaskan untuk program ini.' }
 
   // Get active period
   const { data: period } = await supabase
@@ -142,6 +160,18 @@ export async function submitMilestoneCompletion(data: {
 
   const { milestone_id, is_completed, notes, evidence_url } = data
 
+  // Verify access to program through milestone
+  const { data: milestone } = await supabase
+    .from('program_milestones')
+    .select('program_id')
+    .eq('id', milestone_id)
+    .single()
+
+  if (!milestone) return { error: 'Milestone tidak ditemukan.' }
+  
+  const hasAccess = await checkAccess(supabase, user.id, milestone.program_id)
+  if (!hasAccess) return { error: 'Anda tidak memiliki akses ke program milestone ini.' }
+
   const { error } = await supabase
     .from('milestone_completions')
     .upsert({
@@ -189,6 +219,10 @@ export async function submitDailyMetricValues(
   if (!period) return { error: 'Tidak ada periode aktif saat ini.' }
   if (period.is_locked) return { error: 'Periode ini sudah dikunci oleh Admin.' }
 
+  // Verify access
+  const hasAccess = await checkAccess(supabase, user.id, programId)
+  if (!hasAccess) return { error: 'Anda tidak memiliki akses ke program ini.' }
+
   const rows = values.map(v => ({
     period_id: period.id,
     program_id: programId,
@@ -233,6 +267,10 @@ export async function upsertSingleMetricValue(params: {
 
   if (!period) return { error: 'Tidak ada periode aktif saat ini.' }
   if (period.is_locked) return { error: 'Periode ini sudah dikunci oleh Admin.' }
+
+  // Verify access
+  const hasAccess = await checkAccess(supabase, user.id, params.programId)
+  if (!hasAccess) return { error: 'Anda tidak memiliki akses ke program ini.' }
 
   const row = {
     period_id: period.id,
