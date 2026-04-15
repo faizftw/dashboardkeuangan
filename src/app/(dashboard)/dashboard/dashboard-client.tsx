@@ -83,9 +83,15 @@ function KpiCard({ icon: Icon, label, value, sub, iconClass, comparison }: {
       </div>
       <div>
         <p className="text-xs font-black tracking-[0.15em] text-slate-400 uppercase mb-3 truncate" title={label}>{label}</p>
-        <div className="flex items-end gap-2 min-w-0">
-          <span className={cn("text-2xl sm:text-3xl lg:text-4xl font-black text-slate-800 truncate", iconClass)} title={String(value)}>{value}</span>
-          {sub && <span className="text-sm text-slate-400 font-semibold mb-1 truncate shrink-0">{sub}</span>}
+        <div className="flex items-end gap-2 w-full" style={{ containerType: 'inline-size' }}>
+          <span className={cn(
+            "font-black text-slate-800 leading-none whitespace-nowrap",
+            "text-[min(2.25rem,14cqw)] sm:text-[min(3rem,14cqw)] lg:text-[min(3.75rem,14cqw)]",
+            iconClass
+          )} title={String(value)}>
+            {value}
+          </span>
+          {sub && <span className="text-xs sm:text-sm text-slate-400 font-semibold mb-0.5 whitespace-nowrap shrink-0">{sub}</span>}
         </div>
       </div>
       {comparison && (
