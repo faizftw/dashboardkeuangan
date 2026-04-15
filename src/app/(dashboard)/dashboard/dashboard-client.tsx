@@ -75,9 +75,11 @@ function KpiCard({ icon: Icon, label, value, sub, iconClass, comparison }: {
   comparison?: { value: number; label: string }
 }) {
   return (
-    <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm flex flex-col justify-between relative overflow-hidden transition-all hover:shadow-md">
-      <div className="absolute top-0 right-0 p-4 opacity-5">
-        <Icon className="w-20 h-20" />
+    <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm flex flex-col justify-between relative transition-all hover:shadow-md hover:z-20">
+      <div className="absolute inset-0 overflow-hidden pointer-events-none rounded-2xl">
+        <div className="absolute top-0 right-0 p-4 opacity-5">
+          <Icon className="w-20 h-20" />
+        </div>
       </div>
       <div>
         <p className="text-xs font-black tracking-[0.15em] text-slate-400 uppercase mb-3">{label}</p>
@@ -420,8 +422,10 @@ export function OverviewClient({
       {/* ── Row 1: KPI Cards ──────────────────────────────────────── */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {/* Health Score */}
-        <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm relative overflow-hidden">
-          <div className="absolute top-0 right-0 p-4 opacity-5"><HeartPulse className="w-20 h-20" /></div>
+        <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm relative hover:z-20 transition-all">
+          <div className="absolute inset-0 overflow-hidden pointer-events-none rounded-2xl">
+            <div className="absolute top-0 right-0 p-4 opacity-5"><HeartPulse className="w-20 h-20" /></div>
+          </div>
           <p className="text-xs font-black tracking-[0.15em] text-slate-400 uppercase mb-3">Health Score</p>
           <div className="flex items-end gap-2">
             <span className="text-4xl font-black text-slate-800">{overallHealth.toFixed(1)}%</span>

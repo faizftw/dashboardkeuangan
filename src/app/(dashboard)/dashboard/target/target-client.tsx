@@ -45,9 +45,11 @@ function KpiCard({ label, value, sub, subColor, icon: Icon, accent, comparison }
   comparison?: { value: number; label: string }
 }) {
   return (
-    <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm relative overflow-hidden flex flex-col justify-between transition-all hover:shadow-md">
-      <div className={cn("absolute top-0 right-0 p-4 opacity-5", accent)}>
-        <Icon className="w-20 h-20" />
+    <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm relative flex flex-col justify-between transition-all hover:shadow-md hover:z-20">
+      <div className="absolute inset-0 overflow-hidden pointer-events-none rounded-2xl">
+        <div className={cn("absolute top-0 right-0 p-4 opacity-5", accent)}>
+          <Icon className="w-20 h-20" />
+        </div>
       </div>
       <div>
         <p className="text-xs font-black tracking-[0.15em] text-slate-400 uppercase mb-2">{label}</p>
@@ -238,7 +240,7 @@ export function TargetClient({
           value={formatRupiah(summary.totalAchievedRp)}
           sub={`${summary.rpPct.toFixed(1)}% dari target`}
           subColor={summary.rpPct >= 100 ? 'text-emerald-600 font-black' : summary.rpPct >= 60 ? 'text-amber-600' : 'text-red-500'}
-          comparison={isCustomDateRange ? { value: summary.rpGrowth, label: 'vs periode sblmnya' } : undefined}
+          comparison={isCustomDateRange ? { value: summary.rpGrowth, label: prevPeriodLabel } : undefined}
         />
         <KpiCard
           icon={Users}

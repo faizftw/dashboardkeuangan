@@ -47,7 +47,7 @@ interface AdsClientProps {
 
 function KpiCard({ label, value, sub, subOk, comparison }: { label: string; value: string; sub?: string; subOk?: boolean; comparison?: { value: number; label: string } }) {
   return (
-    <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm relative overflow-hidden flex flex-col justify-between transition-all hover:shadow-md">
+    <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm relative flex flex-col justify-between transition-all hover:shadow-md hover:z-20">
       <div>
         <p className="text-xs font-black tracking-[0.15em] text-slate-400 uppercase mb-2">{label}</p>
         <p className="text-3xl font-black text-slate-800 mb-1">{value}</p>
@@ -182,20 +182,20 @@ export function AdsClient({ programs, metricValues, previousMetricValues = [], p
           label="Total Ads Spent"
           value={formatRupiah(aggregate.totalAdsSpent)}
           sub="periode ini"
-          comparison={prevAggregate ? { value: getGrowth(aggregate.totalAdsSpent, prevAggregate.totalAdsSpent), label: 'vs periode sblmnya' } : undefined}
+          comparison={prevAggregate ? { value: getGrowth(aggregate.totalAdsSpent, prevAggregate.totalAdsSpent), label: prevPeriodLabel } : undefined}
         />
         <KpiCard
           label="Total Goals"
           value={aggregate.totalGoals.toLocaleString()}
           sub="closing/user"
-          comparison={prevAggregate ? { value: getGrowth(aggregate.totalGoals, prevAggregate.totalGoals), label: 'vs periode sblmnya' } : undefined}
+          comparison={prevAggregate ? { value: getGrowth(aggregate.totalGoals, prevAggregate.totalGoals), label: prevPeriodLabel } : undefined}
         />
         <KpiCard
           label="Avg ROAS"
           value={`${aggregate.avgRoas.toFixed(2)}x`}
           sub={aggregate.avgRoas >= 1 ? 'Di atas 1x (profitable)' : 'Di bawah 1x (rugi)'}
           subOk={aggregate.avgRoas >= 1}
-          comparison={prevAggregate ? { value: getGrowth(aggregate.avgRoas, prevAggregate.avgRoas), label: 'vs periode sblmnya' } : undefined}
+          comparison={prevAggregate ? { value: getGrowth(aggregate.avgRoas, prevAggregate.avgRoas), label: prevPeriodLabel } : undefined}
         />
         <KpiCard
           label="Avg CPP"
