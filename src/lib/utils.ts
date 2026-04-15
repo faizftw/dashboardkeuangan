@@ -44,7 +44,7 @@ export function getPreviousPeriodLabel(startDate?: string, endDate?: string): st
     const format = (d: Date) => d.toLocaleDateString('id-ID', { day: 'numeric', month: 'short' })
     
     return `vs ${format(prevStart)} - ${format(prevEnd)}`
-  } catch (e) {
+  } catch {
     return 'vs periode sblmnya'
   }
 }
