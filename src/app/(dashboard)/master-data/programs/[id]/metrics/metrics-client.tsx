@@ -73,6 +73,7 @@ interface MetricRow {
   show_on_dashboard: boolean
   show_on_tv: boolean
   display_order: number
+  is_primary: boolean
   isNew: boolean
   isDirty: boolean
 }
@@ -91,6 +92,7 @@ function toMetricRow(m: MetricDefinition, order: number): MetricRow {
     unit_label: m.unit_label || '',
     show_on_dashboard: m.show_on_dashboard,
     show_on_tv: m.show_on_tv,
+    is_primary: m.is_primary || false,
     display_order: order,
     isNew: false,
     isDirty: false,
@@ -112,6 +114,7 @@ export function MetricsClient({ program, initialMetrics }: MetricsClientProps) {
   )
   const [isLoading, setIsLoading] = useState(false)
   const [showTemplates, setShowTemplates] = useState(initialMetrics.length === 0)
+  const [deletedIds, setDeletedIds] = useState<string[]>([])
 
   const dept = DEPARTMENTS.find(d => d.key === program.department)
 
@@ -134,6 +137,7 @@ export function MetricsClient({ program, initialMetrics }: MetricsClientProps) {
       unit_label: '',
       show_on_dashboard: true,
       show_on_tv: true,
+      is_primary: false,
       display_order: rows.length,
       isNew: true,
       isDirty: true,
@@ -141,17 +145,12 @@ export function MetricsClient({ program, initialMetrics }: MetricsClientProps) {
     setRows(prev => [...prev, newRow])
   }
 
-  const removeRow = async (index: number) => {
+  const removeRow = (index: number) => {
     const row = rows[index]
     if (!row.isNew && row.id) {
-      if (!confirm(`Hapus metrik "${row.label}"? Data input harian yang terkait juga akan terhapus.`)) return
-      setIsLoading(true)
-      const res = await deleteMetricDefinition(row.id)
-      setIsLoading(false)
-      if ('error' in res) return toast.error(res.error)
-      toast.success('Metrik dihapus')
+      setDeletedIds(prev => [...prev, row.id!])
     }
-    setRows(prev => prev.filter((_, i) => i !== index).map((r, i) => ({ ...r, display_order: i })))
+    setRows(prev => prev.filter((_, i) => i !== index).map((r, i) => ({ ...r, display_order: i, isDirty: true })))
   }
 
   const moveRow = (index: number, direction: 'up' | 'down') => {
@@ -164,42 +163,48 @@ export function MetricsClient({ program, initialMetrics }: MetricsClientProps) {
 
   // ── Apply Template ────────────────────────────────────────────────────────
 
-  const handleApplyTemplate = async (templateKey: string) => {
+  const handleApplyTemplate = (templateKey: string) => {
     const template = METRIC_TEMPLATES.find(t => t.key === templateKey)
     if (!template) return
 
     if (rows.length > 0 && !confirm(`Ini akan mengganti ${rows.length} metrik yang ada. Lanjutkan?`)) return
 
-    setIsLoading(true)
-    const res = await applyMetricTemplate(program.id, template.metrics)
+    // Mark current existing metrics for deletion
+    const currentIds = rows.filter(r => !r.isNew && r.id).map(r => r.id!)
+    setDeletedIds(prev => [...prev, ...currentIds])
 
-    if ('error' in res) {
-      setIsLoading(false)
-      return toast.error(res.error)
-    }
+    // Set new rows from template
+    const newRows: MetricRow[] = template.metrics.map((m, i) => ({
+      metric_key: m.metric_key || '',
+      label: m.label || '',
+      data_type: m.data_type || 'integer',
+      input_type: m.input_type || 'manual',
+      formula: m.formula || '',
+      is_target_metric: m.is_target_metric || false,
+      monthly_target: m.monthly_target?.toString() || '',
+      target_direction: m.target_direction || 'higher_is_better',
+      unit_label: m.unit_label || '',
+      show_on_dashboard: m.show_on_dashboard ?? true,
+      show_on_tv: m.show_on_tv ?? true,
+      is_primary: m.is_primary ?? false,
+      display_order: i,
+      isNew: true,
+      isDirty: true
+    }))
 
-    // Fetch the saved metrics directly and update state — no manual refresh needed
-    const fetchRes = await getMetricDefinitions(program.id)
-    setIsLoading(false)
-
-    if (fetchRes.error || !fetchRes.data) {
-      toast.error('Template diterapkan, tapi gagal memuat ulang. Coba refresh halaman.')
-      return
-    }
-
-    setRows(fetchRes.data.map((m, i) => toMetricRow(m, i)))
+    setRows(newRows)
     setShowTemplates(false)
-    toast.success(`Template "${template.label}" diterapkan! ${fetchRes.data.length} metrik dimuat.`)
+    toast.success(`Template "${template.label}" dimuat. Klik "Simpan Semua" untuk menerapkan ke database.`)
   }
 
   // ── Save all dirty / new rows ─────────────────────────────────────────────
 
   const handleSaveAll = async () => {
     const dirty = rows.filter(r => r.isDirty)
-    if (dirty.length === 0) return toast.info('Tidak ada perubahan.')
+    if (dirty.length === 0 && deletedIds.length === 0) return toast.info('Tidak ada perubahan.')
 
     // Validate
-    for (const row of dirty) {
+    for (const row of rows) {
       if (!row.label.trim()) return toast.error('Label metrik tidak boleh kosong.')
       if (!row.metric_key.trim()) return toast.error('Metric key tidak boleh kosong.')
       if (row.input_type === 'calculated' && !row.formula.trim()) {
@@ -210,40 +215,64 @@ export function MetricsClient({ program, initialMetrics }: MetricsClientProps) {
     setIsLoading(true)
     let hasError = false
 
-    for (const row of dirty) {
-      const payload = {
-        program_id: program.id,
-        metric_key: row.metric_key,
-        label: row.label,
-        data_type: row.data_type,
-        input_type: row.input_type,
-        formula: row.input_type === 'calculated' ? row.formula : null,
-        is_target_metric: row.is_target_metric,
-        monthly_target: row.is_target_metric && row.monthly_target ? Number(row.monthly_target) : null,
-        target_direction: row.target_direction,
-        unit_label: row.unit_label || null,
-        show_on_dashboard: row.show_on_dashboard,
-        show_on_tv: row.show_on_tv,
-        display_order: row.display_order,
+    try {
+      // 1. Process deletions
+      if (deletedIds.length > 0) {
+        for (const id of deletedIds) {
+          const res = await deleteMetricDefinition(id)
+          if ('error' in res) {
+            toast.error(`Gagal menghapus metrik: ${res.error}`)
+            hasError = true
+            break
+          }
+        }
       }
 
-      let res
-      if (row.isNew) {
-        res = await createMetricDefinition(payload)
-      } else if (row.id) {
-        res = await updateMetricDefinition(row.id, payload)
-      }
+      if (hasError) throw new Error('Deletion failed')
 
-      if (res && 'error' in res) {
-        toast.error(res.error)
-        hasError = true
-        break
+      // 2. Process rows (create or update)
+      for (const row of rows) {
+        // Skip rows that aren't dirty and already exist
+        if (!row.isDirty && !row.isNew) continue
+
+        const payload = {
+          program_id: program.id,
+          metric_key: row.metric_key,
+          label: row.label,
+          data_type: row.data_type,
+          input_type: row.input_type,
+          formula: row.input_type === 'calculated' ? row.formula : null,
+          is_target_metric: row.is_target_metric,
+          monthly_target: row.is_target_metric && row.monthly_target ? Number(row.monthly_target) : null,
+          target_direction: row.target_direction,
+          unit_label: row.unit_label || null,
+          show_on_dashboard: row.show_on_dashboard,
+          show_on_tv: row.show_on_tv,
+          display_order: row.display_order,
+          is_primary: row.is_primary, // Pastikan is_primary juga disimpan
+        }
+
+        let res
+        if (row.isNew) {
+          res = await createMetricDefinition(payload)
+        } else if (row.id) {
+          res = await updateMetricDefinition(row.id, payload)
+        }
+
+        if (res && 'error' in res) {
+          toast.error(`Gagal menyimpan "${row.label}": ${res.error}`)
+          hasError = true
+          break
+        }
       }
+    } catch (e) {
+      hasError = true
     }
 
     setIsLoading(false)
     if (!hasError) {
-      toast.success('Semua metrik berhasil disimpan!')
+      toast.success('Semua perubahan berhasil disimpan!')
+      setDeletedIds([])
       router.refresh()
     }
   }
