@@ -280,15 +280,6 @@ export function OverviewClient({
     return map
   }, [metricValues])
 
-  const dailyInputsByProgram = useMemo(() => {
-    const map = new Map<string, DailyInput[]>()
-    dailyInputs.forEach(di => {
-      const list = map.get(di.program_id) || []
-      list.push(di)
-      map.set(di.program_id, list)
-    })
-    return map
-  }, [dailyInputs])
 
   const milestoneCompletionsByMilestone = useMemo(() => {
     const map = new Map<string, MilestoneCompletion>()
@@ -311,7 +302,7 @@ export function OverviewClient({
   const totalMilestones = programs.reduce((sum, p) => sum + (p.program_milestones?.length || 0), 0)
   const completedMilestones = programs.reduce((sum, p) => {
     const ids = p.program_milestones?.map(m => m.id) || []
-    return sum + milestoneCompletions.filter(c => ids.includes(c.milestone_id) && c.is_completed).length
+    return sum + ids.filter(id => milestoneCompletionsByMilestone.get(id)?.is_completed).length
   }, 0)
   
   const targetTercapai = summary.statusCounts.tercapai
@@ -398,7 +389,7 @@ export function OverviewClient({
 
       return { day: displayLabel, health: Math.min(Math.round(avg), 150) }
     })
-  }, [activePeriod, programs, dailyInputs, metricValues, milestoneCompletions, startDate, endDate])
+  }, [activePeriod, programs, dailyInputs, metricValues, milestoneCompletionsByMilestone, startDate, endDate])
 
   // ── Bar chart: % health per program ─────────────────────────────────────
   const barData = useMemo(() =>
