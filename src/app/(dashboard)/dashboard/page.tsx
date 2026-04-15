@@ -60,7 +60,6 @@ export default async function DashboardPage({
             programs={data.programs}
             dailyInputs={data.dailyInputs}
             activePeriod={data.activePeriod}
-            milestoneCompletions={data.milestoneCompletions}
             metricValues={data.metricValues}
             profiles={data.profiles}
             prorationFactor={data.prorationFactor}
