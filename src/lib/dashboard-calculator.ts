@@ -348,7 +348,6 @@ export function getPerformanceGrade(score: number): { label: string, color: stri
 
 // ─── Ads Performance Utilities ────────────────────────────────────────────────
 
-const ADS_METRIC_KEYS = ['ads_spent', 'budget_iklan', 'leads', 'lead_masuk', 'roas', 'cpp', 'cpp_real', 'cpm', 'cpc', 'adds_to_cart', 'conversion_rate']
 
 /**
  * Detects if a program is an "Ads Program"

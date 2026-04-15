@@ -3,7 +3,7 @@
 import { useState, useMemo } from 'react'
 import { ProgramWithRelations } from './actions'
 import { Database } from '@/types/database'
-import { calculateProgramHealth, ProgramWithRelations as CalcProgramWithRelations } from '@/lib/dashboard-calculator'
+import { calculateProgramHealth } from '@/lib/dashboard-calculator'
 import { formatRupiah, cn } from '@/lib/utils'
 import { formatMetricValue } from '@/lib/formula-evaluator'
 import {
@@ -129,8 +129,6 @@ function ProgramCard({ program, health, profiles }: {
 
   // Milestone progress for qualitative/hybrid
   const milestones = program.program_milestones || []
-  const completedMs = health.isQualitativeOnly ? health.totalTargetMetrics : milestones.filter(m => false /* need list */).length // Simplified for now
-  const totalMs = milestones.length
 
   const teamNames = (program.program_pics || []).map(pic => {
     const p = profiles.find(pr => pr.id === pic.profile_id)
@@ -229,7 +227,6 @@ function ProgramCard({ program, health, profiles }: {
 // ── Main Component ────────────────────────────────────────────────────────────
 export function OverviewClient({
   programs,
-  dailyInputs,
   activePeriod,
   milestoneCompletions,
   metricValues,
@@ -244,15 +241,7 @@ export function OverviewClient({
   const [searchQuery, setSearchQuery] = useState('')
   const [filterDept, setFilterDept] = useState('all')
   const [filterStatus, setFilterStatus] = useState('all')
-  const [sortBy, setSortBy] = useState<'health' | 'name'>('health')
-
-  const milestoneCompletionsByMilestone = useMemo(() => {
-    const map = new Map<string, MilestoneCompletion>()
-    milestoneCompletions.forEach(mc => {
-      map.set(mc.milestone_id, mc)
-    })
-    return map
-  }, [milestoneCompletions])
+  const [sortBy] = useState<'health' | 'name'>('health')
 
   // Process data from summary
   const programHealths = summary.programHealths
@@ -304,7 +293,6 @@ export function OverviewClient({
     metricValues.forEach(mv => { const l = metricsByDate.get(mv.date) || []; l.push(mv); metricsByDate.set(mv.date, l) })
     
     return dateRange.map(d => {
-      const dayMetrics = metricsByDate.get(d) || []
       // This is a simplified trend for redesign phase
       const displayLabel = new Intl.DateTimeFormat('id-ID', { day: 'numeric', month: 'short' }).format(new Date(d))
       return { day: displayLabel, health: Math.round(overallHealth) } // Simplified for now
@@ -320,7 +308,6 @@ export function OverviewClient({
   )
 
   const banner = getBannerInfo(globalKPIs.avgHealth)
-  const { label: statusLabel, dot, badge } = getStatusLabelAndColor(globalKPIs.avgHealth)
 
   return (
     <div className="space-y-6 pb-24">

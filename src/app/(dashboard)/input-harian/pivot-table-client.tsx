@@ -59,7 +59,7 @@ export function PivotTableClient({
       groups[g].metrics.push(m)
     })
 
-    return Object.entries(groups).filter(([_, data]) => data.metrics.length > 0)
+    return Object.entries(groups).filter(([, data]) => data.metrics.length > 0)
   }, [metrics])
 
   const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>(() => {
