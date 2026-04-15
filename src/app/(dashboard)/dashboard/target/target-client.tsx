@@ -128,8 +128,13 @@ export function TargetClient({
       userPct: monthlyTargetUser > 0 ? (totalAchievedUser / monthlyTargetUser) * 100 : 0,
       proRataRp,
       proRataUser,
-      rpGrowth: prevAchievedRp > 0 ? ((totalAchievedRp - prevAchievedRp) / prevAchievedRp) * 100 : 0,
-      userGrowth: prevAchievedUser > 0 ? ((totalAchievedUser - prevAchievedUser) / prevAchievedUser) * 100 : 0,
+      rpGrowth: prevAchievedRp > 0
+      ? ((totalAchievedRp - prevAchievedRp) / prevAchievedRp) * 100
+      : totalAchievedRp > 0 ? 100 : 0,
+
+      userGrowth: prevAchievedUser > 0
+      ? ((totalAchievedUser - prevAchievedUser) / prevAchievedUser) * 100
+      : totalAchievedUser > 0 ? 100 : 0,
       hasPrevData: prevAchievedRp > 0 || prevAchievedUser > 0,
     }
   }, [dashboardSummary, previousSummary, programs, milestoneCompletions])
