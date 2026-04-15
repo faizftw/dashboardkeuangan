@@ -10,8 +10,6 @@ import {
   createMetricDefinition,
   updateMetricDefinition,
   deleteMetricDefinition,
-  applyMetricTemplate,
-  getMetricDefinitions,
 } from '../../../metric-actions'
 import {
   Plus,
@@ -265,7 +263,7 @@ export function MetricsClient({ program, initialMetrics }: MetricsClientProps) {
           break
         }
       }
-    } catch (e) {
+    } catch {
       hasError = true
     }
 
