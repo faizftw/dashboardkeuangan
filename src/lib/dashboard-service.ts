@@ -4,6 +4,9 @@ export { type ProgramWithRelations } from './dashboard-calculator'
 import { 
   calculateProgramHealth, 
   aggregateByMetricGroup, 
+  aggregateGlobalKPIs,
+  aggregateAdsMetrics,
+  buildAdsDailySeries,
   ProgramWithRelations,
   ProgramHealthResult 
 } from './dashboard-calculator'
@@ -21,6 +24,9 @@ export interface DashboardSummary {
     perluPerhatian: number
   }
   aggregates: ReturnType<typeof aggregateByMetricGroup>
+  globalKPIs: ReturnType<typeof aggregateGlobalKPIs>
+  adsMetrics: ReturnType<typeof aggregateAdsMetrics>
+  adsDailySeries: ReturnType<typeof buildAdsDailySeries>
   programHealths: (ProgramHealthResult & { program: ProgramWithRelations })[]
 }
 
@@ -98,6 +104,25 @@ export async function getUnifiedDashboardData(options: {
         overallHealth: 0,
         statusCounts: { tercapai: 0, menujuTarget: 0, perluPerhatian: 0 },
         aggregates: {},
+        globalKPIs: {
+          avgHealth: 0,
+          activeProgramsCount: 0,
+          totalPrograms: 0,
+          targetsHit: 0,
+          totalMilestones: 0,
+          completedMilestones: 0,
+          healthStatus: 'KRITIS'
+        },
+        adsMetrics: {
+          totalAdsSpent: 0,
+          totalRevenue: 0,
+          totalGoals: 0,
+          totalLeads: 0,
+          avgRoas: 0,
+          avgCpp: 0,
+          avgCr: 0
+        },
+        adsDailySeries: [],
         programHealths: []
       }
     }
@@ -208,10 +233,27 @@ export async function getUnifiedDashboardData(options: {
 
     const aggregates = aggregateByMetricGroup(programs, valsByProg, inputsByProg, prorationFactor, workingDays)
 
+    // Calculate Global KPIs for Overview Tab
+    const globalKPIs = aggregateGlobalKPIs(
+      programHealths,
+      programs,
+      Array.from(compsByMilestone.values())
+    )
+
+    // Calculate Ads Metrics for Ads Tab
+    const adsMetrics = aggregateAdsMetrics(programs, valsByProg)
+
+    // Calculate Ads Daily Series for Ads Tab Chart
+    // Default chart: spend vs roas
+    const adsDailySeries = buildAdsDailySeries(programs, valsByProg, 'ads_spent', 'roas')
+
     return {
       overallHealth,
       statusCounts,
       aggregates,
+      globalKPIs,
+      adsMetrics,
+      adsDailySeries,
       programHealths
     }
   }

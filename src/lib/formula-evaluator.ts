@@ -59,23 +59,6 @@ function tokenize(formula: string): Token[] {
   return tokens
 }
 
-/**
- * Resolve a single token to its numeric value.
- * Returns null if the identifier is missing from values.
- */
-function resolveToken(
-  token: Token,
-  values: Record<string, number | null>
-): number | null {
-  if (token.type === 'number') {
-    return parseFloat(token.value)
-  }
-  if (token.type === 'identifier') {
-    const v = values[token.value]
-    return v ?? null
-  }
-  return null
-}
 
 /**
  * Recursive Parser for Formulas with IF support.

@@ -6,7 +6,7 @@ import { formatMetricValue, evaluateFormula } from '@/lib/formula-evaluator'
 import { formatRupiah, cn } from '@/lib/utils'
 import { upsertSingleMetricValue, upsertDailyMetricTarget, autoDistributeTargets } from './actions'
 import { toast } from 'sonner'
-import { Loader2, Calculator, Target, Info, Sparkles } from 'lucide-react'
+import { Loader2, Calculator, Target, Info, Sparkles, ChevronDown, ChevronRight, Eye, EyeOff } from 'lucide-react'
 
 type MetricDefinition = Database['public']['Tables']['program_metric_definitions']['Row']
 type MetricValue = Database['public']['Tables']['daily_metric_values']['Row']
@@ -41,6 +41,37 @@ export function PivotTableClient({
   const metrics = useMemo(() => {
     return (activeProgram?.program_metric_definitions || []).sort((a, b) => a.display_order - b.display_order)
   }, [activeProgram])
+
+  // Metric Grouping Logic
+  const metricGroups = useMemo(() => {
+    const groups: Record<string, { label: string; metrics: MetricDefinition[] }> = {
+      'revenue': { label: '💰 Pendapatan', metrics: [] },
+      'user_acquisition': { label: '👥 User/Closing', metrics: [] },
+      'ad_spend': { label: '📢 Iklan/Spent', metrics: [] },
+      'leads': { label: '🎯 Funnel/Leads', metrics: [] },
+      'conversion': { label: '🔄 Konversi', metrics: [] },
+      'efficiency': { label: '📈 Efisiensi', metrics: [] },
+      'others': { label: '⚙️ Metrik Lainnya', metrics: [] }
+    }
+
+    metrics.forEach(m => {
+      const g = (m.metric_group && groups[m.metric_group]) ? m.metric_group : 'others'
+      groups[g].metrics.push(m)
+    })
+
+    return Object.entries(groups).filter(([_, data]) => data.metrics.length > 0)
+  }, [metrics])
+
+  const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>(() => {
+    // Expand revenue and user_acquisition by default
+    return { revenue: true, user_acquisition: true, ad_spend: true }
+  })
+
+  const toggleGroup = (groupId: string) => {
+    setExpandedGroups(prev => ({ ...prev, [groupId]: !prev[groupId] }))
+  }
+
+  const [onlyShowEssential, setOnlyShowEssential] = useState(false)
 
   // Get total days in period month
   const totalDays = useMemo(() => {
@@ -301,7 +332,20 @@ export function PivotTableClient({
             </select>
           </div>
 
-          <div className="flex bg-slate-200/50 p-1 rounded-xl w-full sm:w-auto mr-auto">
+          <div className="flex items-center gap-2 mb-1">
+             <button
+               onClick={() => setOnlyShowEssential(!onlyShowEssential)}
+               className={cn(
+                 "flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-bold border transition-all shadow-sm",
+                 onlyShowEssential ? "bg-amber-50 text-amber-700 border-amber-200" : "bg-white text-slate-500 border-slate-200 hover:bg-slate-50"
+               )}
+             >
+               {onlyShowEssential ? <Eye className="w-3 h-3" /> : <EyeOff className="w-3 h-3" />}
+               {onlyShowEssential ? 'Lihat Semua Metrik' : 'Hanya Metrik Esensial'}
+             </button>
+          </div>
+
+          <div className="flex bg-slate-200/50 p-1 rounded-xl w-full sm:w-auto mr-auto ml-2">
             <button
               onClick={() => setViewMode('actual')}
               className={`flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition-all ${
@@ -447,33 +491,79 @@ export function PivotTableClient({
         <div className="relative overflow-x-auto rounded-xl border border-slate-200 shadow-sm bg-white">
           <table className="w-full text-sm text-left">
             <thead className="bg-slate-800 text-slate-100 font-bold">
-              <tr>
+               {/* Group Level Header */}
+               <tr>
+                 <th className="px-4 py-2 sticky left-0 z-10 bg-slate-900 border-r border-slate-700 w-24">Unit</th>
+                 {metricGroups.map(([id, data]) => {
+                   const isExpanded = expandedGroups[id]
+                   const visibleMetrics = data.metrics.filter(m => !onlyShowEssential || m.is_primary)
+                   if (visibleMetrics.length === 0) return null
+                   
+                   return (
+                     <th 
+                        key={id} 
+                        colSpan={isExpanded ? visibleMetrics.length : 1}
+                        className={cn(
+                          "px-4 py-2 text-center border-l border-slate-700 transition-all",
+                          isExpanded ? "bg-slate-800 text-slate-100" : "bg-slate-900 text-slate-500 cursor-pointer hover:bg-slate-800"
+                        )}
+                        onClick={() => !isExpanded && toggleGroup(id)}
+                     >
+                       <div className="flex items-center justify-center gap-2">
+                         <span className="text-[10px] tracking-widest uppercase">{data.label}</span>
+                         <button 
+                            onClick={(e) => { e.stopPropagation(); toggleGroup(id) }}
+                            className="p-0.5 hover:bg-white/10 rounded transition-colors"
+                         >
+                           {isExpanded ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />}
+                         </button>
+                       </div>
+                     </th>
+                   )
+                 })}
+               </tr>
+               {/* Metric Level Header */}
+               <tr>
                 <th className="px-4 py-3 sticky left-0 z-10 bg-slate-800 border-r border-slate-700 w-24">Tanggal</th>
-                {metrics.map(m => (
-                  <th key={m.id} className="px-4 py-3 text-right whitespace-nowrap border-l border-slate-700 min-w-[130px]">
-                    <div className="flex flex-col items-end">
-                      <span className="flex items-center gap-1">
-                        {m.input_type === 'calculated' && <Calculator className="w-3 h-3 text-slate-400" />}
-                        {m.label}
-                      </span>
-                      {m.is_target_metric && viewMode === 'actual' && (
-                        <span className="text-[9px] text-emerald-400 font-medium">Target Metric</span>
-                      )}
-                      {viewMode === 'target' && isAdmin && m.input_type === 'manual' && m.is_target_metric && (
-                        <button 
-                          onClick={() => handleAutoDistribute(m.id, m.label)}
-                          className={cn(
-                            "mt-1 text-[9px] flex items-center gap-1 px-1.5 py-0.5 rounded transition-all",
-                            isSaving === 'bulk' ? "bg-slate-700 text-slate-500 pointer-events-none" : "bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500/40"
-                          )}
-                        >
-                          <Sparkles className="w-2.5 h-2.5" />
-                          Auto Distribusi
-                        </button>
-                      )}
-                    </div>
-                  </th>
-                ))}
+                {metricGroups.map(([id, data]) => {
+                  const isExpanded = expandedGroups[id]
+                  const visibleMetrics = data.metrics.filter(m => !onlyShowEssential || m.is_primary)
+                  
+                  if (!isExpanded) {
+                    if (visibleMetrics.length === 0) return null
+                    return (
+                      <th key={id} className="px-4 py-3 text-center border-l border-slate-700 bg-slate-800/50 text-slate-400 italic font-medium text-[9px]">
+                        Folded
+                      </th>
+                    )
+                  }
+
+                  return visibleMetrics.map(m => (
+                    <th key={m.id} className="px-4 py-3 text-right whitespace-nowrap border-l border-slate-700 min-w-[130px]">
+                      <div className="flex flex-col items-end">
+                        <span className="flex items-center gap-1">
+                          {m.input_type === 'calculated' && <Calculator className="w-3 h-3 text-slate-400" />}
+                          {m.label}
+                        </span>
+                        {m.is_target_metric && viewMode === 'actual' && (
+                          <span className="text-[9px] text-emerald-400 font-medium">Target Metric</span>
+                        )}
+                        {viewMode === 'target' && isAdmin && m.input_type === 'manual' && m.is_target_metric && (
+                          <button 
+                            onClick={() => handleAutoDistribute(m.id, m.label)}
+                            className={cn(
+                              "mt-1 text-[9px] flex items-center gap-1 px-1.5 py-0.5 rounded transition-all",
+                              isSaving === 'bulk' ? "bg-slate-700 text-slate-500 pointer-events-none" : "bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500/40"
+                            )}
+                          >
+                            <Sparkles className="w-2.5 h-2.5" />
+                            Auto Distribusi
+                          </button>
+                        )}
+                      </div>
+                    </th>
+                  ))
+                })}
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 table-fixed">
@@ -491,59 +581,74 @@ export function PivotTableClient({
                       {day} {new Date(activePeriod!.year, activePeriod!.month - 1, day).toLocaleString('id-ID', { month: 'short' })}
                     </td>
                     
-                    {metrics.map(m => {
-                      const cellKey = `${dateStr}_${m.id}`
-                      const val = rowEvaluated[m.id]
-                      const isEditing = editingCell?.date === dateStr && editingCell?.metricId === m.id
-                      const saving = isSaving === cellKey
-                      const isCalc = m.input_type === 'calculated'
+                    {metricGroups.map(([gid, gdata]) => {
+                      const isExpanded = expandedGroups[gid]
+                      const visibleMetrics = gdata.metrics.filter(m => !onlyShowEssential || m.is_primary)
 
-                      let colorClass = "text-slate-700"
-                      if (m.is_target_metric && val !== null) {
-                         let monthlyTarget = 0;
-                         if (m.data_type === 'currency') monthlyTarget = activeProgram.monthly_target_rp || 0;
-                         else monthlyTarget = activeProgram.monthly_target_user || 0;
-                         
-                         const dailyTarget = monthlyTarget / (activePeriod?.working_days || 30)
-                         if (dailyTarget > 0) {
-                            const pct = val / dailyTarget
-                            if (pct >= 1) colorClass = "text-emerald-600 font-bold"
-                            else if (pct >= 0.5) colorClass = "text-amber-600 font-bold"
-                            else colorClass = "text-red-600 font-bold"
-                         }
+                      if (!isExpanded) {
+                        if (visibleMetrics.length === 0) return null
+                        return (
+                          <td key={gid} className="px-2 py-3 border-l border-slate-100 bg-slate-50/50 text-center text-slate-300">
+                             ...
+                          </td>
+                        )
                       }
 
-                      return (
-                        <td 
-                          key={m.id} 
-                          className={cn(
-                            "px-4 py-2 text-right border-l border-slate-100 transition-colors",
-                            isCalc ? 'bg-slate-50/50 text-slate-600' : 'cursor-text hover:bg-slate-100/80',
-                            viewMode === 'target' && !isCalc && 'bg-indigo-50/20',
-                            saving ? 'opacity-50' : ''
-                          )}
-                          onClick={() => !isEditing && handleCellClick(dateStr, m, val)}
-                        >
-                          {isEditing ? (
-                            <input 
-                              ref={inputRef}
-                              type="number" 
-                              value={editValue}
-                              onChange={e => setEditValue(e.target.value)}
-                              onBlur={handleSaveCell}
-                              onKeyDown={handleKeyDown}
-                              className="w-full text-right bg-white border border-indigo-400 rounded p-1 text-sm font-bold text-indigo-900 focus:outline-none focus:ring-2 focus:ring-indigo-500 shadow-sm"
-                            />
-                          ) : (
-                            <div className="flex items-center justify-end gap-2">
-                              {saving && <Loader2 className="w-3 h-3 animate-spin text-indigo-500" />}
-                              <span className={cn(isCalc ? 'font-medium' : colorClass, viewMode === 'target' && !isCalc && 'text-indigo-600 font-bold')}>
-                                {val === null || val === undefined ? <span className="text-slate-300">&mdash;</span> : formatMetricValue(val, m.data_type, m.unit_label)}
-                              </span>
-                            </div>
-                          )}
-                        </td>
-                      )
+                      return visibleMetrics.map(m => {
+                        const cellKey = `${dateStr}_${m.id}`
+                        const val = rowEvaluated[m.id]
+                        const isEditing = editingCell?.date === dateStr && editingCell?.metricId === m.id
+                        const saving = isSaving === cellKey
+                        const isCalc = m.input_type === 'calculated'
+
+                        let colorClass = "text-slate-700"
+                        if (m.is_target_metric && val !== null) {
+                           let monthlyTarget = 0;
+                           if (m.metric_key === 'revenue') monthlyTarget = activeProgram.monthly_target_rp || 0;
+                           else if (m.metric_key === 'user_count') monthlyTarget = activeProgram.monthly_target_user || 0;
+                           else monthlyTarget = m.monthly_target || 0;
+                           
+                           const dailyTarget = monthlyTarget / (activePeriod?.working_days || 30)
+                           if (dailyTarget > 0) {
+                              const pct = val / dailyTarget
+                              if (pct >= 1) colorClass = "text-emerald-600 font-bold"
+                              else if (pct >= 0.5) colorClass = "text-amber-600 font-bold"
+                              else colorClass = "text-red-600 font-bold"
+                           }
+                        }
+
+                        return (
+                          <td 
+                            key={m.id} 
+                            className={cn(
+                              "px-4 py-2 text-right border-l border-slate-100 transition-colors",
+                              isCalc ? 'bg-slate-50/50 text-slate-600' : 'cursor-text hover:bg-slate-100/80',
+                              viewMode === 'target' && !isCalc && 'bg-indigo-50/20',
+                              saving ? 'opacity-50' : ''
+                            )}
+                            onClick={() => !isEditing && handleCellClick(dateStr, m, val)}
+                          >
+                            {isEditing ? (
+                              <input 
+                                ref={inputRef}
+                                type="number" 
+                                value={editValue}
+                                onChange={e => setEditValue(e.target.value)}
+                                onBlur={handleSaveCell}
+                                onKeyDown={handleKeyDown}
+                                className="w-full text-right bg-white border border-indigo-400 rounded p-1 text-sm font-bold text-indigo-900 focus:outline-none focus:ring-2 focus:ring-indigo-500 shadow-sm"
+                              />
+                            ) : (
+                              <div className="flex items-center justify-end gap-2">
+                                {saving && <Loader2 className="w-3 h-3 animate-spin text-indigo-500" />}
+                                <span className={cn(isCalc ? 'font-medium' : colorClass, viewMode === 'target' && !isCalc && 'text-indigo-600 font-bold')}>
+                                  {val === null || val === undefined ? <span className="text-slate-300">&mdash;</span> : formatMetricValue(val, m.data_type, m.unit_label)}
+                                </span>
+                              </div>
+                            )}
+                          </td>
+                        )
+                      })
                     })}
                   </tr>
                 )
@@ -554,24 +659,44 @@ export function PivotTableClient({
             <tfoot className="bg-slate-100/80 font-bold border-t-2 border-slate-300">
               <tr>
                 <td className="px-4 py-3 text-slate-800 sticky left-0 z-10 bg-slate-100/80 border-r border-slate-200">TOTAL</td>
-                {metrics.map(m => {
-                  const val = summaries.total[m.id]
-                  return (
-                    <td key={m.id} className="px-4 py-3 text-right text-indigo-900 border-l border-slate-200">
-                      {val === null || val === undefined ? '-' : formatMetricValue(val, m.data_type, m.unit_label)}
-                    </td>
-                  )
+                {metricGroups.map(([gid, gdata]) => {
+                  const isExpanded = expandedGroups[gid]
+                  const visibleMetrics = gdata.metrics.filter(m => !onlyShowEssential || m.is_primary)
+                  
+                  if (!isExpanded) {
+                    if (visibleMetrics.length === 0) return null
+                    return <td key={gid} className="px-2 py-3 border-l border-slate-200"></td>
+                  }
+
+                  return visibleMetrics.map(m => {
+                    const val = summaries.total[m.id]
+                    return (
+                      <td key={m.id} className="px-4 py-3 text-right text-indigo-900 border-l border-slate-200">
+                        {val === null || val === undefined ? '-' : formatMetricValue(val, m.data_type, m.unit_label)}
+                      </td>
+                    )
+                  })
                 })}
               </tr>
               <tr className="border-t border-slate-200">
                 <td className="px-4 py-3 text-slate-600 text-xs sticky left-0 z-10 bg-slate-100/80 border-r border-slate-200">RATA-RATA<br/><span className="font-normal text-[10px]">({summaries.daysCount} hari)</span></td>
-                {metrics.map(m => {
-                  const val = summaries.average[m.id]
-                  return (
-                    <td key={m.id} className="px-4 py-3 text-right text-slate-600 text-xs border-l border-slate-200">
-                      {val === null || val === undefined ? '-' : formatMetricValue(val, m.data_type, m.unit_label)}
-                    </td>
-                  )
+                {metricGroups.map(([gid, gdata]) => {
+                  const isExpanded = expandedGroups[gid]
+                  const visibleMetrics = gdata.metrics.filter(m => !onlyShowEssential || m.is_primary)
+
+                  if (!isExpanded) {
+                    if (visibleMetrics.length === 0) return null
+                    return <td key={gid} className="px-2 py-3 border-l border-slate-200"></td>
+                  }
+
+                  return visibleMetrics.map(m => {
+                    const val = summaries.average[m.id]
+                    return (
+                      <td key={m.id} className="px-4 py-3 text-right text-slate-600 text-xs border-l border-slate-200">
+                        {val === null || val === undefined ? '-' : formatMetricValue(val, m.data_type, m.unit_label)}
+                      </td>
+                    )
+                  })
                 })}
               </tr>
             </tfoot>
