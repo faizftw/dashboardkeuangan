@@ -60,7 +60,12 @@ export async function applyMetricTemplate(
   }
 
   const rows = metrics.map(m => ({ 
+    is_primary: false,
+    is_target_metric: false,
     target_direction: 'higher_is_better',
+    show_on_dashboard: true,
+    show_on_tv: true,
+    display_order: 0,
     ...m, 
     program_id: programId 
   }))
