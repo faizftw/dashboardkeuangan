@@ -746,9 +746,10 @@ export function OverviewClient({
                   />
                   <Tooltip 
                     contentStyle={{ borderRadius: 12, border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }}
-                    formatter={(val: any, name: string) => {
-                      if (name === 'Pendapatan') return [formatRupiah(Number(val || 0)), name]
-                      return [val, name]
+                    formatter={(val: unknown, name: unknown) => {
+                      const label = String(name || '')
+                      if (label === 'Pendapatan') return [formatRupiah(Number(val || 0)), label]
+                      return [val as string | number, label]
                     }}
                   />
                   <Legend verticalAlign="top" height={36} iconType="circle" wrapperStyle={{ fontSize: 12, fontWeight: 600, paddingBottom: '10px' }} />
