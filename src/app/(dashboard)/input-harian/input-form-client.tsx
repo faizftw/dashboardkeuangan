@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import { submitDailyInput, updateDailyInput, deleteDailyInput, submitMilestoneCompletion, submitDailyMetricValues } from './actions'
 import { Database } from '@/types/database'
 import { formatRupiah, cn } from '@/lib/utils'
+import { isAdsProgram } from '@/lib/dashboard-calculator'
 import { evaluateFormula, formatMetricValue } from '@/lib/formula-evaluator'
 import { toast } from 'sonner'
 import { 
@@ -18,7 +19,8 @@ import {
   Calculator,
   ArrowUpDown,
   ChevronUp,
-  ChevronDown
+  ChevronDown,
+  TrendingUp
 } from 'lucide-react'
 
 type ProgramMilestone = Database['public']['Tables']['program_milestones']['Row']
@@ -201,12 +203,14 @@ export function InputFormClient({
         payload.program_id = selectedProgramId
       }
 
-      // For legacy programs (no custom metrics), also save rp/user values
-      if (!hasCustomMetrics && (activeProgram?.target_type === 'quantitative' || activeProgram?.target_type === 'hybrid')) {
+      // ALWAYS try to save legacy rp/user if they are present in the form, 
+      // regardless of custom metrics existence, to maintain backward compatibility
+      const targetType = activeProgram?.target_type
+      if (targetType === 'quantitative' || targetType === 'hybrid') {
         const rp = formData.get('achievement_rp')
         const user = formData.get('achievement_user')
-        if (rp) payload.achievement_rp = Number(rp)
-        if (user) payload.achievement_user = Number(user)
+        if (rp !== null && rp !== '') (payload as any).achievement_rp = Number(rp)
+        if (user !== null && user !== '') (payload as any).achievement_user = Number(user)
       }
 
       let res;
@@ -364,9 +368,30 @@ export function InputFormClient({
                   <td className="px-6 py-4 text-center align-top">
                     {(() => {
                       const programMetrics = prog?.program_metric_definitions || [];
-                      const isCustomMetricProgram = programMetrics.length > 0;
+                      const isAds = isAdsProgram(programMetrics);
+                      const isQuantitative = prog?.target_type === 'quantitative' || prog?.target_type === 'hybrid';
+                      
+                      // Legacy-first display for quantitative programs that aren't Ads-heavy
+                      if (isQuantitative && !isAds) {
+                        return (
+                          <div className="inline-flex flex-col items-center p-2 rounded-lg bg-indigo-50/30 border border-indigo-50">
+                            <span className="font-extrabold text-indigo-700 text-xs">{formatRupiah(Number(input.achievement_rp || 0))}</span>
+                            <div className="flex items-center gap-1.5 mt-0.5">
+                              <span className="text-[10px] text-slate-500 font-bold">{input.achievement_user || 0} user</span>
+                              {percentageHarian && (
+                                <span className={cn(
+                                  "text-[9px] px-1.5 rounded-full font-black uppercase",
+                                  Number(percentageHarian) >= 100 ? "bg-emerald-100 text-emerald-700" : "bg-indigo-100 text-indigo-700"
+                                )}>
+                                  {percentageHarian}%
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        )
+                      }
 
-                      if (isCustomMetricProgram) {
+                      if (programMetrics.length > 0) {
                         // Adaptive display for custom metrics
                         const dateMetrics = allPeriodMetricValues?.filter(mv => 
                           mv.program_id === input.program_id && mv.date === input.date
@@ -507,43 +532,46 @@ export function InputFormClient({
                     )}
                   </div>
 
-                  {/* Show legacy fields only for programs without custom metrics */}
-                  {/* Legacy fields */}
-                  {!hasCustomMetrics && (activeProgram?.target_type === 'quantitative' || activeProgram?.target_type === 'hybrid') && (
-                    <div className="space-y-4">
-                      <div className="flex items-center gap-2 text-xs font-bold text-slate-400 uppercase tracking-[0.1em]">
-                        <Target className="h-3 w-3" /> Input Angka Target
+                   {/* Legacy fields - Primary for quantitative programs */}
+                  {(activeProgram?.target_type === 'quantitative' || activeProgram?.target_type === 'hybrid') && (
+                    <div className="space-y-4 p-4 rounded-xl bg-slate-50/50 border border-slate-100">
+                      <div className="flex items-center gap-2 text-[10px] font-black text-indigo-600 uppercase tracking-widest">
+                        <Target className="h-3 w-3" /> Capaian Utama (Legacy)
                       </div>
-                      <div className="grid grid-cols-2 gap-4">
-                        <div className="space-y-1.5 min-w-0">
+                      <div className="grid grid-cols-2 gap-6">
+                        <div className="space-y-1.5">
                           <label className="text-[10px] font-bold text-slate-500 uppercase">RP CAPAIAN</label>
                           <input 
                             name="achievement_rp" type="number" min="0" placeholder="Rp 0"
                             defaultValue={editingId ? pastInputs.find(i=>i.id===editingId)?.achievement_rp?.toString() : ""}
-                            className="w-full text-sm font-bold rounded-xl border border-slate-200 px-4 py-3 focus:border-indigo-500 outline-none transition-all"
+                            className="w-full text-sm font-bold rounded-xl border border-slate-200 px-4 py-3 focus:border-indigo-500 outline-none transition-all bg-white"
                           />
                         </div>
-                        <div className="space-y-1.5 min-w-0">
-                          <label className="text-[10px] font-bold text-slate-500 uppercase">USER BARU</label>
+                        <div className="space-y-1.5">
+                          <label className="text-[10px] font-bold text-slate-500 uppercase">USER/CLOSING</label>
                           <input 
                             name="achievement_user" type="number" min="0" placeholder="0"
                             defaultValue={editingId ? pastInputs.find(i=>i.id===editingId)?.achievement_user?.toString() : ""}
-                            className="w-full text-sm font-bold rounded-xl border border-slate-200 px-4 py-3 focus:border-indigo-500 outline-none transition-all"
+                            className="w-full text-sm font-bold rounded-xl border border-slate-200 px-4 py-3 focus:border-indigo-500 outline-none transition-all bg-white"
                           />
                         </div>
                       </div>
                     </div>
                   )}
 
-                  {/* Dynamic Metric Fields - Optimized Grid */}
+                  {/* Dynamic Metric Fields - Specialized KPIs */}
                   {hasCustomMetrics && (
                     <div className="space-y-4">
-                      <div className="flex items-center gap-2 text-xs font-bold text-slate-400 uppercase tracking-[0.1em]">
-                        <Target className="h-3 w-3" /> Input KPI Utama
+                      <div className="flex items-center gap-2 text-[10px] font-black text-purple-600 uppercase tracking-widest pl-1">
+                        <TrendingUp className="h-3 w-3" /> Metrik Spesifik (Custom)
                       </div>
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-5">
+                      <div className="grid grid-cols-2 gap-x-6 gap-y-4">
                         {activeMetrics.map(metric => {
                           const isCalc = metric.input_type === 'calculated'
+                          // Don't duplicate legacy fields in custom section if already shown above
+                          if (!isAdsProgram(activeProgram?.program_metric_definitions || []) && 
+                             (metric.metric_key === 'revenue' || metric.metric_key === 'user_count')) return null;
+
                           const calcVal = isCalc && metric.formula
                             ? evaluateFormula(metric.formula, metricKeyValues)
                             : null
@@ -557,7 +585,7 @@ export function InputFormClient({
                                 {isCalc && <Calculator className="h-3 w-3 text-purple-400 shrink-0" />}
                               </div>
                               {isCalc ? (
-                                <div className="w-full text-xs font-bold rounded-xl border border-purple-100 bg-purple-50/50 px-3 py-2.5 text-purple-700 truncate">
+                                <div className="w-full text-xs font-bold rounded-xl border border-purple-100 bg-purple-50/50 px-3 py-2 text-purple-700 truncate min-h-[38px] flex items-center">
                                   {calcVal !== null 
                                     ? formatMetricValue(calcVal, metric.data_type, metric.unit_label)
                                     : '—'
@@ -571,7 +599,7 @@ export function InputFormClient({
                                   placeholder={metric.data_type === 'currency' ? 'Rp 0' : '0'}
                                   value={metricValues[metric.id] || ''}
                                   onChange={e => setMetricValues(prev => ({ ...prev, [metric.id]: e.target.value }))}
-                                  className="w-full text-sm font-bold rounded-xl border border-slate-200 px-3 py-2.5 focus:border-indigo-500 outline-none transition-all placeholder:text-slate-300"
+                                  className="w-full text-sm font-bold rounded-xl border border-slate-200 px-3 py-2 focus:border-indigo-500 outline-none transition-all placeholder:text-slate-300"
                                 />
                               )}
                             </div>

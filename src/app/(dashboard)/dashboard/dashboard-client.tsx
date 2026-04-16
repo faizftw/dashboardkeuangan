@@ -127,8 +127,33 @@ function ProgramCard({ program, health, profiles }: {
   const evaluatedMetrics = health.calculatedMetrics || {}
 
   const defs = program.program_metric_definitions || []
-  const primaryMetrics = defs.filter(m => m.is_primary && m.is_target_metric)
+  let primaryMetrics = defs.filter(m => m.is_primary && m.is_target_metric)
   const secondaryMetrics = defs.filter(m => !m.is_primary)
+
+  // Synthetic primary metrics for legacy programs if no custom primary metrics exist
+  if (primaryMetrics.length === 0 && !isQualitative) {
+    const hasLegacyRp = (program.monthly_target_rp || 0) > 0 || (program.daily_target_rp || 0) > 0
+    const hasLegacyUser = (program.monthly_target_user || 0) > 0 || (program.daily_target_user || 0) > 0
+    
+    if (hasLegacyRp) {
+      primaryMetrics.push({
+        id: 'legacy_rp',
+        metric_key: 'revenue',
+        label: 'Omzet',
+        data_type: 'currency',
+        unit_label: 'Rp'
+      } as any)
+    }
+    if (hasLegacyUser) {
+      primaryMetrics.push({
+        id: 'legacy_user',
+        metric_key: 'user_count',
+        label: 'Closing',
+        data_type: 'integer',
+        unit_label: 'user'
+      } as any)
+    }
+  }
 
   // Milestone progress for qualitative/hybrid
   const milestones = program.program_milestones || []
@@ -191,15 +216,16 @@ function ProgramCard({ program, health, profiles }: {
           {primaryMetrics.length > 0 ? (
             primaryMetrics.map(m => {
               const actual = evaluatedMetrics[m.metric_key] || 0
-              const target = m.monthly_target || 0
+              // Use effective target from health result (handled fallback in backend)
+              const target = health.effectiveTargets?.[m.metric_key] || m.monthly_target || 0
               const pct = target > 0 ? (actual / target) * 100 : 0
               return (
                 <div key={m.id} className="space-y-1">
                   <div className="flex justify-between items-center text-[11px]">
                     <span className="font-medium text-[#6B7280] uppercase tracking-wider">{m.label}</span>
                     <span className="font-semibold text-[#111827] text-right ml-1 break-all">
-                      {formatMetricValue(actual, m.data_type, m.unit_label)}
-                      <span className="text-[#6B7280] font-normal ml-1">/ {formatMetricValue(target, m.data_type, m.unit_label)}</span>
+                      {formatMetricValue(actual, m.data_type || 'integer', m.unit_label)}
+                      <span className="text-[#6B7280] font-normal ml-1">/ {formatMetricValue(target, m.data_type || 'integer', m.unit_label)}</span>
                     </span>
                   </div>
                   <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
@@ -904,11 +930,23 @@ export function OverviewClient({
                     })
                     .map(ph => {
                       const metrics = ph.calculatedMetrics || {}
-                      const roas = metrics.roas || 0
-                      const spent = metrics.ads_spent || 0
-                      const goals = metrics.user_count || 0
-                      const cpp = metrics.cpp || 0
-                      const cr = metrics.conversion_rate || 0
+                      
+                      // Robust extraction with synonyms
+                      const getVal = (keys: string[]) => {
+                        for (const k of keys) {
+                          if (metrics[k] !== undefined && metrics[k] !== null) return metrics[k]
+                        }
+                        return 0
+                      }
+
+                      const spent = getVal(['ads_spent', 'ad_spend', 'budget_iklan', 'spent'])
+                      const revenue = getVal(['revenue', 'omzet', 'pemasukan', 'revenue_from_paid_traffic'])
+                      const goals = getVal(['user_count', 'closing', 'leads_converted', 'pembelian'])
+                      const leads = getVal(['leads', 'lead_masuk', 'prospek', 'leads_count'])
+                      
+                      const roas = metrics.roas || (spent > 0 ? revenue / spent : 0)
+                      const cpp = metrics.cpp || (goals > 0 ? spent / goals : 0)
+                      const cr = metrics.conversion_rate || (leads > 0 ? (goals / leads) * 100 : 0)
                       
                       return (
                         <tr key={ph.program.id} className="hover:bg-slate-50 transition-colors group">

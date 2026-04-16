@@ -7,6 +7,7 @@ import { formatRupiah, cn } from '@/lib/utils'
 import { upsertSingleMetricValue, upsertDailyMetricTarget, autoDistributeTargets } from './actions'
 import { toast } from 'sonner'
 import { Loader2, Calculator, Target, Info, Sparkles, ChevronDown, ChevronRight, Eye, EyeOff } from 'lucide-react'
+import { isAdsProgram } from '@/lib/dashboard-calculator'
 
 type MetricDefinition = Database['public']['Tables']['program_metric_definitions']['Row']
 type MetricValue = Database['public']['Tables']['daily_metric_values']['Row']
@@ -395,101 +396,111 @@ export function PivotTableClient({
         </div>
       )}
 
-      {metrics.length === 0 ? (
-        <div className="relative overflow-x-auto rounded-xl border border-slate-200 shadow-sm bg-white">
-          <table className="w-full text-sm text-left">
-            <thead className="bg-slate-800 text-slate-100 font-bold">
-              <tr>
-                <th className="px-4 py-3 sticky left-0 z-10 bg-slate-800 border-r border-slate-700 w-24">Tanggal</th>
-                {activeProgram.target_type !== 'qualitative' ? (
-                  <>
-                    <th className="px-4 py-3 text-right whitespace-nowrap border-l border-slate-700">
-                      <div className="flex flex-col items-end">
-                        <span>Pencapaian (Rp)</span>
-                        <span className="text-[10px] text-emerald-400 font-medium">Target: {formatRupiah(dailyTargetRp)}/hari</span>
-                      </div>
-                    </th>
-                    <th className="px-4 py-3 text-right whitespace-nowrap border-l border-slate-700">
-                      <div className="flex flex-col items-end">
-                        <span>Pencapaian (User)</span>
-                        <span className="text-[10px] text-emerald-400 font-medium">Target: {dailyTargetUser.toLocaleString()} user/hari</span>
-                      </div>
-                    </th>
-                  </>
-                ) : (
-                  <th className="px-4 py-3 whitespace-nowrap border-l border-slate-700 w-48">Status Kualitatif</th>
-                )}
-                <th className="px-4 py-3 whitespace-nowrap border-l border-slate-700">Catatan</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              {daysArray.map(day => {
-                const dateStr = buildDateString(day)
-                const input = pastInputs?.find(i => i.program_id === activeProgram.id && i.date === dateStr)
-                const isFuture = dateStr > todayStr
-                
-                return (
-                  <tr key={day} className={cn("hover:bg-indigo-50/50 transition-colors", isFuture && "bg-slate-50")}>
-                    <td className="px-4 py-2 sticky left-0 z-10 bg-white border-r border-slate-100 font-semibold text-slate-700 whitespace-nowrap w-24">
-                      {day} {new Date(activePeriod?.year || 2024, (activePeriod?.month || 1) - 1, 1).toLocaleString('id-ID', { month: 'short' })}
-                    </td>
+      {(() => {
+        const isAds = isAdsProgram(activeProgram.program_metric_definitions || []);
+        const isQuantitative = activeProgram.target_type === 'quantitative' || activeProgram.target_type === 'hybrid';
+        
+        // Use legacy table view for quantitative programs that aren't Ads-heavy
+        if ((isQuantitative && !isAds) || metrics.length === 0) {
+          return (
+            <div className="relative overflow-x-auto rounded-xl border border-slate-200 shadow-sm bg-white">
+              {/* ... existing legacy table ... */}
+              <table className="w-full text-sm text-left">
+                <thead className="bg-slate-800 text-slate-100 font-bold">
+                  <tr>
+                    <th className="px-4 py-3 sticky left-0 z-10 bg-slate-800 border-r border-slate-700 w-24">Tanggal</th>
                     {activeProgram.target_type !== 'qualitative' ? (
                       <>
-                        <td className="px-4 py-2 text-right border-l border-slate-100">
-                          <span className={cn(
-                            "font-medium", 
-                            (input?.achievement_rp || 0) >= dailyTargetRp && dailyTargetRp > 0 ? "text-emerald-600 font-bold" : 
-                            (input?.achievement_rp || 0) > 0 ? "text-indigo-600" : "text-slate-400"
-                          )}>
-                            {formatRupiah(input?.achievement_rp || 0)}
-                          </span>
-                        </td>
-                        <td className="px-4 py-2 text-right border-l border-slate-100">
-                          <span className={cn(
-                            "font-medium", 
-                            (input?.achievement_user || 0) >= dailyTargetUser && dailyTargetUser > 0 ? "text-emerald-600 font-bold" :
-                            (input?.achievement_user || 0) > 0 ? "text-indigo-600" : "text-slate-400"
-                          )}>
-                            {(input?.achievement_user || 0).toLocaleString()} user
-                          </span>
-                        </td>
+                        <th className="px-4 py-3 text-right whitespace-nowrap border-l border-slate-700">
+                          <div className="flex flex-col items-end">
+                            <span>Pencapaian (Rp)</span>
+                            <span className="text-[10px] text-emerald-400 font-medium">Target: {formatRupiah(dailyTargetRp)}/hari</span>
+                          </div>
+                        </th>
+                        <th className="px-4 py-3 text-right whitespace-nowrap border-l border-slate-700">
+                          <div className="flex flex-col items-end">
+                            <span>Pencapaian (User)</span>
+                            <span className="text-[10px] text-emerald-400 font-medium">Target: {dailyTargetUser.toLocaleString()} user/hari</span>
+                          </div>
+                        </th>
                       </>
                     ) : (
-                      <td className="px-4 py-2 border-l border-slate-100">
-                        {input?.qualitative_status === 'completed' && <span className="bg-emerald-100 text-emerald-800 text-xs font-bold px-2 py-0.5 rounded">Selesai</span>}
-                        {input?.qualitative_status === 'in_progress' && <span className="bg-amber-100 text-amber-800 text-xs font-bold px-2 py-0.5 rounded">Dalam Proses</span>}
-                        {(!input || input?.qualitative_status === 'not_started') && <span className="text-slate-400 text-xs italic">-</span>}
-                      </td>
+                      <th className="px-4 py-3 whitespace-nowrap border-l border-slate-700 w-48">Status Kualitatif</th>
                     )}
-                    <td className="px-4 py-2 border-l border-slate-100 text-slate-600 max-w-sm truncate" title={input?.notes || ''}>
-                      {input?.notes || <span className="italic text-slate-400 opacity-50">-</span>}
-                    </td>
+                    <th className="px-4 py-3 whitespace-nowrap border-l border-slate-700">Catatan</th>
                   </tr>
-                )
-              })}
-            </tbody>
-            {activeProgram.target_type !== 'qualitative' && (
-               <tfoot className="bg-slate-50 border-t-2 border-slate-200 font-bold text-slate-800">
-                 <tr>
-                   <td className="px-4 py-3 sticky left-0 z-10 bg-slate-50 border-r border-slate-200">TOTAL</td>
-                   <td className="px-4 py-3 text-right text-indigo-700 border-l border-slate-200">
-                     {formatRupiah(pastInputs?.filter(i => i.program_id === activeProgram.id).reduce((sum, i) => sum + Number(i.achievement_rp || 0), 0) || 0)}
-                   </td>
-                   <td className="px-4 py-3 text-right text-indigo-700 border-l border-slate-200">
-                     {(pastInputs?.filter(i => i.program_id === activeProgram.id).reduce((sum, i) => sum + Number(i.achievement_user || 0), 0) || 0).toLocaleString()} user
-                   </td>
-                   <td className="px-4 py-3 border-l border-slate-200"></td>
-                 </tr>
-               </tfoot>
-            )}
-          </table>
-          <div className="p-3 bg-slate-50 text-xs text-slate-500 border-t border-slate-200 text-center">
-            Untuk mengubah nilai pada program standar ini, gunakan mode <strong>Semua Program</strong>.
-          </div>
-        </div>
-      ) : (
-        <div className="relative overflow-x-auto rounded-xl border border-slate-200 shadow-sm bg-white">
-          <table className="w-full text-sm text-left">
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {daysArray.map(day => {
+                    const dateStr = buildDateString(day)
+                    const input = pastInputs?.find(i => i.program_id === activeProgram.id && i.date === dateStr)
+                    const isFuture = dateStr > todayStr
+                    
+                    return (
+                      <tr key={day} className={cn("hover:bg-indigo-50/50 transition-colors", isFuture && "bg-slate-50")}>
+                        <td className="px-4 py-2 sticky left-0 z-10 bg-white border-r border-slate-100 font-semibold text-slate-700 whitespace-nowrap w-24">
+                          {day} {new Date(activePeriod?.year || 2024, (activePeriod?.month || 1) - 1, 1).toLocaleString('id-ID', { month: 'short' })}
+                        </td>
+                        {activeProgram.target_type !== 'qualitative' ? (
+                          <>
+                            <td className="px-4 py-2 text-right border-l border-slate-100">
+                              <span className={cn(
+                                "font-medium", 
+                                (input?.achievement_rp || 0) >= dailyTargetRp && dailyTargetRp > 0 ? "text-emerald-600 font-bold" : 
+                                (input?.achievement_rp || 0) > 0 ? "text-indigo-600" : "text-slate-400"
+                              )}>
+                                {formatRupiah(input?.achievement_rp || 0)}
+                              </span>
+                            </td>
+                            <td className="px-4 py-2 text-right border-l border-slate-100">
+                              <span className={cn(
+                                "font-medium", 
+                                (input?.achievement_user || 0) >= dailyTargetUser && dailyTargetUser > 0 ? "text-emerald-600 font-bold" :
+                                (input?.achievement_user || 0) > 0 ? "text-indigo-600" : "text-slate-400"
+                              )}>
+                                {(input?.achievement_user || 0).toLocaleString()} user
+                              </span>
+                            </td>
+                          </>
+                        ) : (
+                          <td className="px-4 py-2 border-l border-slate-100">
+                            {input?.qualitative_status === 'completed' && <span className="bg-emerald-100 text-emerald-800 text-xs font-bold px-2 py-0.5 rounded">Selesai</span>}
+                            {input?.qualitative_status === 'in_progress' && <span className="bg-amber-100 text-amber-800 text-xs font-bold px-2 py-0.5 rounded">Dalam Proses</span>}
+                            {(!input || input?.qualitative_status === 'not_started') && <span className="text-slate-400 text-xs italic">-</span>}
+                          </td>
+                        )}
+                        <td className="px-4 py-2 border-l border-slate-100 text-slate-600 max-w-sm truncate" title={input?.notes || ''}>
+                          {input?.notes || <span className="italic text-slate-400 opacity-50">-</span>}
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+                {activeProgram.target_type !== 'qualitative' && (
+                  <tfoot className="bg-slate-50 border-t-2 border-slate-200 font-bold text-slate-800">
+                    <tr>
+                      <td className="px-4 py-3 sticky left-0 z-10 bg-slate-50 border-r border-slate-200">TOTAL</td>
+                      <td className="px-4 py-3 text-right text-indigo-700 border-l border-slate-200">
+                        {formatRupiah(pastInputs?.filter(i => i.program_id === activeProgram.id).reduce((sum, i) => sum + Number(i.achievement_rp || 0), 0) || 0)}
+                      </td>
+                      <td className="px-4 py-3 text-right text-indigo-700 border-l border-slate-200">
+                        {(pastInputs?.filter(i => i.program_id === activeProgram.id).reduce((sum, i) => sum + Number(i.achievement_user || 0), 0) || 0).toLocaleString()} user
+                      </td>
+                      <td className="px-4 py-3 border-l border-slate-200"></td>
+                    </tr>
+                  </tfoot>
+                )}
+              </table>
+              <div className="p-3 bg-slate-50 text-xs text-slate-500 border-t border-slate-200 text-center">
+                Untuk mengubah nilai pada program standar ini, gunakan mode <strong>Semua Program</strong>.
+              </div>
+            </div>
+          )
+        }
+
+        return (
+          <div className="relative overflow-x-auto rounded-xl border border-slate-200 shadow-sm bg-white">
+            <table className="w-full text-sm text-left">
             <thead className="bg-slate-800 text-slate-100 font-bold">
                {/* Group Level Header */}
                <tr>
@@ -702,7 +713,8 @@ export function PivotTableClient({
             </tfoot>
           </table>
         </div>
-      )}
+      )
+    })()}
     </div>
   )
 }

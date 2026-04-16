@@ -19,7 +19,8 @@ export interface ProgramHealthResult {
   status: 'KRITIS' | 'PERLU PERHATIAN' | 'CUKUP' | 'BAIK' | 'EXCELLENT'
   totalTargetMetrics: number
   isQualitativeOnly: boolean
-  calculatedMetrics?: Record<string, number | null> // Added to store all evaluated metrics
+  calculatedMetrics?: Record<string, number | null>
+  effectiveTargets?: Record<string, number> // Stores final targets used for display
 }
 
 export function getHealthStatus(score: number): ProgramHealthResult['status'] {
@@ -48,19 +49,25 @@ export function calculateProgramHealth(
   // 1. Calculate All Metrics using evaluateAllMetrics pipeline
   const manualValues: Record<string, number | null> = {}
   
-  // Aggregate manual values (SUM)
+  // Aggregate manual values (SUM) from daily_metric_values table
   metrics.filter(m => m.input_type === 'manual').forEach(m => {
     const vals = progMetricValues.filter(mv => mv.metric_definition_id === m.id)
-    manualValues[m.metric_key] = vals.reduce((sum, v) => sum + (v.value || 0), 0)
+    // Only set if we actually have meaningful values for this metric in this period
+    if (vals.length > 0 && vals.some(v => v.value !== null)) {
+      manualValues[m.metric_key] = vals.reduce((sum, v) => sum + (v.value || 0), 0)
+    }
   })
 
-  // Fallback to legacy Rp/User if manual metrics are missing
+  // Fallback to legacy daily_inputs (achievement_rp/user) if no data found in custom metrics
+  // We prioritize the new system (daily_metric_values) if any non-null data exists there for these keys
   const inputs = dailyInputsByProgram.get(program.id) || []
-  if (!('revenue' in manualValues)) {
-    manualValues['revenue'] = inputs.reduce((sum, i) => sum + Number(i.achievement_rp || 0), 0)
+  if (manualValues['revenue'] === undefined || manualValues['revenue'] === null || manualValues['revenue'] === 0) {
+    const legacySum = inputs.reduce((sum, i) => sum + Number(i.achievement_rp || 0), 0)
+    if (legacySum > 0) manualValues['revenue'] = legacySum
   }
-  if (!('user_count' in manualValues)) {
-    manualValues['user_count'] = inputs.reduce((sum, i) => sum + Number(i.achievement_user || 0), 0)
+  if (manualValues['user_count'] === undefined || manualValues['user_count'] === null || manualValues['user_count'] === 0) {
+    const legacySum = inputs.reduce((sum, i) => sum + Number(i.achievement_user || 0), 0)
+    if (legacySum > 0) manualValues['user_count'] = legacySum
   }
 
   // Pre-load baseline and target metrics for formulas
@@ -91,6 +98,7 @@ export function calculateProgramHealth(
     if (primaryMetrics.length > 0) {
       let sumPercentage = 0
       let validMetrics = 0
+      const effectiveTargets: Record<string, number> = {}
 
       primaryMetrics.forEach(m => {
         const sumActual = evaluatedMetrics[m.metric_key] || 0
@@ -111,6 +119,8 @@ export function calculateProgramHealth(
                                 manualDaily > 0 ? (manualDaily * daysInSelection) : 
                                 (monthlyTarget * prorationFactor)
 
+        effectiveTargets[m.metric_key] = effectiveTarget
+
         if (effectiveTarget > 0) {
           let pct = (sumActual / effectiveTarget) * 100
           if (m.target_direction === 'lower_is_better') {
@@ -128,7 +138,8 @@ export function calculateProgramHealth(
         status: getHealthStatus(healthScore),
         totalTargetMetrics: validMetrics,
         isQualitativeOnly: false,
-        calculatedMetrics: evaluatedMetrics
+        calculatedMetrics: evaluatedMetrics,
+        effectiveTargets
       }
     }
   }
@@ -186,7 +197,11 @@ export function calculateProgramHealth(
     status: getHealthStatus(healthScore),
     totalTargetMetrics: totalValidMetrics,
     isQualitativeOnly: false,
-    calculatedMetrics: evaluatedMetrics
+    calculatedMetrics: evaluatedMetrics,
+    effectiveTargets: {
+      revenue: effectiveRp,
+      user_count: effectiveUser
+    }
   }
 }
 
@@ -247,66 +262,84 @@ export function aggregateByMetricGroup(
     const progMetricValues = metricValuesByProgram.get(prog.id) || []
     const progInputs = dailyInputsByProgram.get(prog.id) || []
     
-    const hasPrimaryRevenue = definitions.some(m => m.metric_group === 'revenue' && m.is_primary)
-    const hasPrimaryAcquisition = definitions.some(m => m.metric_group === 'user_acquisition' && m.is_primary)
+    // Group definitions by category using synonyms and metric_group
+    const getProgValue = (group: string, keys: string[]) => {
+      let customSum = 0
+      let customTarget = 0
+      let foundCustom = false
 
-    // 1. Process Custom Metrics
-    definitions.forEach(m => {
-      const g = m.metric_group
-      if (g && (g === 'revenue' || g === 'user_acquisition' || g === 'ad_spend' || g === 'leads')) {
-        existingGroups.add(g)
-
-        const vals = progMetricValues.filter(mv => mv.metric_definition_id === m.id)
-        const sumActual = vals.reduce((sum, v) => sum + (v.value || 0), 0)
-        const sumCustomTarget = vals.reduce((sum, v) => sum + (v.target_value || 0), 0)
-        
-        groupRawTotals[g].actual += sumActual
-
-        let monthlyTarget = m.monthly_target || 0
-        if (monthlyTarget === 0) {
-          if (m.data_type === 'currency') monthlyTarget = prog.monthly_target_rp || 0
-          else if (m.data_type === 'integer') monthlyTarget = prog.monthly_target_user || 0
+      definitions.forEach(m => {
+        const k = m.metric_key?.toLowerCase()
+        const match = m.metric_group === group || keys.includes(k)
+        if (match) {
+          const vals = progMetricValues.filter(mv => mv.metric_definition_id === m.id)
+          if (vals.length > 0) {
+            foundCustom = true
+            customSum += vals.reduce((s, v) => s + (Number(v.value) || 0), 0)
+            customTarget += vals.reduce((s, v) => s + (Number(v.target_value) || 0), 0)
+          }
         }
-
-        const daysInSelection = prorationFactor * workingDaysInPeriod
-        const manualDaily = g === 'revenue' ? (prog.daily_target_rp || 0) : 
-                            g === 'user_acquisition' ? (prog.daily_target_user || 0) : 0
-
-        groupRawTotals[g].target += (sumCustomTarget > 0 ? sumCustomTarget : 
-                                    manualDaily > 0 ? (manualDaily * daysInSelection) : 
-                                    (monthlyTarget * prorationFactor))
-        
-        groupRawTotals[g].totalTarget += (sumCustomTarget > 0 ? sumCustomTarget : monthlyTarget)
-      } else if (g === 'conversion' || g === 'efficiency') {
-        existingGroups.add(g)
-      }
-    })
-
-    // 2. Fallback to Legacy
-    const daysInSelection = prorationFactor * workingDaysInPeriod
-
-    if (!hasPrimaryRevenue && (prog.monthly_target_rp || 0) > 0) {
-      existingGroups.add('revenue')
-      const sumActual = progInputs.reduce((sum, i) => sum + (Number(i.achievement_rp) || 0), 0)
-      const monthlyTarget = prog.monthly_target_rp || 0
-      const manualDaily = prog.daily_target_rp || 0
+      })
       
-      groupRawTotals.revenue.actual += sumActual
-      groupRawTotals.revenue.target += manualDaily > 0 ? (manualDaily * daysInSelection) : (monthlyTarget * prorationFactor)
-      groupRawTotals.revenue.totalTarget += monthlyTarget
+      return { actual: customSum, target: customTarget, found: foundCustom }
     }
 
-    if (!hasPrimaryAcquisition && (prog.monthly_target_user || 0) > 0) {
-      existingGroups.add('user_acquisition')
-      const sumActual = progInputs.reduce((sum, i) => sum + (Number(i.achievement_user) || 0), 0)
-      const monthlyTarget = prog.monthly_target_user || 0
-      const manualDaily = prog.daily_target_user || 0
+    const rev = getProgValue('revenue', ['revenue', 'omzet', 'pemasukan', 'revenue_from_paid_traffic'])
+    const acq = getProgValue('user_acquisition', ['user_count', 'closing', 'leads_converted', 'pembelian'])
+    const spd = getProgValue('ad_spend', ['ads_spent', 'ad_spend', 'budget_iklan', 'spent'])
+    const lds = getProgValue('leads', ['leads', 'lead_masuk', 'prospek', 'leads_count'])
 
-      groupRawTotals.user_acquisition.actual += sumActual
-      groupRawTotals.user_acquisition.target += manualDaily > 0 ? (manualDaily * daysInSelection) : (monthlyTarget * prorationFactor)
-      groupRawTotals.user_acquisition.totalTarget += monthlyTarget
+    // Update global aggregates
+    const processGroup = (g: string, data: { actual: number, target: number, found: boolean }, legacyActual: number, legacyTarget: number, legacyDaily: number) => {
+      const daysInSelection = prorationFactor * workingDaysInPeriod
+      
+      // We use custom if found ANY data there, even if 0 (prioritize new system)
+      // Otherwise fallback to legacy
+      let actual = 0
+      let target = 0
+      let totalTarget = 0
+
+      if (data.found) {
+        existingGroups.add(g)
+        actual = data.actual
+        // If custom target is 0, use legacy target as fallback for the target value
+        target = data.target > 0 ? data.target : 
+                 legacyDaily > 0 ? (legacyDaily * daysInSelection) : (legacyTarget * prorationFactor)
+        totalTarget = data.target > 0 ? data.target : legacyTarget
+      } else if (legacyActual > 0 || legacyTarget > 0) {
+        existingGroups.add(g)
+        actual = legacyActual
+        target = legacyDaily > 0 ? (legacyDaily * daysInSelection) : (legacyTarget * prorationFactor)
+        totalTarget = legacyTarget
+      }
+
+      if (existingGroups.has(g)) {
+        groupRawTotals[g].actual += actual
+        groupRawTotals[g].target += target
+        groupRawTotals[g].totalTarget += totalTarget
+      }
     }
+
+    processGroup('revenue', rev, progInputs.reduce((sum, i) => sum + (Number(i.achievement_rp) || 0), 0), prog.monthly_target_rp || 0, prog.daily_target_rp || 0)
+    processGroup('user_acquisition', acq, progInputs.reduce((sum, i) => sum + (Number(i.achievement_user) || 0), 0), prog.monthly_target_user || 0, prog.daily_target_user || 0)
+    
+    // Ads groups usually don't have legacy fallbacks
+    if (spd.found) {
+      existingGroups.add('ad_spend')
+      groupRawTotals.ad_spend.actual += spd.actual
+      groupRawTotals.ad_spend.target += spd.target
+      groupRawTotals.ad_spend.totalTarget += spd.target
+    }
+    if (lds.found) {
+      existingGroups.add('leads')
+      groupRawTotals.leads.actual += lds.actual
+    }
+
+    // Mark as existing for computed metrics
+    if (definitions.some(m => m.metric_group === 'conversion')) existingGroups.add('conversion')
+    if (definitions.some(m => m.metric_group === 'efficiency')) existingGroups.add('efficiency')
   })
+
 
   const result: Record<string, { actual: number, target: number, totalTarget: number, isComputed: boolean }> = {}
 
@@ -353,8 +386,16 @@ export function getPerformanceGrade(score: number): { label: string, color: stri
  * Detects if a program is an "Ads Program"
  */
 export function isAdsProgram(metricDefinitions: MetricDefinition[]): boolean {
+  if (!metricDefinitions || metricDefinitions.length === 0) return false
+  
   return metricDefinitions.some(
-    m => m.metric_group === 'ad_spend' || m.metric_group === 'leads'
+    m => 
+      m.metric_group === 'ad_spend' || 
+      m.metric_group === 'leads' ||
+      m.metric_key === 'ads_spent' ||
+      m.metric_key === 'leads' ||
+      m.metric_key === 'roas' ||
+      m.metric_key === 'cpp'
   )
 }
 
@@ -388,13 +429,16 @@ export function aggregateAdsMetrics(
       const vals = progMetricValues.filter(mv => mv.metric_definition_id === m.id)
       const sum = vals.reduce((acc, v) => acc + (Number(v.value) || 0), 0)
 
-      if (m.metric_group === 'ad_spend') {
+      const g = m.metric_group
+      const k = m.metric_key?.toLowerCase()
+
+      if (g === 'ad_spend' || k === 'ads_spent' || k === 'ad_spend' || k === 'budget_iklan' || k === 'spent') {
         totalAdsSpent += sum
-      } else if (m.metric_group === 'revenue') {
+      } else if (g === 'revenue' || k === 'revenue' || k === 'omzet' || k === 'pemasukan' || k === 'revenue_from_paid_traffic') {
         totalRevenue += sum
-      } else if (m.metric_group === 'user_acquisition' && m.is_primary) {
+      } else if (g === 'user_acquisition' || k === 'user_count' || k === 'closing' || k === 'leads_converted' || k === 'pembelian') {
         totalGoals += sum
-      } else if (m.metric_group === 'leads') {
+      } else if (g === 'leads' || k === 'leads' || k === 'lead_masuk' || k === 'prospek' || k === 'leads_count') {
         totalLeads += sum
       }
     })
@@ -441,11 +485,27 @@ export function buildAdsDailySeries(
       const def = defs.find(m => m.id === mv.metric_definition_id)
       if (!def) return
 
-      if (def.metric_key === metricX) entry.xSum += val
-      if (def.metric_group === 'revenue') entry.revSum += val
-      if (def.metric_group === 'ad_spend') entry.spendSum += val
-      if (def.metric_group === 'user_acquisition' && def.is_primary) entry.goalsSum += val
-      if (def.metric_group === 'leads') entry.leadsSum += val
+      const k = def.metric_key?.toLowerCase()
+      const g = def.metric_group
+
+      // Match logic with aggregateAdsMetrics synonyms
+      const isSpend = g === 'ad_spend' || k === 'ads_spent' || k === 'ad_spend' || k === 'budget_iklan' || k === 'spent'
+      const isRevenue = g === 'revenue' || k === 'revenue' || k === 'omzet' || k === 'pemasukan' || k === 'revenue_from_paid_traffic'
+      const isGoal = g === 'user_acquisition' || k === 'user_count' || k === 'closing' || k === 'leads_converted' || k === 'pembelian'
+      const isLead = g === 'leads' || k === 'leads' || k === 'lead_masuk' || k === 'prospek' || k === 'leads_count'
+
+      // Check for exact key match first, then fall back to synonyms if metricX is a standard key
+      const isXMatch = def.metric_key === metricX || 
+                       (metricX === 'ads_spent' && isSpend) ||
+                       (metricX === 'revenue' && isRevenue) ||
+                       (metricX === 'user_count' && isGoal) ||
+                       (metricX === 'leads' && isLead)
+
+      if (isXMatch) entry.xSum += val
+      if (isRevenue) entry.revSum += val
+      if (isSpend) entry.spendSum += val
+      if (isGoal) entry.goalsSum += val
+      if (isLead) entry.leadsSum += val
 
       byDate.set(d, entry)
     })
@@ -675,26 +735,29 @@ export function buildTargetTrendSeries(
     let dailyActualUser = 0
 
     programs.forEach(p => {
-      const metrics = p.program_metric_definitions || []
-      const revMetricId = metrics.find(m => m.metric_key === 'revenue')?.id
-      const userMetricId = metrics.find(m => m.metric_key === 'user_count')?.id
-
-      // 1. Check metric values (new system)
+      const defs = p.program_metric_definitions || []
       const progMetrics = metricsByProgram.get(p.id) || []
       const dayMetrics = progMetrics.filter(mv => mv.date <= d)
-      
-      const revVal = revMetricId ? dayMetrics.filter(mv => mv.metric_definition_id === revMetricId).reduce((s, v) => s + (v.value || 0), 0) : 0
-      const userVal = userMetricId ? dayMetrics.filter(mv => mv.metric_definition_id === userMetricId).reduce((s, v) => s + (v.value || 0), 0) : 0
 
-      // 2. Fallback to daily inputs (legacy system)
+      // Identify metric IDs using synonyms or group
+      const findIds = (group: string, keys: string[]) => 
+        defs.filter(m => m.metric_group === group || keys.includes(m.metric_key?.toLowerCase())).map(m => m.id)
+
+      const revIds = findIds('revenue', ['revenue', 'omzet', 'pemasukan', 'revenue_from_paid_traffic'])
+      const acqIds = findIds('user_acquisition', ['user_count', 'closing', 'leads_converted', 'pembelian'])
+
+      const revVal = dayMetrics.filter(mv => revIds.includes(mv.metric_definition_id)).reduce((s, v) => s + (v.value || 0), 0)
+      const userVal = dayMetrics.filter(mv => acqIds.includes(mv.metric_definition_id)).reduce((s, v) => s + (v.value || 0), 0)
+
+      // Fallback to daily inputs (legacy system)
       const progInputs = inputsByProgram.get(p.id) || []
       const dayInputs = progInputs.filter(di => di.date <= d)
 
       const legacyRev = dayInputs.reduce((s, i) => s + Number(i.achievement_rp || 0), 0)
       const legacyUser = dayInputs.reduce((s, i) => s + Number(i.achievement_user || 0), 0)
 
-      dailyActualRevenue += (revVal || legacyRev || 0)
-      dailyActualUser += (userVal || legacyUser || 0)
+      dailyActualRevenue += (revVal || (revIds.length === 0 ? legacyRev : 0))
+      dailyActualUser += (userVal || (acqIds.length === 0 ? legacyUser : 0))
     })
 
     return {
