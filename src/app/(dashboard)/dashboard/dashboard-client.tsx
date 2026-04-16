@@ -90,11 +90,11 @@ function KpiCard({ icon: Icon, label, value, sub, accentColor, comparison }: {
 
       <div>
         <p className="text-[10px] font-bold tracking-[0.05em] text-[#6B7280] uppercase mb-2 truncate" title={label}>{label}</p>
-        <div className="flex items-baseline gap-2 w-full flex-wrap">
-          <span className="text-2xl lg:text-[28px] font-semibold text-[#111827] leading-tight" title={String(value)}>
+        <div className="flex items-baseline gap-2 w-full flex-wrap min-w-0">
+          <span className="text-xl sm:text-2xl lg:text-[28px] font-semibold text-[#111827] leading-tight tabular-nums break-words" title={String(value)}>
             {value}
           </span>
-          {sub && <span className="text-[12px] text-[#6B7280] font-normal truncate">{sub}</span>}
+          {sub && <span className="text-[12px] text-[#6B7280] font-normal truncate min-w-0">{sub}</span>}
         </div>
       </div>
 
@@ -196,7 +196,7 @@ function ProgramCard({ program, health, profiles }: {
                 <div key={m.id} className="space-y-1">
                   <div className="flex justify-between items-center text-[11px]">
                     <span className="font-medium text-[#6B7280] uppercase tracking-wider">{m.label}</span>
-                    <span className="font-semibold text-[#111827]">
+                    <span className="font-semibold text-[#111827] text-right ml-1 break-all">
                       {formatMetricValue(actual, m.data_type, m.unit_label)}
                       <span className="text-[#6B7280] font-normal ml-1">/ {formatMetricValue(target, m.data_type, m.unit_label)}</span>
                     </span>
@@ -235,9 +235,9 @@ function ProgramCard({ program, health, profiles }: {
               const val = evaluatedMetrics[m.metric_key]
               if (val === undefined || val === null) return null
               return (
-                <div key={m.id} className="bg-slate-50 px-2.5 py-1 rounded-lg border border-[#E5E7EB] flex items-baseline gap-1.5 transition-colors hover:bg-white min-w-0">
-                  <span className="text-[10px] font-medium text-[#6B7280] truncate">{m.label}:</span>
-                  <span className="text-[11px] font-semibold text-[#111827] whitespace-nowrap">
+                <div key={m.id} className="bg-slate-50 px-2.5 py-1 rounded-lg border border-[#E5E7EB] flex items-baseline gap-1.5 transition-colors hover:bg-white min-w-0 flex-1">
+                  <span className="text-[10px] font-medium text-[#6B7280] truncate shrink-0">{m.label}:</span>
+                  <span className="text-[11px] font-semibold text-[#111827] break-all">
                     {formatMetricValue(val, m.data_type, m.unit_label)}
                   </span>
                 </div>

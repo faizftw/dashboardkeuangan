@@ -106,7 +106,9 @@ export function RadialProgressCard({
                         <tspan
                           x={viewBox.cx}
                           y={viewBox.cy}
-                          className="fill-slate-800 text-3xl font-black"
+                          textAnchor="middle"
+                          dominantBaseline="middle"
+                          className="fill-slate-800 text-2xl sm:text-3xl font-black"
                         >
                           {percentage.toFixed(0)}%
                         </tspan>
@@ -127,8 +129,8 @@ export function RadialProgressCard({
         </ChartContainer>
       </CardContent>
       <div className="px-5 pb-5 pt-0 text-center">
-        <div className="flex flex-col items-center gap-0.5">
-          <span className="text-sm font-black text-slate-700">{displayValue}</span>
+        <div className="flex flex-col items-center gap-0.5 min-w-0">
+          <span className="text-xs sm:text-sm font-black text-slate-700 break-all">{displayValue}</span>
           <span className="text-[10px] font-bold text-slate-400 uppercase tracking-tighter">
             Target: {displayTarget} {unitLabel}
           </span>
