@@ -1,19 +1,20 @@
 'use client'
 
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { ProgramWithRelations } from './actions'
 import { calculateProgramHealth } from '@/lib/dashboard-calculator'
-import { formatRupiah, cn } from '@/lib/utils'
+import { formatRupiah, cn, getPreviousPeriodLabel } from '@/lib/utils'
 import { formatMetricValue } from '@/lib/formula-evaluator'
 import {
-  LineChart, Line, XAxis, YAxis, CartesianGrid,
-  Tooltip, ResponsiveContainer, BarChart, Bar, Cell
+  AreaChart, Area, XAxis, YAxis, CartesianGrid,
+  Tooltip, ResponsiveContainer, BarChart, Bar, Cell,
+  ComposedChart, Legend, LineChart, Line
 } from 'recharts'
 import {
   HeartPulse, Layers, Target, CheckSquare,
   Search, Info, ArrowUpRight, ArrowDownRight
 } from 'lucide-react'
-import { getPreviousPeriodLabel } from '@/lib/utils'
 
 import { DashboardSummary } from '@/lib/dashboard-service'
 
@@ -30,12 +31,12 @@ interface OverviewClientProps {
 type TabType = 'overview' | 'target' | 'ads'
 
 // ── Status helpers ───────────────────────────────────────────────────────────
-function getStatusLabelAndColor(score: number): { label: string; dot: string; badge: string } {
-  if (score >= 100) return { label: 'Excellent', dot: 'bg-blue-500',   badge: 'text-blue-700 bg-blue-50 border-blue-200' }
-  if (score >= 80)  return { label: 'Baik',      dot: 'bg-emerald-500', badge: 'text-emerald-700 bg-emerald-50 border-emerald-200' }
-  if (score >= 60)  return { label: 'Cukup',     dot: 'bg-amber-400',   badge: 'text-amber-700 bg-amber-50 border-amber-200' }
-  if (score >= 40)  return { label: 'Perlu Perhatian', dot: 'bg-orange-500', badge: 'text-orange-700 bg-orange-50 border-orange-200' }
-  return { label: 'Kritis', dot: 'bg-red-500', badge: 'text-red-700 bg-red-50 border-red-200' }
+function getStatusLabelAndColor(score: number): { label: string; dot: string; badge: string, accent: string } {
+  if (score >= 100) return { label: 'Excellent', dot: 'bg-blue-500',   badge: 'text-blue-700 bg-blue-50 border-blue-200',   accent: '#FCD34D' } // Gold/Excellent
+  if (score >= 80)  return { label: 'Baik',      dot: 'bg-emerald-500', badge: 'text-emerald-700 bg-emerald-50 border-emerald-200', accent: '#639922' } // Green
+  if (score >= 60)  return { label: 'Cukup',     dot: 'bg-amber-400',   badge: 'text-amber-700 bg-amber-50 border-amber-200',   accent: '#EAB308' } // Amber
+  if (score >= 40)  return { label: 'Perlu perhatian', dot: 'bg-orange-500', badge: 'text-orange-700 bg-orange-50 border-orange-200', accent: '#378ADD' } // Blue/Info
+  return { label: 'Kritis', dot: 'bg-red-500', badge: 'text-red-700 bg-red-50 border-red-200', accent: '#E24B4A' } // Red
 }
 
 function getProgressColor(score: number) {
@@ -47,59 +48,57 @@ function getProgressColor(score: number) {
 }
 
 function getBannerInfo(score: number) {
-  if (score < 40)  return { text: 'TARGET JAUH TERTINGGAL — FOKUS DAN KEJAR SEKARANG! 💪', bg: 'from-red-600 to-rose-700' }
-  if (score < 60)  return { text: 'MASIH ADA WAKTU — TINGKATKAN INTENSITAS! 🔥', bg: 'from-amber-500 to-orange-600' }
-  if (score < 80)  return { text: 'PROGRES BAGUS — JANGAN KENDUR! 🎯', bg: 'from-indigo-500 to-indigo-600' }
-  if (score < 100) return { text: 'HAMPIR SAMPAI — SATU LANGKAH LAGI! 🚀', bg: 'from-indigo-600 to-violet-700' }
-  return { text: 'TARGET TERCAPAI — LUAR BIASA! 🏆', bg: 'from-emerald-500 to-teal-600' }
+  if (score < 40)  return { text: 'Target jauh tertinggal — fokus dan kejar sekarang! 💪', bg: 'bg-[#FCEBEB]', border: 'border-[#F7C1C1]', textCol: 'text-[#791F1F]' }
+  if (score < 60)  return { text: 'Masih ada waktu — tingkatkan intensitas! 🔥', bg: 'bg-orange-50', border: 'border-orange-200', textCol: 'text-orange-800' }
+  if (score < 80)  return { text: 'Progres bagus — jangan kendur! 🎯', bg: 'bg-blue-50', border: 'border-blue-200', textCol: 'text-blue-800' }
+  if (score < 100) return { text: 'Hampir sampai — satu langkah lagi! 🚀', bg: 'bg-indigo-50', border: 'border-[#EEEDFE]', textCol: 'text-[#534AB7]' }
+  return { text: 'Target tercapai — luar biasa! 🏆', bg: 'bg-emerald-50', border: 'border-emerald-200', textCol: 'text-emerald-800' }
 }
 
 // ── KPI Card ─────────────────────────────────────────────────────────────────
-function KpiCard({ icon: Icon, label, value, sub, iconClass, comparison }: {
+function KpiCard({ icon: Icon, label, value, sub, accentColor, comparison }: {
   icon: React.ElementType
   label: string
   value: string | number
   sub?: string
-  iconClass?: string
+  accentColor?: string
   comparison?: { value: number; label: string }
 }) {
   return (
-    <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm flex flex-col justify-between relative transition-all hover:shadow-md hover:z-20">
-      <div className="absolute inset-0 overflow-hidden pointer-events-none rounded-2xl">
-        <div className="absolute top-0 right-0 p-4 opacity-5">
-          <Icon className="w-20 h-20" />
-        </div>
+    <div className="bg-white p-4 rounded-xl border border-[#E5E7EB] flex flex-col justify-between relative overflow-hidden">
+      {/* 3px Vertical Accent */}
+      {accentColor && (
+        <div 
+          className="absolute left-0 top-0 bottom-0 w-[3px]" 
+          style={{ backgroundColor: accentColor }}
+        />
+      )}
+      
+      <div className="absolute top-0 right-0 p-3 opacity-5 pointer-events-none">
+        <Icon className="w-16 h-16" />
       </div>
+
       <div>
-        <p className="text-xs font-black tracking-[0.15em] text-slate-400 uppercase mb-3 truncate" title={label}>{label}</p>
-        <div className="flex items-end gap-2 w-full flex-wrap" style={{ containerType: 'inline-size' }}>
-          <span className={cn(
-            "font-black text-slate-800 leading-none whitespace-nowrap drop-shadow-sm",
-            "text-[min(2.25rem,11cqw)] sm:text-[min(2.5rem,11cqw)] lg:text-[min(3rem,11cqw)]",
-            iconClass
-          )} title={String(value)}>
+        <p className="text-[10px] font-bold tracking-[0.05em] text-[#6B7280] uppercase mb-2 truncate" title={label}>{label}</p>
+        <div className="flex items-baseline gap-2 w-full flex-wrap">
+          <span className="text-2xl lg:text-[28px] font-semibold text-[#111827] leading-tight" title={String(value)}>
             {value}
           </span>
-          {sub && <span className="text-[10px] sm:text-xs text-slate-400 font-bold mb-1 whitespace-nowrap shrink-0">{sub}</span>}
+          {sub && <span className="text-[12px] text-[#6B7280] font-normal truncate">{sub}</span>}
         </div>
       </div>
+
       {comparison && (
-        <div className="flex items-center gap-1.5 mt-2 pt-2 border-t border-slate-100">
-          <div className="group/tooltip relative flex items-center gap-1.5">
-            <span className={cn(
-              "text-xs font-bold px-1 py-0.5 rounded flex items-center gap-0.5",
-              comparison.value > 0 ? "bg-emerald-100 text-emerald-700" : 
-              comparison.value < 0 ? "bg-rose-100 text-rose-700" : "bg-slate-100 text-slate-500"
-            )}>
-              {comparison.value > 0 ? <ArrowUpRight className="h-3 w-3" /> : comparison.value < 0 ? <ArrowDownRight className="h-3 w-3" /> : null}
-              {Math.abs(comparison.value).toFixed(1)}%
-            </span>
-            <Info className="h-3.5 w-3.5 text-slate-300 hover:text-slate-500 cursor-help transition-colors" />
-            <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2.5 py-1.5 bg-slate-900 text-white text-[10px] font-bold rounded-lg opacity-0 group-hover/tooltip:opacity-100 transition-all pointer-events-none whitespace-nowrap z-50 shadow-xl border border-white/10">
-              {comparison.label}
-              <div className="absolute top-full left-1/2 -translate-x-1/2 border-8 border-transparent border-t-slate-900" />
-            </div>
-          </div>
+        <div className="flex items-center gap-1.5 mt-3 pt-3 border-t border-[#E5E7EB]">
+          <span className={cn(
+            "text-[12px] font-medium flex items-center gap-0.5",
+            comparison.value > 0 ? "text-emerald-600" : 
+            comparison.value < 0 ? "text-rose-600" : "text-slate-500"
+          )}>
+            {comparison.value > 0 ? <ArrowUpRight className="h-3 w-3" /> : comparison.value < 0 ? <ArrowDownRight className="h-3 w-3" /> : null}
+            {Math.abs(comparison.value).toFixed(1)}%
+          </span>
+          <span className="text-[12px] text-slate-400">{comparison.label}</span>
         </div>
       )}
     </div>
@@ -112,7 +111,7 @@ function ProgramCard({ program, health, profiles }: {
   health: ReturnType<typeof calculateProgramHealth>
   profiles: { id: string; name: string }[]
 }) {
-  const { label, dot, badge } = getStatusLabelAndColor(health.healthScore)
+  const { label, badge, accent } = getStatusLabelAndColor(health.healthScore)
   const isQualitative = health.isQualitativeOnly
   const evaluatedMetrics = health.calculatedMetrics || {}
 
@@ -126,73 +125,73 @@ function ProgramCard({ program, health, profiles }: {
   const pics = (program.program_pics || []).map(pic => profiles.find(pr => pr.id === pic.profile_id)).filter(Boolean)
 
   return (
-    <div className="bg-white rounded-2xl border border-slate-200 shadow-sm hover:shadow-xl hover:border-indigo-300 transition-all duration-300 overflow-hidden group flex flex-col">
-      {/* Top Banner Accent */}
-      <div className={cn("h-1.5 w-full", dot)} />
+    <div className="bg-white rounded-xl border border-[#E5E7EB] transition-all duration-300 overflow-hidden group flex flex-col relative">
+      {/* Vertical Accent */}
+      <div className="absolute left-0 top-0 bottom-0 w-[4px]" style={{ backgroundColor: accent }} />
       
-      <div className="p-5 flex-1 flex flex-col gap-5">
+      <div className="p-4 flex-1 flex flex-col gap-4">
         {/* Header */}
-        <div className="flex items-start justify-between gap-4">
+        <div className="flex items-start justify-between gap-4 pl-1">
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 mb-1.5">
               {program.department && (
-                <span className="text-[10px] font-black uppercase tracking-widest px-2 py-0.5 bg-slate-100 text-slate-500 rounded-md">
+                <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 bg-slate-100 text-[#6B7280] rounded">
                   {program.department}
                 </span>
               )}
-              <span className={cn("text-[10px] font-black uppercase tracking-widest px-2 py-0.5 rounded-md border", badge)}>
+              <span className={cn("text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded border", badge)}>
                 {label}
               </span>
             </div>
-            <h3 className="font-extrabold text-slate-800 text-lg leading-tight group-hover:text-indigo-600 transition-colors line-clamp-2" title={program.name}>
+            <h3 className="font-semibold text-[#111827] text-base leading-tight group-hover:text-[#534AB7] transition-colors line-clamp-2" title={program.name}>
               {program.name}
             </h3>
           </div>
 
-          <div className="flex flex-col items-end shrink-0 bg-slate-50 px-3 py-2 rounded-xl border border-slate-100">
-            <span className="text-2xl font-black text-slate-800 leading-none">{Math.round(health.healthScore)}%</span>
-            <span className="text-[9px] font-bold text-slate-400 uppercase mt-1">Health</span>
+          <div className="flex flex-col items-end shrink-0 bg-slate-50 px-3 py-1.5 rounded-lg border border-[#E5E7EB]">
+            <span className="text-xl font-semibold text-[#111827] leading-none">{Math.round(health.healthScore)}%</span>
+            <span className="text-[9px] font-bold text-[#6B7280] uppercase mt-1">Health</span>
           </div>
         </div>
 
-        {/* PIC Avatars & Team */}
+        {/* PIC Avatars */}
         {pics.length > 0 && (
-          <div className="flex items-center gap-2">
-            <div className="flex -space-x-2">
+          <div className="flex items-center gap-2 pl-1">
+            <div className="flex -space-x-1.5">
               {pics.slice(0, 3).map((p) => (
-                <div key={p?.id} className="h-7 w-7 rounded-full bg-indigo-100 border-2 border-white flex items-center justify-center text-[10px] font-bold text-indigo-700 uppercase" title={p?.name}>
+                <div key={p?.id} className="h-6 w-6 rounded-full bg-[#EEEDFE] border-2 border-white flex items-center justify-center text-[9px] font-bold text-[#534AB7] uppercase" title={p?.name}>
                   {p?.name?.[0]}
                 </div>
               ))}
               {pics.length > 3 && (
-                <div className="h-7 w-7 rounded-full bg-slate-100 border-2 border-white flex items-center justify-center text-[10px] font-bold text-slate-500">
+                <div className="h-6 w-6 rounded-full bg-slate-100 border-2 border-white flex items-center justify-center text-[9px] font-bold text-slate-500">
                   +{pics.length - 3}
                 </div>
               )}
             </div>
-            <span className="text-[11px] font-medium text-slate-400 truncate">
+            <span className="text-[11px] font-medium text-[#6B7280] truncate">
               {pics.map(p => p?.name).join(', ')}
             </span>
           </div>
         )}
 
         {/* Progress Section */}
-        <div className="space-y-4">
+        <div className="space-y-3 pl-1">
           {primaryMetrics.length > 0 ? (
             primaryMetrics.map(m => {
               const actual = evaluatedMetrics[m.metric_key] || 0
               const target = m.monthly_target || 0
               const pct = target > 0 ? (actual / target) * 100 : 0
               return (
-                <div key={m.id} className="space-y-1.5">
+                <div key={m.id} className="space-y-1">
                   <div className="flex justify-between items-center text-[11px]">
-                    <span className="font-bold text-slate-500 uppercase tracking-wider">{m.label}</span>
-                    <span className="font-black text-slate-800">
+                    <span className="font-medium text-[#6B7280] uppercase tracking-wider">{m.label}</span>
+                    <span className="font-semibold text-[#111827]">
                       {formatMetricValue(actual, m.data_type, m.unit_label)}
-                      <span className="text-slate-400 font-medium ml-1">/ {formatMetricValue(target, m.data_type, m.unit_label)}</span>
+                      <span className="text-[#6B7280] font-normal ml-1">/ {formatMetricValue(target, m.data_type, m.unit_label)}</span>
                     </span>
                   </div>
-                  <div className="h-2.5 bg-slate-100 rounded-full overflow-hidden shadow-inner">
+                  <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
                     <div
                       className={cn("h-full rounded-full transition-all duration-1000", getProgressColor(pct))}
                       style={{ width: `${Math.min(pct, 100)}%` }}
@@ -202,12 +201,12 @@ function ProgramCard({ program, health, profiles }: {
               )
             })
           ) : isQualitative && milestones.length > 0 ? (
-            <div className="space-y-1.5">
+            <div className="space-y-1">
               <div className="flex justify-between items-center text-[11px]">
-                <span className="font-bold text-slate-500 uppercase tracking-wider">Project Progress</span>
-                <span className="font-black text-slate-800">{Math.round(health.healthScore)}%</span>
+                <span className="font-medium text-[#6B7280] uppercase tracking-wider">Project Progress</span>
+                <span className="font-semibold text-[#111827]">{Math.round(health.healthScore)}%</span>
               </div>
-              <div className="h-2.5 bg-slate-100 rounded-full overflow-hidden shadow-inner">
+              <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
                 <div
                   className={cn("h-full rounded-full transition-all duration-1000", getProgressColor(health.healthScore))}
                   style={{ width: `${Math.min(health.healthScore, 100)}%` }}
@@ -215,34 +214,27 @@ function ProgramCard({ program, health, profiles }: {
               </div>
             </div>
           ) : (
-            <div className="py-2 text-[11px] text-slate-400 font-medium italic">Tidak ada parameter target utama.</div>
+            <div className="py-1 text-[11px] text-[#6B7280] font-normal italic">Tidak ada parameter target utama.</div>
           )}
         </div>
 
         {/* Secondary Metrics Grid */}
         {secondaryMetrics.length > 0 ? (
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 pt-4 border-t border-slate-100">
-            {secondaryMetrics.slice(0, 6).map(m => {
+          <div className="flex flex-wrap gap-1.5 pt-3 border-t border-[#E5E7EB] pl-1">
+            {secondaryMetrics.slice(0, 5).map(m => {
               const val = evaluatedMetrics[m.metric_key]
               if (val === undefined || val === null) return null
               return (
-                <div key={m.id} className="bg-slate-50/80 p-2 rounded-xl border border-slate-100 flex flex-col gap-0.5 min-w-0" style={{ containerType: 'inline-size' }}>
-                  <span className="text-[9px] font-bold text-slate-400 uppercase truncate leading-none mb-1">{m.label}</span>
-                  <span className="text-[min(0.875rem,24cqw)] font-black text-slate-700 leading-tight whitespace-nowrap">
+                <div key={m.id} className="bg-slate-50 px-2.5 py-1 rounded-lg border border-[#E5E7EB] flex items-baseline gap-1.5 transition-colors hover:bg-white min-w-0">
+                  <span className="text-[10px] font-medium text-[#6B7280] truncate">{m.label}:</span>
+                  <span className="text-[11px] font-semibold text-[#111827] whitespace-nowrap">
                     {formatMetricValue(val, m.data_type, m.unit_label)}
                   </span>
                 </div>
               )
             })}
           </div>
-        ) : (
-          <div className="flex-1" /> // Spacer
-        )}
-      </div>
-
-      {/* Footer Sparkline Decoration (Dummy placeholder for aesthetic) */}
-      <div className="h-1 bg-slate-50 flex items-end">
-        <div className="w-full h-full bg-indigo-50/30 group-hover:bg-indigo-100/50 transition-colors" />
+        ) : null}
       </div>
     </div>
   )
@@ -320,35 +312,35 @@ export function OverviewClient({
   return (
     <div className="space-y-6 pb-24">
       {/* ── Tab Switcher ─────────────────────────────────────────── */}
-      <div className="flex items-center gap-1 p-1 bg-slate-100/80 backdrop-blur-sm border border-slate-200 rounded-2xl w-fit">
+      <div className="flex items-center gap-1 p-1 bg-slate-50 border border-[#E5E7EB] rounded-xl w-fit">
         <button
           onClick={() => setActiveTab('overview')}
           className={cn(
-            "flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-bold transition-all",
-            activeTab === 'overview' ? "bg-white text-indigo-600 shadow-sm border border-indigo-100" : "text-slate-500 hover:text-slate-700 hover:bg-white/50"
+            "flex items-center gap-2 px-4 py-1.5 rounded-lg text-[13px] font-semibold transition-all",
+            activeTab === 'overview' ? "bg-white text-[#534AB7] border border-[#E5E7EB]" : "text-slate-500 hover:text-slate-700 hover:bg-white/50"
           )}
         >
-          <HeartPulse className="h-4 w-4" />
+          <HeartPulse className="h-3.5 w-3.5" />
           Overview
         </button>
         <button
           onClick={() => setActiveTab('target')}
           className={cn(
-            "flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-bold transition-all",
-            activeTab === 'target' ? "bg-white text-indigo-600 shadow-sm border border-indigo-100" : "text-slate-500 hover:text-slate-700 hover:bg-white/50"
+            "flex items-center gap-2 px-4 py-1.5 rounded-lg text-[13px] font-semibold transition-all",
+            activeTab === 'target' ? "bg-white text-[#534AB7] border border-[#E5E7EB]" : "text-slate-500 hover:text-slate-700 hover:bg-white/50"
           )}
         >
-          <Target className="h-4 w-4" />
+          <Target className="h-3.5 w-3.5" />
           Target
         </button>
         <button
           onClick={() => setActiveTab('ads')}
           className={cn(
-            "flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-bold transition-all",
-            activeTab === 'ads' ? "bg-white text-indigo-600 shadow-sm border border-indigo-100" : "text-slate-500 hover:text-slate-700 hover:bg-white/50"
+            "flex items-center gap-2 px-4 py-1.5 rounded-lg text-[13px] font-semibold transition-all",
+            activeTab === 'ads' ? "bg-white text-[#534AB7] border border-[#E5E7EB]" : "text-slate-500 hover:text-slate-700 hover:bg-white/50"
           )}
         >
-          <Layers className="h-4 w-4" />
+          <Layers className="h-3.5 w-3.5" />
           Ads Perform
         </button>
       </div>
@@ -357,55 +349,87 @@ export function OverviewClient({
         <div className="space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-500">
           {/* Row 1: KPI Cards */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-            <KpiCard icon={HeartPulse} label="Health Score" value={`${Math.round(globalKPIs.avgHealth)}%`} sub={globalKPIs.healthStatus} comparison={isCustomDateRange && prevGlobalKPIs ? { value: healthGrowth, label: prevPeriodLabel } : undefined} />
-            <KpiCard icon={Layers} label="Program Aktif" value={globalKPIs.activeProgramsCount} sub={`dari ${globalKPIs.totalPrograms} total`} />
-            <KpiCard icon={Target} label="Target Tercapai" value={globalKPIs.targetsHit} sub={`program bulan ini`} iconClass="text-emerald-600" comparison={isCustomDateRange && prevGlobalKPIs ? { value: targetGrowth, label: prevPeriodLabel } : undefined} />
-            <KpiCard icon={CheckSquare} label="Milestone Done" value={globalKPIs.completedMilestones} sub={`dari ${globalKPIs.totalMilestones} total`} iconClass="text-indigo-600" />
+            <KpiCard 
+              icon={HeartPulse} 
+              label="Health Score" 
+              value={`${Math.round(globalKPIs.avgHealth)}%`} 
+              sub={globalKPIs.healthStatus} 
+              accentColor={getStatusLabelAndColor(globalKPIs.avgHealth).accent}
+              comparison={isCustomDateRange && prevGlobalKPIs ? { value: healthGrowth, label: prevPeriodLabel } : undefined} 
+            />
+            <KpiCard 
+              icon={Layers} 
+              label="Program aktif" 
+              value={globalKPIs.activeProgramsCount} 
+              sub={`dari ${globalKPIs.totalPrograms} total`} 
+              accentColor="#378ADD"
+            />
+            <KpiCard 
+              icon={Target} 
+              label="Target tercapai" 
+              value={globalKPIs.targetsHit} 
+              sub={`program bulan ini`} 
+              accentColor="#639922"
+              comparison={isCustomDateRange && prevGlobalKPIs ? { value: targetGrowth, label: prevPeriodLabel } : undefined} 
+            />
+            <KpiCard 
+              icon={CheckSquare} 
+              label="Milestone done" 
+              value={globalKPIs.completedMilestones} 
+              sub={`dari ${globalKPIs.totalMilestones} total`} 
+              accentColor="#534AB7"
+            />
           </div>
 
-          {/* Row 2: Charts (Moved up for visibility) */}
+          {/* Row 2: Charts */}
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 pt-2">
-             <div className="lg:col-span-8 bg-white p-6 rounded-3xl border border-slate-200 shadow-sm relative overflow-hidden group">
-                <div className="absolute top-0 right-0 p-8 opacity-[0.03] pointer-events-none">
-                  <HeartPulse className="w-48 h-48" />
-                </div>
-                <h3 className="font-extrabold text-slate-800 mb-6 text-base flex items-center gap-3">
-                  <div className="p-2 bg-indigo-50 rounded-xl">
-                    <HeartPulse className="h-5 w-5 text-indigo-600" />
+             <div className="lg:col-span-8 bg-white p-6 rounded-xl border border-[#E5E7EB] relative overflow-hidden group">
+                <h3 className="font-semibold text-[#111827] mb-6 text-sm flex items-center gap-3">
+                  <div className="p-2 bg-[#EEEDFE] rounded-lg">
+                    <HeartPulse className="h-4 w-4 text-[#534AB7]" />
                   </div>
-                  Tren Kesehatan Bisnis Global
+                  Tren kesehatan bisnis global
                 </h3>
                 <div className="h-72">
                    <ResponsiveContainer width="100%" height="100%">
-                      <LineChart data={trendData}>
+                      <AreaChart data={trendData}>
+                        <defs>
+                          <linearGradient id="colorHealth" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="5%" stopColor="#534AB7" stopOpacity={0.1}/>
+                            <stop offset="95%" stopColor="#534AB7" stopOpacity={0}/>
+                          </linearGradient>
+                        </defs>
                         <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
-                        <XAxis dataKey="day" axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: '#94a3b8', fontWeight: 600 }} />
+                        <XAxis dataKey="day" axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: '#94a3b8', fontWeight: 500 }} />
                         <YAxis hide domain={[0, 120]} />
                         <Tooltip 
-                          contentStyle={{ borderRadius: 16, border: 'none', boxShadow: '0 20px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1)' }} 
-                          itemStyle={{ fontWeight: 800, fontSize: 12 }}
+                          contentStyle={{ borderRadius: 12, border: '1px solid #E5E7EB', boxShadow: 'none' }} 
+                          itemStyle={{ fontWeight: 600, fontSize: 12 }}
                         />
-                        <Line type="monotone" dataKey="health" stroke="#6366f1" strokeWidth={4} dot={{ r: 0 }} activeDot={{ r: 6, strokeWidth: 0, fill: '#6366f1' }} animationDuration={2000} />
-                      </LineChart>
+                        <Area type="monotone" dataKey="health" stroke="#534AB7" strokeWidth={3} fillOpacity={1} fill="url(#colorHealth)" />
+                      </AreaChart>
                    </ResponsiveContainer>
                 </div>
              </div>
              
-             <div className="lg:col-span-4 bg-white p-6 rounded-3xl border border-slate-200 shadow-sm">
-                <h3 className="font-extrabold text-slate-800 mb-6 text-base flex items-center gap-3">
-                  <div className="p-2 bg-emerald-50 rounded-xl">
-                    <Target className="h-5 w-5 text-emerald-600" />
+             <div className="lg:col-span-4 bg-white p-6 rounded-xl border border-[#E5E7EB]">
+                <h3 className="font-semibold text-[#111827] mb-6 text-sm flex items-center gap-3">
+                  <div className="p-2 bg-emerald-50 rounded-lg">
+                    <Target className="h-4 w-4 text-emerald-600" />
                   </div>
-                  Top Performers
+                  Top performers
                 </h3>
                 <div className="h-72">
                    <ResponsiveContainer width="100%" height="100%">
                       <BarChart data={barData} layout="vertical" margin={{ left: -20 }}>
                         <XAxis type="number" hide />
-                        <YAxis type="category" dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: '#64748b', fontWeight: 700 }} width={100} tickFormatter={v => v.length > 12 ? v.slice(0, 10) + '...' : v} />
-                        <Tooltip cursor={{ fill: '#f8fafc' }} contentStyle={{ borderRadius: 16, border: 'none' }} />
-                        <Bar dataKey="healthScore" radius={[0, 8, 8, 0]} maxBarSize={20}>
-                          {barData.map((e, i) => <Cell key={i} fill={e.healthScore >= 100 ? '#10b981' : '#6366f1'} />)}
+                        <YAxis type="category" dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: '#64748b', fontWeight: 500 }} width={100} tickFormatter={v => v.length > 12 ? v.slice(0, 10) + '...' : v} />
+                        <Tooltip cursor={{ fill: '#f8fafc' }} contentStyle={{ borderRadius: 12, border: '1px solid #E5E7EB' }} />
+                        <Bar dataKey="healthScore" radius={[0, 4, 4, 0]} maxBarSize={20}>
+                          {barData.map((e, i) => {
+                            const opacities = [1, 0.9, 0.8, 0.7, 0.6, 0.5, 0.4, 0.3, 0.2, 0.1];
+                            return <Cell key={i} fill={`rgba(83, 74, 183, ${opacities[i] || 0.1})`} />
+                          })}
                         </Bar>
                       </BarChart>
                    </ResponsiveContainer>
@@ -413,10 +437,10 @@ export function OverviewClient({
              </div>
           </div>
 
-          {/* Motivational Banner */}
-          <div className={cn("bg-gradient-to-r p-5 rounded-3xl text-center font-black tracking-[0.2em] text-xs sm:text-sm text-white shadow-lg relative overflow-hidden", banner.bg)}>
-            <div className="absolute inset-0 bg-white/10 backdrop-blur-[1px] pointer-events-none" />
-            <span className="relative z-10">{banner.text}</span>
+          {/* Motivational Banner redesigned as Alert Bar */}
+          <div className={cn("px-4 py-2.5 rounded-lg border flex items-center gap-3 text-[13px] font-medium transition-all", banner.bg, banner.border, banner.textCol)}>
+            <div className={cn("h-2 w-2 rounded-full", getStatusLabelAndColor(globalKPIs.avgHealth).dot)} />
+            <span>{banner.text}</span>
           </div>
 
           {/* Search & Program Grid */}
@@ -466,29 +490,31 @@ export function OverviewClient({
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             <KpiCard 
               icon={Target} 
-              label="Total Capaian Rp" 
+              label="Total capaian Rp" 
               value={formatRupiah(summary.aggregates.revenue?.actual || 0)} 
               sub={`/ ${formatRupiah(summary.aggregates.revenue?.totalTarget || 0)}`} 
-              iconClass="text-emerald-600"
+              accentColor="#639922"
             />
             <KpiCard 
               icon={HeartPulse} 
               label="Progres Rp" 
               value={`${Math.round((summary.aggregates.revenue?.actual / (summary.aggregates.revenue?.target || 1)) * 100)}%`} 
               sub="vs pro-rata"
+              accentColor="#534AB7"
             />
             <KpiCard 
               icon={Layers} 
-              label="Total Capaian User" 
+              label="Total capaian user" 
               value={summary.aggregates.user_acquisition?.actual || 0} 
               sub={`/ ${summary.aggregates.user_acquisition?.totalTarget || 0} user`} 
-              iconClass="text-indigo-600"
+              accentColor="#639922"
             />
             <KpiCard 
               icon={CheckSquare} 
-              label="Progres User" 
+              label="Progres user" 
               value={`${Math.round((summary.aggregates.user_acquisition?.actual / (summary.aggregates.user_acquisition?.target || 1)) * 100)}%`} 
               sub="vs pro-rata"
+              accentColor="#534AB7"
             />
           </div>
 
@@ -520,10 +546,31 @@ export function OverviewClient({
         <div className="space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-500">
           {/* Row 1: Ads Aggregate Cards */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-            <KpiCard icon={Layers} label="Total Ads Spent" value={formatRupiah(summary.adsMetrics.totalAdsSpent)} iconClass="text-rose-600" />
-            <KpiCard icon={Target} label="Total Goals" value={summary.adsMetrics.totalGoals} sub="closing" iconClass="text-emerald-600" />
-            <KpiCard icon={HeartPulse} label="Avg ROAS" value={`${summary.adsMetrics.avgRoas.toFixed(2)}x`} iconClass="text-indigo-600" />
-            <KpiCard icon={CheckSquare} label="Avg CPP" value={formatRupiah(summary.adsMetrics.avgCpp)} iconClass="text-amber-600" />
+            <KpiCard 
+              icon={Layers} 
+              label="Total ads spent" 
+              value={formatRupiah(summary.adsMetrics.totalAdsSpent)} 
+              accentColor="#378ADD" 
+            />
+            <KpiCard 
+              icon={Target} 
+              label="Total goals" 
+              value={summary.adsMetrics.totalGoals} 
+              sub="closing" 
+              accentColor="#639922" 
+            />
+            <KpiCard 
+              icon={HeartPulse} 
+              label="Avg ROAS" 
+              value={`${summary.adsMetrics.avgRoas.toFixed(2)}x`} 
+              accentColor="#534AB7" 
+            />
+            <KpiCard 
+              icon={CheckSquare} 
+              label="Avg CPP" 
+              value={formatRupiah(summary.adsMetrics.avgCpp)} 
+              accentColor={summary.adsMetrics.avgCpp > 60000 ? "#E24B4A" : "#639922"} 
+            />
           </div>
 
           {/* Dual Axis Ads Chart */}

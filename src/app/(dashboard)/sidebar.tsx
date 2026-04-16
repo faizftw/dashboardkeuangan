@@ -63,19 +63,18 @@ export function Sidebar({ profile, userEmail, isCollapsed, setIsCollapsed }: Sid
       {/* Sidebar Content */}
       <aside
         className={cn(
-          "fixed top-0 left-0 z-50 h-full bg-slate-100 border-r border-slate-200 transition-all duration-300 ease-in-out flex flex-col shadow-sm",
+          "fixed top-0 left-0 z-50 h-full bg-white border-r border-[#E5E7EB] transition-all duration-300 ease-in-out flex flex-col",
           isMobileOpen ? "translate-x-0 w-72" : "-translate-x-full lg:translate-x-0",
           isCollapsed ? "lg:w-20" : "lg:w-72"
         )}
       >
-        {/* Sidebar Header (Logo) */}
-        <div className="h-20 flex items-center px-4 border-b border-slate-200/60 bg-white/50">
+        <div className="h-20 flex items-center px-4 border-b border-[#E5E7EB]">
           <div className="flex items-center gap-3 overflow-hidden">
-            <div className="bg-gradient-to-br from-indigo-600 to-indigo-700 text-white w-10 h-10 rounded-xl flex items-center justify-center font-bold text-xl shadow-lg shadow-indigo-200 shrink-0">
+            <div className="bg-[#534AB7] text-white w-10 h-10 rounded-lg flex items-center justify-center font-bold text-xl shrink-0">
               DT
             </div>
             {!isCollapsed && (
-              <span className="font-extrabold text-xl bg-clip-text text-transparent bg-gradient-to-r from-slate-900 to-slate-700 truncate animate-in fade-in duration-500 whitespace-nowrap">
+              <span className="font-semibold text-lg text-[#111827] truncate animate-in fade-in duration-500 whitespace-nowrap">
                 Dashboard KPI
               </span>
             )}
@@ -87,20 +86,19 @@ export function Sidebar({ profile, userEmail, isCollapsed, setIsCollapsed }: Sid
           <NavLinks isCollapsed={isCollapsed} onClick={() => setIsMobileOpen(false)} />
         </div>
 
-        {/* User Profile & Logout Section */}
-        <div className="p-4 border-t border-slate-200/60 bg-slate-50/80">
+        <div className="p-4 border-t border-[#E5E7EB]">
           <div className={cn(
-            "flex items-center gap-3 p-3 rounded-2xl transition-all duration-300 overflow-hidden",
-            isCollapsed ? "justify-center" : "bg-white shadow-sm border border-slate-200/50"
+            "flex items-center gap-3 p-3 rounded-xl transition-all duration-300 overflow-hidden",
+            isCollapsed ? "justify-center" : "bg-white border border-[#E5E7EB]"
           )}>
-            <div className="h-10 w-10 rounded-full bg-indigo-100 border border-indigo-200 flex items-center justify-center text-indigo-700 shrink-0">
-              <User className="h-5 w-5" />
+            <div className="h-10 w-10 rounded-full bg-[#EEEDFE] flex items-center justify-center text-[#534AB7] shrink-0 font-bold">
+              {profile?.name?.charAt(0).toUpperCase() || <User className="h-5 w-5" />}
             </div>
             
             {!isCollapsed && (
               <div className="flex-1 truncate animate-in fade-in duration-300">
-                <p className="text-sm font-bold text-slate-900 truncate">{profile?.name || userEmail}</p>
-                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{profile?.role || 'User'}</p>
+                <p className="text-sm font-semibold text-[#111827] truncate">{profile?.name || userEmail}</p>
+                <p className="text-[10px] font-medium text-[#6B7280] uppercase tracking-wider">{profile?.role || 'User'}</p>
               </div>
             )}
           </div>
