@@ -170,7 +170,7 @@ function ProgramCard({ program, health, profiles }: {
         {pics.length > 0 && (
           <div className="flex items-center gap-2">
             <div className="flex -space-x-2">
-              {pics.slice(0, 3).map((p, i) => (
+              {pics.slice(0, 3).map((p) => (
                 <div key={p?.id} className="h-7 w-7 rounded-full bg-indigo-100 border-2 border-white flex items-center justify-center text-[10px] font-bold text-indigo-700 uppercase" title={p?.name}>
                   {p?.name?.[0]}
                 </div>
