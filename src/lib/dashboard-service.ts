@@ -7,8 +7,10 @@ import {
   aggregateGlobalKPIs,
   aggregateAdsMetrics,
   buildAdsDailySeries,
+  buildHealthTrendSeries,
   ProgramWithRelations,
-  ProgramHealthResult 
+  ProgramHealthResult,
+  HealthTrendPoint
 } from './dashboard-calculator'
 
 type DailyInput = Database['public']['Tables']['daily_inputs']['Row']
@@ -27,6 +29,7 @@ export interface DashboardSummary {
   globalKPIs: ReturnType<typeof aggregateGlobalKPIs>
   adsMetrics: ReturnType<typeof aggregateAdsMetrics>
   adsDailySeries: ReturnType<typeof buildAdsDailySeries>
+  healthTrend: HealthTrendPoint[]
   programHealths: (ProgramHealthResult & { program: ProgramWithRelations })[]
 }
 
@@ -123,6 +126,7 @@ export async function getUnifiedDashboardData(options: {
           avgCr: 0
         },
         adsDailySeries: [],
+        healthTrend: [],
         programHealths: []
       }
     }
@@ -247,6 +251,17 @@ export async function getUnifiedDashboardData(options: {
     // Default chart: spend vs roas
     const adsDailySeries = buildAdsDailySeries(programs, valsByProg, 'ads_spent', 'roas')
 
+    // Calculate Global Health Trend for Overview Tab
+    const healthTrend = buildHealthTrendSeries(
+      programs,
+      Array.from(valsByProg.values()).flat(),
+      Array.from(inputsByProg.values()).flat(),
+      Array.from(compsByMilestone.values()),
+      activePeriod,
+      options.startDate,
+      options.endDate
+    )
+
     return {
       overallHealth,
       statusCounts,
@@ -254,6 +269,7 @@ export async function getUnifiedDashboardData(options: {
       globalKPIs,
       adsMetrics,
       adsDailySeries,
+      healthTrend,
       programHealths
     }
   }

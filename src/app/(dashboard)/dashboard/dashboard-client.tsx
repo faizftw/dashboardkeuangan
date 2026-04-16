@@ -313,25 +313,13 @@ export function OverviewClient({
   )
 
   // ── Charts Data ────────────────────────────────────────────────────────────
-  const trendData = useMemo(() => {
-    const dateRange: string[] = []
-    if (startDate && endDate) {
-      const start = new Date(startDate); const end = new Date(endDate); const cur = new Date(start)
-      while (cur <= end) { dateRange.push(cur.toISOString().split('T')[0]); cur.setDate(cur.getDate() + 1) }
-    } else {
-      const today = new Date().getDate()
-      for (let i = 1; i <= Math.min(today, 31); i++) dateRange.push(`${activePeriod.year}-${String(activePeriod.month).padStart(2, '0')}-${String(i).padStart(2, '0')}`)
-    }
-    // Optimization: avoid nested O(N^2) by grouping values once
-    const metricsByDate = new Map<string, MetricValue[]>()
-    metricValues.forEach(mv => { const l = metricsByDate.get(mv.date) || []; l.push(mv); metricsByDate.set(mv.date, l) })
-    
-    return dateRange.map(d => {
-      // This is a simplified trend for redesign phase
-      const displayLabel = new Intl.DateTimeFormat('id-ID', { day: 'numeric', month: 'short' }).format(new Date(d))
-      return { day: displayLabel, health: Math.round(overallHealth) } // Simplified for now
-    })
-  }, [startDate, endDate, activePeriod, metricValues, overallHealth])
+  const trendData = useMemo(() => 
+    summary.healthTrend.map(tp => ({
+      day: tp.displayDate,
+      health: tp.health
+    })),
+    [summary.healthTrend]
+  )
 
   const barData = useMemo(() =>
     [...programHealths].sort((a, b) => b.healthScore - a.healthScore).slice(0, 10).map(ph => ({

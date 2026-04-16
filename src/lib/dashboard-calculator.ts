@@ -479,7 +479,12 @@ export function aggregateGlobalKPIs(
   milestoneCompletions: MilestoneCompletion[]
 ) {
   const totalPrograms = programs.length
-  const activeProgramsCount = programs.filter(p => (p.program_metric_definitions?.length || 0) > 0 || (p.program_milestones?.length || 0) > 0).length
+  const activeProgramsCount = programs.filter(p => 
+    (p.program_metric_definitions?.length || 0) > 0 || 
+    (p.program_milestones?.length || 0) > 0 ||
+    (Number(p.monthly_target_rp) || 0) > 0 ||
+    (Number(p.monthly_target_user) || 0) > 0
+  ).length
   
   const avgHealth = programResults.length > 0 
     ? programResults.reduce((sum, r) => sum + r.healthScore, 0) / programResults.length 
@@ -501,3 +506,102 @@ export function aggregateGlobalKPIs(
   }
 }
 
+export interface HealthTrendPoint {
+  date: string
+  displayDate: string
+  health: number
+}
+
+/**
+ * Builds daily health trend series for the main global chart.
+ * Replaces the static overallHealth average with a real daily progression.
+ */
+export function buildHealthTrendSeries(
+  programs: ProgramWithRelations[],
+  metricValues: MetricValue[],
+  dailyInputs: DailyInput[],
+  milestoneCompletions: MilestoneCompletion[],
+  activePeriod: Database['public']['Tables']['periods']['Row'],
+  startDate?: string,
+  endDate?: string
+): HealthTrendPoint[] {
+  const dateRange: string[] = []
+  const workingDays = activePeriod.working_days || 30
+
+  if (startDate && endDate) {
+    const start = new Date(startDate); const end = new Date(endDate); const cur = new Date(start)
+    while (cur <= end) { dateRange.push(cur.toISOString().split('T')[0]); cur.setDate(cur.getDate() + 1) }
+  } else {
+    // Current month view: from day 1 to today (capped at 31)
+    const today = new Date().getDate()
+    for (let i = 1; i <= Math.min(today, 31); i++) {
+      dateRange.push(`${activePeriod.year}-${String(activePeriod.month).padStart(2, '0')}-${String(i).padStart(2, '0')}`)
+    }
+  }
+
+  // To optimize, we group data by date once
+  const metricsByProgram = new Map<string, MetricValue[]>()
+  metricValues.forEach(mv => {
+    const list = metricsByProgram.get(mv.program_id) || []
+    list.push(mv)
+    metricsByProgram.set(mv.program_id, list)
+  })
+
+  const inputsByProgram = new Map<string, DailyInput[]>()
+  dailyInputs.forEach(di => {
+    const list = inputsByProgram.get(di.program_id) || []
+    list.push(di)
+    inputsByProgram.set(di.program_id, list)
+  })
+
+  const completionsByMilestone = new Map<string, MilestoneCompletion>()
+  milestoneCompletions.forEach(mc => {
+    completionsByMilestone.set(mc.milestone_id, mc)
+  })
+
+  return dateRange.map(d => {
+    const dayOfMonth = new Date(d).getDate()
+    const prorationFactor = Math.min(dayOfMonth / workingDays, 1)
+
+    // Filter values up to this date
+    const dailyMetricValuesByProgram = new Map<string, MetricValue[]>()
+    metricsByProgram.forEach((vals, pid) => {
+      dailyMetricValuesByProgram.set(pid, vals.filter(v => v.date <= d))
+    })
+
+    const dailyInputsSliceByProgram = new Map<string, DailyInput[]>()
+    inputsByProgram.forEach((vals, pid) => {
+      dailyInputsSliceByProgram.set(pid, vals.filter(v => v.date <= d))
+    })
+
+    const dailyCompletionsByMilestone = new Map<string, MilestoneCompletion>()
+    completionsByMilestone.forEach((val, mid) => {
+      // Completed_at is ISO string or null
+      if (val.completed_at && val.completed_at.split('T')[0] <= d) {
+        dailyCompletionsByMilestone.set(mid, val)
+      }
+    })
+
+    // Calculate health for all programs at this point in time
+    const programHealths = programs.map(p => 
+      calculateProgramHealth(
+        p, 
+        dailyMetricValuesByProgram, 
+        dailyInputsSliceByProgram, 
+        dailyCompletionsByMilestone, 
+        prorationFactor, 
+        workingDays
+      )
+    )
+
+    const avgHealth = programHealths.length > 0
+      ? programHealths.reduce((sum, ph) => sum + ph.healthScore, 0) / programHealths.length
+      : 0
+
+    return {
+      date: d,
+      displayDate: new Intl.DateTimeFormat('id-ID', { day: 'numeric', month: 'short' }).format(new Date(d)),
+      health: Math.round(avgHealth)
+    }
+  })
+}
