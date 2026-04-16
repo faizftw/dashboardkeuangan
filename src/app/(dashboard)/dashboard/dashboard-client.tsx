@@ -746,8 +746,8 @@ export function OverviewClient({
                   />
                   <Tooltip 
                     contentStyle={{ borderRadius: 12, border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }}
-                    formatter={(val: number, name: string) => {
-                      if (name === 'Pendapatan') return [formatRupiah(val), name]
+                    formatter={(val: any, name: string) => {
+                      if (name === 'Pendapatan') return [formatRupiah(Number(val || 0)), name]
                       return [val, name]
                     }}
                   />

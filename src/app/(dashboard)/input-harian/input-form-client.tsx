@@ -449,7 +449,8 @@ export function InputFormClient({
       {isModalOpen && !isLocked && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-md overflow-y-auto">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl my-8 animate-in zoom-in-95 duration-200">
-            <div className="px-8 py-6 border-b border-slate-100 flex justify-between items-center bg-slate-50/50 rounded-t-2xl">
+            {/* Sticky Header */}
+            <div className="sticky top-0 z-30 px-8 py-6 border-b border-slate-100 flex justify-between items-center bg-white/95 backdrop-blur-sm rounded-t-2xl">
               <div className="flex items-center gap-3">
                 <div className="h-10 w-10 bg-indigo-600 rounded-xl flex items-center justify-center text-white shadow-xl shadow-indigo-100">
                   <ClipboardList className="h-6 w-6" />
@@ -461,13 +462,15 @@ export function InputFormClient({
                   <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest mt-0.5">Periode Bulan Ini</p>
                 </div>
               </div>
-              <button onClick={() => setIsModalOpen(false)} className="text-slate-400 hover:text-slate-600 p-2 hover:bg-white rounded-full transition-all">✕</button>
+              <button onClick={() => setIsModalOpen(false)} className="text-slate-400 hover:text-slate-600 p-2 hover:bg-white rounded-full transition-all text-lg">✕</button>
             </div>
             
-            <div className="p-8 grid grid-cols-1 md:grid-cols-2 gap-8">
-              {/* Common Form Section */}
-              <div className="space-y-6">
-                <form id="daily-form" onSubmit={handleSubmit} className="space-y-6">
+            {/* Scrollable Body Container */}
+            <div className="max-h-[70vh] overflow-y-auto custom-scrollbar">
+              <div className="p-8 grid grid-cols-1 md:grid-cols-12 gap-10">
+                {/* Form column */}
+                <div className="md:col-span-7 space-y-8">
+                  <form id="daily-form" onSubmit={handleSubmit} className="space-y-8">
                   <div className="space-y-2">
                     <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Tanggal Kerja</label>
                     <input 
@@ -495,74 +498,76 @@ export function InputFormClient({
                   </div>
 
                   {/* Show legacy fields only for programs without custom metrics */}
+                  {/* Legacy fields */}
                   {!hasCustomMetrics && (activeProgram?.target_type === 'quantitative' || activeProgram?.target_type === 'hybrid') && (
-                    <div className="bg-indigo-50/50 p-5 rounded-2xl border border-indigo-100 space-y-5">
-                      <div className="flex justify-between items-center text-[10px] font-black text-indigo-400 uppercase tracking-widest px-1">
+                    <div className="space-y-4">
+                      <div className="flex items-center gap-2 text-xs font-bold text-slate-400 uppercase tracking-[0.1em]">
                         <Target className="h-3 w-3" /> Input Angka Target
                       </div>
-                      <div className="grid grid-cols-1 gap-4">
-                        <div className="space-y-1.5 flex flex-col">
-                          <label className="text-[10px] font-bold text-slate-600 uppercase">RP CAPAIAN</label>
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="space-y-1.5 min-w-0">
+                          <label className="text-[10px] font-bold text-slate-500 uppercase">RP CAPAIAN</label>
                           <input 
                             name="achievement_rp" type="number" min="0" placeholder="Rp 0"
                             defaultValue={editingId ? pastInputs.find(i=>i.id===editingId)?.achievement_rp?.toString() : ""}
-                            className="w-full text-sm font-bold rounded-xl border border-slate-200 px-4 py-3 focus:border-indigo-500 outline-none"
+                            className="w-full text-sm font-bold rounded-xl border border-slate-200 px-4 py-3 focus:border-indigo-500 outline-none transition-all"
                           />
                         </div>
-                        <div className="space-y-1.5 flex flex-col">
-                          <label className="text-[10px] font-bold text-slate-600 uppercase">USER BARU</label>
+                        <div className="space-y-1.5 min-w-0">
+                          <label className="text-[10px] font-bold text-slate-500 uppercase">USER BARU</label>
                           <input 
                             name="achievement_user" type="number" min="0" placeholder="0"
                             defaultValue={editingId ? pastInputs.find(i=>i.id===editingId)?.achievement_user?.toString() : ""}
-                            className="w-full text-sm font-bold rounded-xl border border-slate-200 px-4 py-3 focus:border-indigo-500 outline-none"
+                            className="w-full text-sm font-bold rounded-xl border border-slate-200 px-4 py-3 focus:border-indigo-500 outline-none transition-all"
                           />
                         </div>
                       </div>
                     </div>
                   )}
 
-                  {/* Dynamic Metric Fields for programs with custom metrics */}
+                  {/* Dynamic Metric Fields - Optimized Grid */}
                   {hasCustomMetrics && !editingId && (
                     <div className="space-y-4">
-                      <div className="flex items-center gap-2 text-[10px] font-black text-indigo-400 uppercase tracking-widest">
-                        <Target className="h-3 w-3" /> Input KPI
+                      <div className="flex items-center gap-2 text-xs font-bold text-slate-400 uppercase tracking-[0.1em]">
+                        <Target className="h-3 w-3" /> Input KPI Utama
                       </div>
-                      {activeMetrics.map(metric => {
-                        const isCalc = metric.input_type === 'calculated'
-                        const calcVal = isCalc && metric.formula
-                          ? evaluateFormula(metric.formula, metricKeyValues)
-                          : null
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-5">
+                        {activeMetrics.map(metric => {
+                          const isCalc = metric.input_type === 'calculated'
+                          const calcVal = isCalc && metric.formula
+                            ? evaluateFormula(metric.formula, metricKeyValues)
+                            : null
 
-                        return (
-                          <div key={metric.id} className={`space-y-1 ${isCalc ? 'opacity-70' : ''}`}>
-                            <div className="flex items-center justify-between">
-                              <label className="text-[10px] font-bold text-slate-600 uppercase">
-                                {metric.label}
-                                {metric.unit_label && <span className="ml-1 text-slate-400 normal-case">({metric.unit_label})</span>}
-                              </label>
-                              {isCalc && <Calculator className="h-3 w-3 text-purple-400" />}
-                            </div>
-                            {isCalc ? (
-                              <div className="w-full text-sm font-bold rounded-xl border border-purple-100 bg-purple-50 px-4 py-3 text-purple-700">
-                                {calcVal !== null 
-                                  ? formatMetricValue(calcVal, metric.data_type, metric.unit_label)
-                                  : <span className="text-slate-400">— (butuh data lain)</span>
-                                }
+                          return (
+                            <div key={metric.id} className={`space-y-1.5 ${isCalc ? 'opacity-80' : ''}`}>
+                              <div className="flex items-center justify-between gap-2 overflow-hidden">
+                                <label className="text-[10px] font-bold text-slate-500 uppercase truncate" title={metric.label}>
+                                  {metric.label}
+                                </label>
+                                {isCalc && <Calculator className="h-3 w-3 text-purple-400 shrink-0" />}
                               </div>
-                            ) : (
-                              <input
-                                type={metric.data_type === 'boolean' ? 'checkbox' : 'number'}
-                                step={metric.data_type === 'float' ? '0.01' : '1'}
-                                min="0"
-                                placeholder={metric.data_type === 'currency' ? 'Rp 0' : '0'}
-                                value={metricValues[metric.id] || ''}
-                                onChange={e => setMetricValues(prev => ({ ...prev, [metric.id]: e.target.value }))}
-                                className="w-full text-sm font-bold rounded-xl border border-slate-200 px-4 py-3 focus:border-indigo-500 outline-none"
-                              />
-                            )}
-                          </div>
-                        )
-                      })}
+                              {isCalc ? (
+                                <div className="w-full text-xs font-bold rounded-xl border border-purple-100 bg-purple-50/50 px-3 py-2.5 text-purple-700 truncate">
+                                  {calcVal !== null 
+                                    ? formatMetricValue(calcVal, metric.data_type, metric.unit_label)
+                                    : '—'
+                                  }
+                                </div>
+                              ) : (
+                                <input
+                                  type={metric.data_type === 'boolean' ? 'checkbox' : 'number'}
+                                  step={metric.data_type === 'float' ? '0.01' : '1'}
+                                  min="0"
+                                  placeholder={metric.data_type === 'currency' ? 'Rp 0' : '0'}
+                                  value={metricValues[metric.id] || ''}
+                                  onChange={e => setMetricValues(prev => ({ ...prev, [metric.id]: e.target.value }))}
+                                  className="w-full text-sm font-bold rounded-xl border border-slate-200 px-3 py-2.5 focus:border-indigo-500 outline-none transition-all placeholder:text-slate-300"
+                                />
+                              )}
+                            </div>
+                          )
+                        })}
+                      </div>
                     </div>
                   )}
 
@@ -572,14 +577,14 @@ export function InputFormClient({
                       name="notes" rows={3}
                       defaultValue={editingId ? pastInputs.find(i=>i.id===editingId)?.notes || '' : ''}
                       placeholder="Apa kendala atau yang berhasil dicapai hari ini?"
-                      className="w-full text-sm font-medium rounded-xl border border-slate-200 px-4 py-3 focus:border-indigo-500 outline-none resize-none"
+                      className="w-full text-sm font-medium rounded-xl border border-slate-200 px-4 py-3 focus:border-indigo-500 outline-none resize-none transition-all"
                     ></textarea>
                   </div>
                 </form>
               </div>
 
               {/* Milestones / Tasks Section */}
-              <div className="bg-slate-50 rounded-2xl p-6 border border-slate-100 flex flex-col h-full">
+              <div className="md:col-span-5 flex flex-col h-full min-h-[400px]">
                 <div className="flex items-center justify-between mb-4 px-1">
                   <h4 className="text-[10px] font-black text-indigo-600 uppercase tracking-widest flex items-center gap-2">
                     <CheckCircle2 className="h-4 w-4" /> Daftar Misi Program
@@ -635,15 +640,16 @@ export function InputFormClient({
                   )}
                 </div>
 
-                <div className="mt-6 pt-4 border-t border-slate-200 space-y-2">
-                  <p className="text-[10px] text-slate-400 font-bold leading-relaxed px-1">
-                    * Misi kualitatif yang Anda centang bersifat persisten dan akan terus berstatus &quot;Selesai&quot; di bulan-bulan berikutnya sampai program berakhir.
+                <div className="mt-auto pt-6 border-t border-slate-200">
+                  <p className="text-[9px] text-slate-400 font-bold leading-relaxed">
+                    * Misi kualitatif yang dicentang akan terus berstatus &quot;Selesai&quot; di periode berikutnya.
                   </p>
                 </div>
               </div>
             </div>
+          </div>
 
-            <div className="px-8 py-5 bg-slate-50 border-t border-slate-100 rounded-b-2xl flex justify-between items-center sticky bottom-0 z-10">
+          <div className="px-8 py-5 bg-white border-t border-slate-100 rounded-b-2xl flex justify-between items-center sticky bottom-0 z-30">
               <div className="flex items-center gap-3">
                  <button onClick={() => setIsModalOpen(false)} className="px-6 py-2.5 text-xs font-bold text-slate-500 hover:text-slate-800 transition-colors">Batal</button>
               </div>
