@@ -8,9 +8,11 @@ import {
   aggregateAdsMetrics,
   buildAdsDailySeries,
   buildHealthTrendSeries,
+  buildTargetTrendSeries,
   ProgramWithRelations,
   ProgramHealthResult,
-  HealthTrendPoint
+  HealthTrendPoint,
+  TargetTrendPoint
 } from './dashboard-calculator'
 
 type DailyInput = Database['public']['Tables']['daily_inputs']['Row']
@@ -30,6 +32,7 @@ export interface DashboardSummary {
   adsMetrics: ReturnType<typeof aggregateAdsMetrics>
   adsDailySeries: ReturnType<typeof buildAdsDailySeries>
   healthTrend: HealthTrendPoint[]
+  targetTrend: TargetTrendPoint[]
   programHealths: (ProgramHealthResult & { program: ProgramWithRelations })[]
 }
 
@@ -127,6 +130,7 @@ export async function getUnifiedDashboardData(options: {
         },
         adsDailySeries: [],
         healthTrend: [],
+        targetTrend: [],
         programHealths: []
       }
     }
@@ -270,6 +274,14 @@ export async function getUnifiedDashboardData(options: {
       adsMetrics,
       adsDailySeries,
       healthTrend,
+      targetTrend: buildTargetTrendSeries(
+        programs,
+        Array.from(valsByProg.values()).flat(),
+        Array.from(inputsByProg.values()).flat(),
+        activePeriod,
+        options.startDate,
+        options.endDate
+      ),
       programHealths
     }
   }

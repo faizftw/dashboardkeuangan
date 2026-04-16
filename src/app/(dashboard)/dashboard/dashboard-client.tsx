@@ -17,10 +17,11 @@ import {
 } from 'recharts'
 import {
   HeartPulse, Layers, Target, CheckSquare,
-  Search, ArrowUpRight, ArrowDownRight
+  Search, ArrowUpRight, ArrowDownRight, TrendingUp
 } from 'lucide-react'
 
 import { DashboardSummary } from '@/lib/dashboard-service'
+import { RadialProgressCard } from '@/components/dashboard/radial-progress-card'
 
 interface OverviewClientProps {
   programs: ProgramWithRelations[]
@@ -519,10 +520,15 @@ export function OverviewClient({
              </div>
           </div>
 
-          {/* Motivational Banner redesigned as Alert Bar */}
-          <div className={cn("px-4 py-2.5 rounded-lg border flex items-center gap-3 text-[13px] font-medium transition-all", banner.bg, banner.border, banner.textCol)}>
-            <div className={cn("h-2 w-2 rounded-full", getStatusLabelAndColor(globalKPIs.avgHealth).dot)} />
-            <span>{banner.text}</span>
+          {/* Motivational Banner redesigned as a LARGE prominent card */}
+          <div className={cn("px-8 py-10 rounded-2xl border flex flex-col items-center justify-center text-center gap-6 shadow-sm transition-all", banner.bg, banner.border)}>
+            <div className={cn("p-4 rounded-full shadow-inner", banner.bg === 'bg-[#FCEBEB]' ? 'bg-white' : 'bg-white/50')}>
+               <div className={cn("h-6 w-6 rounded-full animate-pulse", getStatusLabelAndColor(globalKPIs.avgHealth).dot)} />
+            </div>
+            <h2 className={cn("text-xl md:text-2xl font-black tracking-tight max-w-xl leading-tight uppercase", banner.textCol)}>
+              {banner.text}
+            </h2>
+            <div className="h-1 w-24 rounded-full bg-slate-200/50" />
           </div>
 
           {/* Search & Program Grid */}
@@ -569,7 +575,7 @@ export function OverviewClient({
       {activeTab === 'target' && (
         <div className="space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-500">
           {/* Row 1: Target Aggregate Cards */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5 gap-4">
             <KpiCard 
               icon={Target} 
               label="Total capaian Rp" 
@@ -578,10 +584,10 @@ export function OverviewClient({
               accentColor="#639922"
             />
             <KpiCard 
-              icon={HeartPulse} 
-              label="Progres Rp" 
-              value={`${Math.round((summary.aggregates.revenue?.actual / (summary.aggregates.revenue?.target || 1)) * 100)}%`} 
-              sub="vs pro-rata"
+              icon={TrendingUp} 
+              label="Sisa target Rp" 
+              value={formatRupiah(Math.max(0, (summary.aggregates.revenue?.totalTarget || 0) - (summary.aggregates.revenue?.actual || 0)))} 
+              sub="jumlah sisa bulan ini" 
               accentColor="#534AB7"
             />
             <KpiCard 
@@ -589,15 +595,86 @@ export function OverviewClient({
               label="Total capaian user" 
               value={summary.aggregates.user_acquisition?.actual || 0} 
               sub={`/ ${summary.aggregates.user_acquisition?.totalTarget || 0} user`} 
-              accentColor="#639922"
+              accentColor="#378ADD"
             />
             <KpiCard 
               icon={CheckSquare} 
-              label="Progres user" 
-              value={`${Math.round((summary.aggregates.user_acquisition?.actual / (summary.aggregates.user_acquisition?.target || 1)) * 100)}%`} 
-              sub="vs pro-rata"
-              accentColor="#534AB7"
+              label="Sisa target user" 
+              value={Math.max(0, (summary.aggregates.user_acquisition?.totalTarget || 0) - (summary.aggregates.user_acquisition?.actual || 0))} 
+              sub="user yang harus dikejar" 
+              accentColor="#EAB308"
             />
+             <KpiCard 
+              icon={HeartPulse} 
+              label="Progres global" 
+              value={`${Math.round(summary.overallHealth)}%`} 
+              sub={summary.globalKPIs.healthStatus}
+              accentColor={getStatusLabelAndColor(summary.overallHealth).accent}
+            />
+          </div>
+
+          {/* Row 2: Secondary Visuals (Radial + Trend) */}
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+             {/* Radial Cards Column */}
+             <div className="lg:col-span-4 grid grid-cols-1 gap-6">
+                <RadialProgressCard 
+                  title="Revenue Progress"
+                  value={summary.aggregates.revenue?.actual || 0}
+                  target={summary.aggregates.revenue?.totalTarget || 0}
+                  percentage={(summary.aggregates.revenue?.actual / (summary.aggregates.revenue?.totalTarget || 1)) * 100}
+                  displayValue={formatRupiah(summary.aggregates.revenue?.actual || 0)}
+                  displayTarget={formatRupiah(summary.aggregates.revenue?.totalTarget || 0)}
+                  unitLabel="Rp"
+                  color="#639922"
+                />
+                <RadialProgressCard 
+                  title="User Acquisition"
+                  value={summary.aggregates.user_acquisition?.actual || 0}
+                  target={summary.aggregates.user_acquisition?.totalTarget || 0}
+                  percentage={(summary.aggregates.user_acquisition?.actual / (summary.aggregates.user_acquisition?.totalTarget || 1)) * 100}
+                  displayValue={String(summary.aggregates.user_acquisition?.actual || 0)}
+                  displayTarget={String(summary.aggregates.user_acquisition?.totalTarget || 0)}
+                  unitLabel="user"
+                  color="#378ADD"
+                />
+             </div>
+
+             {/* Target Trend Chart Column */}
+             <div className="lg:col-span-8 bg-white p-6 rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+                <h3 className="font-bold text-slate-800 mb-6 text-sm flex items-center gap-2">
+                  <div className="p-2 bg-indigo-50 rounded-lg">
+                    <TrendingUp className="h-4 w-4 text-[#534AB7]" />
+                  </div>
+                  Tren akumulasi capaian vs target
+                </h3>
+                <div className="h-[460px]">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <ComposedChart data={summary.targetTrend}>
+                      <defs>
+                        <linearGradient id="colorRev" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="5%" stopColor="#10b981" stopOpacity={0.1}/>
+                          <stop offset="95%" stopColor="#10b981" stopOpacity={0}/>
+                        </linearGradient>
+                      </defs>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
+                      <XAxis dataKey="displayDate" axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: '#94a3b8' }} />
+                      <YAxis yAxisId="left" hide />
+                      <Tooltip 
+                        contentStyle={{ borderRadius: 12, border: '1px solid #E5E7EB', boxShadow: 'none' }}
+                        formatter={(v: unknown, name: unknown) => {
+                          const n = String(name || '')
+                          if (n.includes('Revenue')) return [formatRupiah(Number(v || 0)), n]
+                          return [v as string | number, n]
+                        }}
+                      />
+                      <Legend verticalAlign="top" height={36} iconType="circle" />
+                      <Area yAxisId="left" type="monotone" dataKey="actualRevenue" name="Capaian Rp" stroke="#10b981" strokeWidth={3} fillOpacity={1} fill="url(#colorRev)" />
+                      <Line yAxisId="left" type="monotone" dataKey="targetRevenue" name="Target Rp (Prorata)" stroke="#94a3b8" strokeWidth={2} strokeDasharray="5 5" dot={false} />
+                      <Bar yAxisId="left" dataKey="actualUser" name="Capaian User" fill="#378ADD" radius={[4, 4, 0, 0]} barSize={10} />
+                    </ComposedChart>
+                  </ResponsiveContainer>
+                </div>
+             </div>
           </div>
 
           {/* Revenue Bar Chart (Full Width) */}
@@ -743,7 +820,11 @@ export function OverviewClient({
                  </thead>
                  <tbody className="divide-y divide-[#E5E7EB]">
                    {programHealths
-                    .filter(ph => isAdsProgram(ph.program.program_metric_definitions || []))
+                    .filter(ph => {
+                      const isAds = isAdsProgram(ph.program.program_metric_definitions || [])
+                      const matchesFilter = selectedAdsProgramId === 'all' || ph.program.id === selectedAdsProgramId
+                      return isAds && matchesFilter
+                    })
                     .map(ph => {
                       const metrics = ph.calculatedMetrics || {}
                       const roas = metrics.roas || 0

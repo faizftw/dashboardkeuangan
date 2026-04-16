@@ -605,3 +605,105 @@ export function buildHealthTrendSeries(
     }
   })
 }
+
+export interface TargetTrendPoint {
+  date: string
+  displayDate: string
+  actualRevenue: number
+  targetRevenue: number
+  actualUser: number
+  targetUser: number
+}
+
+/**
+ * Builds daily cumulative target versus actual series for Revenue and User count.
+ */
+export function buildTargetTrendSeries(
+  programs: ProgramWithRelations[],
+  metricValues: MetricValue[],
+  dailyInputs: DailyInput[],
+  activePeriod: Database['public']['Tables']['periods']['Row'],
+  startDate?: string,
+  endDate?: string
+): TargetTrendPoint[] {
+  const dateRange: string[] = []
+  const workingDays = activePeriod.working_days || 30
+
+  if (startDate && endDate) {
+    const start = new Date(startDate); const end = new Date(endDate); const cur = new Date(start)
+    while (cur <= end) { dateRange.push(cur.toISOString().split('T')[0]); cur.setDate(cur.getDate() + 1) }
+  } else {
+    const today = new Date().getDate()
+    for (let i = 1; i <= Math.min(today, 31); i++) {
+      dateRange.push(`${activePeriod.year}-${String(activePeriod.month).padStart(2, '0')}-${String(i).padStart(2, '0')}`)
+    }
+  }
+
+  // Pre-calculate total targets for all active programs
+  let totalMonthlyTargetRevenue = 0
+  let totalMonthlyTargetUser = 0
+
+  programs.forEach(p => {
+    const metrics = p.program_metric_definitions || []
+    const revMetric = metrics.find(m => m.metric_key === 'revenue')
+    const userMetric = metrics.find(m => m.metric_key === 'user_count')
+
+    totalMonthlyTargetRevenue += (revMetric?.monthly_target || p.monthly_target_rp || 0)
+    totalMonthlyTargetUser += (userMetric?.monthly_target || p.monthly_target_user || 0)
+  })
+
+  // Group data by program to avoid quadratic lookups
+  const metricsByProgram = new Map<string, MetricValue[]>()
+  metricValues.forEach(mv => {
+    const list = metricsByProgram.get(mv.program_id) || []
+    list.push(mv)
+    metricsByProgram.set(mv.program_id, list)
+  })
+
+  const inputsByProgram = new Map<string, DailyInput[]>()
+  dailyInputs.forEach(di => {
+    const list = inputsByProgram.get(di.program_id) || []
+    list.push(di)
+    inputsByProgram.set(di.program_id, list)
+  })
+
+  return dateRange.map(d => {
+    const dayOfMonth = new Date(d).getDate()
+    const prorationFactor = Math.min(dayOfMonth / workingDays, 1)
+
+    let dailyActualRevenue = 0
+    let dailyActualUser = 0
+
+    programs.forEach(p => {
+      const metrics = p.program_metric_definitions || []
+      const revMetricId = metrics.find(m => m.metric_key === 'revenue')?.id
+      const userMetricId = metrics.find(m => m.metric_key === 'user_count')?.id
+
+      // 1. Check metric values (new system)
+      const progMetrics = metricsByProgram.get(p.id) || []
+      const dayMetrics = progMetrics.filter(mv => mv.date <= d)
+      
+      const revVal = revMetricId ? dayMetrics.filter(mv => mv.metric_definition_id === revMetricId).reduce((s, v) => s + (v.value || 0), 0) : 0
+      const userVal = userMetricId ? dayMetrics.filter(mv => mv.metric_definition_id === userMetricId).reduce((s, v) => s + (v.value || 0), 0) : 0
+
+      // 2. Fallback to daily inputs (legacy system)
+      const progInputs = inputsByProgram.get(p.id) || []
+      const dayInputs = progInputs.filter(di => di.date <= d)
+
+      const legacyRev = dayInputs.reduce((s, i) => s + Number(i.achievement_rp || 0), 0)
+      const legacyUser = dayInputs.reduce((s, i) => s + Number(i.achievement_user || 0), 0)
+
+      dailyActualRevenue += (revVal || legacyRev || 0)
+      dailyActualUser += (userVal || legacyUser || 0)
+    })
+
+    return {
+      date: d,
+      displayDate: new Intl.DateTimeFormat('id-ID', { day: 'numeric', month: 'short' }).format(new Date(d)),
+      actualRevenue: Math.round(dailyActualRevenue),
+      targetRevenue: Math.round(totalMonthlyTargetRevenue * prorationFactor),
+      actualUser: Math.round(dailyActualUser),
+      targetUser: Math.round(totalMonthlyTargetUser * prorationFactor)
+    }
+  })
+}
