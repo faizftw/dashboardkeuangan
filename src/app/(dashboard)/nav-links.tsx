@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
-import { usePathname } from 'next/navigation'
+import { usePathname, useSearchParams } from 'next/navigation'
 import { 
   LayoutDashboard,
   FileInput, 
@@ -10,7 +10,7 @@ import {
   ChevronDown,
   HeartPulse,
   Target,
-  TrendingUp,
+  Layers,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
@@ -23,25 +23,26 @@ const dashboardSubItems = [
   {
     name: 'Ringkasan',
     href: '/dashboard',
+    activeTab: 'overview',
     icon: HeartPulse,
-    exact: true, // only active when exactly /dashboard
   },
   {
-    name: 'Metrik Utama',
-    href: '/dashboard/target',
+    name: 'Target Kinerja',
+    href: '/dashboard?tab=target',
+    activeTab: 'target',
     icon: Target,
-    exact: false,
   },
   {
     name: 'Ads Performance',
-    href: '/dashboard/ads',
-    icon: TrendingUp,
-    exact: false,
+    href: '/dashboard?tab=ads',
+    activeTab: 'ads',
+    icon: Layers,
   },
 ]
 
 export function NavLinks({ isCollapsed, onClick }: NavLinksProps) {
   const pathname = usePathname()
+  const searchParams = useSearchParams()
 
   // Auto-expand dashboard group when on any /dashboard route
   const isDashboardActive = pathname?.startsWith('/dashboard')
@@ -52,10 +53,6 @@ export function NavLinks({ isCollapsed, onClick }: NavLinksProps) {
     if (isDashboardActive) setDashboardOpen(true)
   }, [isDashboardActive])
 
-  const isSubItemActive = (href: string, exact: boolean) => {
-    if (exact) return pathname === href
-    return pathname?.startsWith(href)
-  }
 
   return (
     <nav className="flex flex-col gap-1 px-3">
@@ -108,7 +105,8 @@ export function NavLinks({ isCollapsed, onClick }: NavLinksProps) {
             isCollapsed ? "mt-1" : "mt-0.5 pl-3"
           )}>
             {dashboardSubItems.map(sub => {
-              const active = isSubItemActive(sub.href, sub.exact)
+              const currentTab = searchParams.get('tab') || 'overview'
+              const active = isDashboardActive && currentTab === sub.activeTab
               return (
                 <Link
                   key={sub.href}

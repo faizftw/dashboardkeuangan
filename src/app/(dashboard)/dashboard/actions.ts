@@ -3,10 +3,10 @@
 import { createClient } from '@/lib/supabase/server'
 import { Database } from '@/types/database'
 
-type MetricValue = Database['public']['Tables']['daily_metric_values']['Row']
-type DailyInput = Database['public']['Tables']['daily_inputs']['Row']
-type MilestoneCompletion = Database['public']['Tables']['milestone_completions']['Row']
-type Period = Database['public']['Tables']['periods']['Row']
+export type MetricValue = Database['public']['Tables']['daily_metric_values']['Row']
+export type DailyInput = Database['public']['Tables']['daily_inputs']['Row']
+export type MilestoneCompletion = Database['public']['Tables']['milestone_completions']['Row']
+export type Period = Database['public']['Tables']['periods']['Row']
 
 import { redirect } from 'next/navigation'
 import { getUnifiedDashboardData, ProgramWithRelations as InternalProgramWithRelations, DashboardSummary } from '@/lib/dashboard-service'

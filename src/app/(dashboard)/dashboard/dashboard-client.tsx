@@ -1,19 +1,23 @@
 'use client'
 
 import { useState, useMemo, useEffect } from 'react'
-import { useRouter, useSearchParams } from 'next/navigation'
-import { ProgramWithRelations } from './actions'
-import { calculateProgramHealth } from '@/lib/dashboard-calculator'
+import { useRouter, useSearchParams, usePathname } from 'next/navigation'
+import { ProgramWithRelations, MetricValue } from './actions'
+import { 
+  calculateProgramHealth, 
+  isAdsProgram, 
+  aggregateAdsMetrics, 
+  buildAdsDailySeries 
+} from '@/lib/dashboard-calculator'
 import { formatRupiah, cn, getPreviousPeriodLabel } from '@/lib/utils'
 import { formatMetricValue } from '@/lib/formula-evaluator'
 import {
-  AreaChart, Area, XAxis, YAxis, CartesianGrid,
-  Tooltip, ResponsiveContainer, BarChart, Bar, Cell,
-  ComposedChart, Legend, LineChart, Line
+  XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
+  BarChart, Bar, ComposedChart, Legend, Line, AreaChart, Area, Cell
 } from 'recharts'
 import {
   HeartPulse, Layers, Target, CheckSquare,
-  Search, Info, ArrowUpRight, ArrowDownRight
+  Search, ArrowUpRight, ArrowDownRight
 } from 'lucide-react'
 
 import { DashboardSummary } from '@/lib/dashboard-service'
@@ -26,6 +30,7 @@ interface OverviewClientProps {
   isCustomDateRange?: boolean
   startDate?: string
   endDate?: string
+  metricValues: MetricValue[]
 }
 
 type TabType = 'overview' | 'target' | 'ads'
@@ -248,17 +253,94 @@ export function OverviewClient({
   previousSummary,
   isCustomDateRange,
   startDate,
-  endDate
+  endDate,
+  metricValues
 }: OverviewClientProps) {
+  const router = useRouter()
+  const pathname = usePathname()
+  const searchParams = useSearchParams()
+  
+  // Sync activeTab with URL ?tab=...
   const [activeTab, setActiveTab] = useState<TabType>('overview')
+  
+  useEffect(() => {
+    const tab = searchParams.get('tab') as TabType
+    if (tab && ['overview', 'target', 'ads'].includes(tab)) {
+      setActiveTab(tab)
+    }
+  }, [searchParams])
+
+  const handleTabChange = (tab: TabType) => {
+    setActiveTab(tab)
+    const params = new URLSearchParams(searchParams.toString())
+    params.set('tab', tab)
+    router.push(`${pathname}?${params.toString()}`, { scroll: false })
+  }
+
+  // Common filters
   const [searchQuery, setSearchQuery] = useState('')
   const [filterDept, setFilterDept] = useState('all')
   const [filterStatus, setFilterStatus] = useState('all')
   const [sortBy] = useState<'health' | 'name'>('health')
 
+  // Ads Specific States
+  const [selectedAdsProgramId, setSelectedAdsProgramId] = useState('all')
+  const [metricX, setMetricX] = useState('ads_spent')
+  const [metricY, setMetricY] = useState('roas')
+
   // Process data from summary
   const programHealths = summary.programHealths
   const globalKPIs = summary.globalKPIs
+  
+  // ── Ads Data Processing ───────────────────────────────────────────────────
+  const adsPrograms = useMemo(() => 
+    programs.filter(p => isAdsProgram(p.program_metric_definitions || [])),
+    [programs]
+  )
+
+  // Map metricValues for aggregation
+  const metricValuesByProgram = useMemo(() => {
+    const map = new Map<string, MetricValue[]>()
+    metricValues.forEach(mv => {
+      const list = map.get(mv.program_id) || []
+      list.push(mv)
+      map.set(mv.program_id, list)
+    })
+    return map
+  }, [metricValues])
+
+  const targetAdsPrograms = useMemo(() => 
+    selectedAdsProgramId === 'all' 
+      ? adsPrograms 
+      : adsPrograms.filter(p => p.id === selectedAdsProgramId),
+    [adsPrograms, selectedAdsProgramId]
+  )
+
+  const adsAggregate = useMemo(() => 
+    aggregateAdsMetrics(targetAdsPrograms, metricValuesByProgram),
+    [targetAdsPrograms, metricValuesByProgram]
+  )
+
+  const adsChartData = useMemo(() => 
+    buildAdsDailySeries(targetAdsPrograms, metricValuesByProgram, metricX, metricY),
+    [targetAdsPrograms, metricValuesByProgram, metricX, metricY]
+  )
+
+  const adsMetricOptionsX = [
+    { key: 'ads_spent', label: 'Ads Spent' },
+    { key: 'user_count', label: 'Goals' },
+    { key: 'leads', label: 'Leads' },
+    { key: 'cpm', label: 'CPM' },
+    { key: 'cpc', label: 'CPC' },
+  ]
+
+  const adsMetricOptionsY = [
+    { key: 'roas', label: 'ROAS' },
+    { key: 'cpp', label: 'CPP/CPL' },
+    { key: 'conversion_rate', label: 'CR %' },
+    { key: 'user_count', label: 'Goals' },
+    { key: 'leads', label: 'Leads' },
+  ]
 
   const prevGlobalKPIs = previousSummary?.globalKPIs || null
   const healthGrowth = (prevGlobalKPIs && prevGlobalKPIs.avgHealth > 0)
@@ -314,34 +396,34 @@ export function OverviewClient({
       {/* ── Tab Switcher ─────────────────────────────────────────── */}
       <div className="flex items-center gap-1 p-1 bg-slate-50 border border-[#E5E7EB] rounded-xl w-fit">
         <button
-          onClick={() => setActiveTab('overview')}
+          onClick={() => handleTabChange('overview')}
           className={cn(
             "flex items-center gap-2 px-4 py-1.5 rounded-lg text-[13px] font-semibold transition-all",
-            activeTab === 'overview' ? "bg-white text-[#534AB7] border border-[#E5E7EB]" : "text-slate-500 hover:text-slate-700 hover:bg-white/50"
+            activeTab === 'overview' ? "bg-white text-[#534AB7] border border-[#E5E7EB] shadow-sm" : "text-slate-500 hover:text-slate-700 hover:bg-white/50"
           )}
         >
           <HeartPulse className="h-3.5 w-3.5" />
-          Overview
+          Ringkasan
         </button>
         <button
-          onClick={() => setActiveTab('target')}
+          onClick={() => handleTabChange('target')}
           className={cn(
             "flex items-center gap-2 px-4 py-1.5 rounded-lg text-[13px] font-semibold transition-all",
-            activeTab === 'target' ? "bg-white text-[#534AB7] border border-[#E5E7EB]" : "text-slate-500 hover:text-slate-700 hover:bg-white/50"
+            activeTab === 'target' ? "bg-white text-[#534AB7] border border-[#E5E7EB] shadow-sm" : "text-slate-500 hover:text-slate-700 hover:bg-white/50"
           )}
         >
           <Target className="h-3.5 w-3.5" />
           Target
         </button>
         <button
-          onClick={() => setActiveTab('ads')}
+          onClick={() => handleTabChange('ads')}
           className={cn(
             "flex items-center gap-2 px-4 py-1.5 rounded-lg text-[13px] font-semibold transition-all",
-            activeTab === 'ads' ? "bg-white text-[#534AB7] border border-[#E5E7EB]" : "text-slate-500 hover:text-slate-700 hover:bg-white/50"
+            activeTab === 'ads' ? "bg-white text-[#534AB7] border border-[#E5E7EB] shadow-sm" : "text-slate-500 hover:text-slate-700 hover:bg-white/50"
           )}
         >
           <Layers className="h-3.5 w-3.5" />
-          Ads Perform
+          Iklan & Ads
         </button>
       </div>
 
@@ -423,10 +505,10 @@ export function OverviewClient({
                    <ResponsiveContainer width="100%" height="100%">
                       <BarChart data={barData} layout="vertical" margin={{ left: -20 }}>
                         <XAxis type="number" hide />
-                        <YAxis type="category" dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: '#64748b', fontWeight: 500 }} width={100} tickFormatter={v => v.length > 12 ? v.slice(0, 10) + '...' : v} />
+                        <YAxis type="category" dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: '#64748b', fontWeight: 500 }} width={100} tickFormatter={(v: string) => v.length > 12 ? v.slice(0, 10) + '...' : v} />
                         <Tooltip cursor={{ fill: '#f8fafc' }} contentStyle={{ borderRadius: 12, border: '1px solid #E5E7EB' }} />
                         <Bar dataKey="healthScore" radius={[0, 4, 4, 0]} maxBarSize={20}>
-                          {barData.map((e, i) => {
+                          {barData.map((_e: unknown, i: number) => {
                             const opacities = [1, 0.9, 0.8, 0.7, 0.6, 0.5, 0.4, 0.3, 0.2, 0.1];
                             return <Cell key={i} fill={`rgba(83, 74, 183, ${opacities[i] || 0.1})`} />
                           })}
@@ -528,11 +610,11 @@ export function OverviewClient({
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={programHealths.sort((a, b) => (b.calculatedMetrics?.revenue || 0) - (a.calculatedMetrics?.revenue || 0)).slice(0, 8)}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
-                  <XAxis dataKey="program.name" axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: '#94a3b8' }} tickFormatter={v => v.length > 12 ? v.substring(0, 10) + '...' : v} />
-                  <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: '#94a3b8' }} tickFormatter={v => `Rp${v/1000000}jt`} />
+                  <XAxis dataKey="program.name" axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: '#94a3b8' }} tickFormatter={(v: string) => v.length > 12 ? v.substring(0, 10) + '...' : v} />
+                  <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: '#94a3b8' }} tickFormatter={(v: number) => `Rp${v/1000000}jt`} />
                   <Tooltip 
                     contentStyle={{ borderRadius: 12, border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }}
-                    formatter={(v) => [formatRupiah(Number(v)), 'Pendapatan']}
+                    formatter={(v: string | number | readonly (string | number)[] | undefined) => [formatRupiah(Number(Array.isArray(v) ? v[0] : (v || 0))), 'Pendapatan']}
                   />
                   <Bar dataKey="calculatedMetrics.revenue" fill="#10b981" radius={[4, 4, 0, 0]} maxBarSize={40} />
                 </BarChart>
@@ -544,100 +626,149 @@ export function OverviewClient({
 
       {activeTab === 'ads' && (
         <div className="space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-500">
+          {/* Filters for Ads */}
+          <div className="flex flex-col sm:flex-row gap-3">
+             <select 
+               value={selectedAdsProgramId} 
+               onChange={e => setSelectedAdsProgramId(e.target.value)}
+               className="px-4 py-2 text-sm font-semibold bg-white border border-[#E5E7EB] rounded-xl focus:outline-none focus:ring-2 focus:ring-[#534AB7]/20 text-[#111827]"
+             >
+               <option value="all">Semua program iklan ({adsPrograms.length})</option>
+               {adsPrograms.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+             </select>
+          </div>
+
           {/* Row 1: Ads Aggregate Cards */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             <KpiCard 
               icon={Layers} 
               label="Total ads spent" 
-              value={formatRupiah(summary.adsMetrics.totalAdsSpent)} 
+              value={formatRupiah(adsAggregate.totalAdsSpent)} 
+              sub="bulan berjalan"
               accentColor="#378ADD" 
             />
             <KpiCard 
               icon={Target} 
               label="Total goals" 
-              value={summary.adsMetrics.totalGoals} 
-              sub="closing" 
+              value={adsAggregate.totalGoals} 
+              sub="jumlah closing" 
               accentColor="#639922" 
             />
             <KpiCard 
               icon={HeartPulse} 
               label="Avg ROAS" 
-              value={`${summary.adsMetrics.avgRoas.toFixed(2)}x`} 
+              value={`${adsAggregate.avgRoas.toFixed(2)}x`} 
+              sub={adsAggregate.avgRoas >= 1 ? "Profitable (>1x)" : "Ditinjau (<1x)"}
               accentColor="#534AB7" 
             />
             <KpiCard 
               icon={CheckSquare} 
               label="Avg CPP" 
-              value={formatRupiah(summary.adsMetrics.avgCpp)} 
-              accentColor={summary.adsMetrics.avgCpp > 60000 ? "#E24B4A" : "#639922"} 
+              value={formatRupiah(adsAggregate.avgCpp)} 
+              sub="biaya per goal"
+              accentColor={adsAggregate.avgCpp > 60000 ? "#E24B4A" : "#639922"} 
             />
           </div>
 
-          {/* Dual Axis Ads Chart */}
-          <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="font-bold text-slate-800 text-sm flex items-center gap-2">
-                <Layers className="h-4 w-4 text-rose-500" />
-                Ads Performance: Spent vs ROAS
+          {/* Performance Graph */}
+          <div className="bg-white p-6 rounded-xl border border-[#E5E7EB]">
+            <div className="flex flex-col sm:flex-row items-center justify-between mb-8 gap-4">
+              <h3 className="font-semibold text-[#111827] text-sm flex items-center gap-3">
+                <div className="p-2 bg-rose-50 rounded-lg">
+                  <Layers className="h-4 w-4 text-rose-500" />
+                </div>
+                Grafik performa harian
               </h3>
+              <div className="flex items-center gap-3 text-[11px] font-bold text-[#6B7280]">
+                <span>Bandingkan:</span>
+                <select 
+                  value={metricX}
+                  onChange={e => setMetricX(e.target.value)}
+                  className="bg-slate-50 border border-[#E5E7EB] rounded-lg px-2 py-1 text-[#111827] outline-none"
+                >
+                  {adsMetricOptionsX.map(o => <option key={o.key} value={o.key}>{o.label}</option>)}
+                </select>
+                <span>Dengan:</span>
+                <select 
+                   value={metricY}
+                   onChange={e => setMetricY(e.target.value)}
+                   className="bg-slate-50 border border-[#E5E7EB] rounded-lg px-2 py-1 text-[#111827] outline-none"
+                >
+                   {adsMetricOptionsY.map(o => <option key={o.key} value={o.key}>{o.label}</option>)}
+                </select>
+              </div>
             </div>
             <div className="h-80">
               <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={summary.adsDailySeries}>
+                <ComposedChart data={adsChartData}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
                   <XAxis dataKey="displayDate" axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: '#94a3b8' }} />
-                  <YAxis hide yAxisId="left" />
-                  <YAxis hide yAxisId="right" orientation="right" />
+                  <YAxis yAxisId="left" hide />
+                  <YAxis yAxisId="right" orientation="right" hide />
                   <Tooltip 
-                    contentStyle={{ borderRadius: 12, border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }}
-                    formatter={(v, name) => [name === 'x' ? formatRupiah(Number(v)) : `${Number(v).toFixed(2)}x`, name === 'x' ? 'Spent' : 'ROAS']}
+                    contentStyle={{ borderRadius: 12, border: '1px solid #E5E7EB', boxShadow: 'none' }}
+                    formatter={(v: string | number | readonly (string | number)[] | undefined, name: string | number | undefined) => {
+                      const label = adsMetricOptionsX.find(o => o.key === name || o.label === name)?.label || 
+                                    adsMetricOptionsY.find(o => o.key === name || o.label === name)?.label || name
+                      if (['ads_spent', 'cpp', 'cost_per_goal'].includes(name as string)) return [formatRupiah(Number(v)), label]
+                      if (['roas', 'conversion_rate'].includes(name as string)) return [`${Number(v).toFixed(2)}${name === 'conversion_rate' ? '%' : 'x'}`, label]
+                      return [v, label]
+                    }}
                   />
-                  <Line yAxisId="left" type="monotone" dataKey="x" name="Spent" stroke="#f43f5e" strokeWidth={3} dot={false} />
-                  <Line yAxisId="right" type="monotone" dataKey="y" name="ROAS" stroke="#6366f1" strokeWidth={3} dot={false} />
-                </LineChart>
+                  <Legend verticalAlign="top" height={36} iconType="circle" />
+                  <Bar yAxisId="left" dataKey="x" name={adsMetricOptionsX.find(o => o.key === metricX)?.label || metricX} fill="#F43F5F" radius={[4, 4, 0, 0]} barSize={20} />
+                  <Line yAxisId="right" type="monotone" dataKey="y" name={adsMetricOptionsY.find(o => o.key === metricY)?.label || metricY} stroke="#534AB7" strokeWidth={3} dot={{ r: 3, fill: '#534AB7' }} activeDot={{ r: 5 }} />
+                </ComposedChart>
               </ResponsiveContainer>
             </div>
           </div>
 
-          {/* Ads Performance Table */}
-          <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-             <div className="p-4 border-b border-slate-100 bg-slate-50/50">
-               <h3 className="font-bold text-slate-800 text-sm">Detail Performa Ads per Program</h3>
+          {/* Details Table */}
+          <div className="bg-white rounded-xl border border-[#E5E7EB] overflow-hidden">
+             <div className="px-6 py-4 border-b border-[#E5E7EB] bg-slate-50/50">
+                <h3 className="font-semibold text-[#111827] text-sm italic">Detail performa iklan per program</h3>
              </div>
              <div className="overflow-x-auto">
-               <table className="w-full text-left text-xs">
+               <table className="w-full text-left">
                  <thead>
-                   <tr className="bg-slate-100/50 text-slate-400 font-black uppercase tracking-widest border-b border-slate-100">
-                     <th className="px-4 py-3">Program</th>
-                     <th className="px-4 py-3 text-right">Ads Spent</th>
-                     <th className="px-4 py-3 text-right">Goals</th>
-                     <th className="px-4 py-3 text-right">ROAS</th>
-                     <th className="px-4 py-3 text-right">CPP</th>
-                     <th className="px-4 py-3 text-right">CR</th>
-                     <th className="px-4 py-3 text-center">Status</th>
+                   <tr className="border-b border-[#E5E7EB] text-[10px] font-bold text-[#6B7280] uppercase tracking-wider">
+                     <th className="px-6 py-3">Program</th>
+                     <th className="px-6 py-3 text-right text-[#378ADD]">Ads Spent</th>
+                     <th className="px-6 py-3 text-right text-[#639922]">Goals</th>
+                     <th className="px-6 py-3 text-right text-[#534AB7]">ROAS</th>
+                     <th className="px-6 py-3 text-right">CPP</th>
+                     <th className="px-6 py-3 text-right">CR %</th>
+                     <th className="px-6 py-3 text-center">Status</th>
                    </tr>
                  </thead>
-                 <tbody className="divide-y divide-slate-100">
+                 <tbody className="divide-y divide-[#E5E7EB]">
                    {programHealths
-                    .filter(ph => (ph.program.program_metric_definitions || []).some(m => m.metric_group === 'ad_spend' || ['ads_spent', 'leads', 'roas'].includes(m.metric_key))) 
+                    .filter(ph => isAdsProgram(ph.program.program_metric_definitions || []))
                     .map(ph => {
-                      const m = ph.calculatedMetrics || {}
+                      const metrics = ph.calculatedMetrics || {}
+                      const roas = metrics.roas || 0
+                      const spent = metrics.ads_spent || 0
+                      const goals = metrics.user_count || 0
+                      const cpp = metrics.cpp || 0
+                      const cr = metrics.conversion_rate || 0
+                      
                       return (
-                        <tr key={ph.program.id} className="hover:bg-slate-50/80 transition-colors">
-                          <td className="px-4 py-3 font-bold text-slate-700">{ph.program.name}</td>
-                          <td className="px-4 py-3 text-right font-medium">{formatRupiah(m.ads_spent || 0)}</td>
-                          <td className="px-4 py-3 text-right font-medium">{m.user_count || 0}</td>
-                          <td className="px-4 py-3 text-right font-black text-indigo-600">{(m.roas || 0).toFixed(2)}x</td>
-                          <td className="px-4 py-3 text-right font-medium">{formatRupiah(m.cpp || 0)}</td>
-                          <td className="px-4 py-3 text-right font-medium">{(m.conversion_rate || 0).toFixed(1)}%</td>
-                          <td className="px-4 py-3 text-center">
-                            <span className={cn(
-                              "text-[10px] font-black uppercase tracking-tight px-2 py-1 rounded-full border",
-                              getStatusLabelAndColor(ph.healthScore).badge
-                            )}>
-                              {getStatusLabelAndColor(ph.healthScore).label}
-                            </span>
-                          </td>
+                        <tr key={ph.program.id} className="hover:bg-slate-50 transition-colors group">
+                           <td className="px-6 py-4 font-semibold text-[#111827] text-[13px]">{ph.program.name}</td>
+                           <td className="px-6 py-4 text-right text-[#111827] text-[12px] font-medium">{formatRupiah(spent)}</td>
+                           <td className="px-6 py-4 text-right text-[#111827] text-[12px] font-medium">{goals}</td>
+                           <td className="px-6 py-4 text-right">
+                              <span className={cn("px-2 py-0.5 rounded-lg text-[12px] font-bold", roas >= 1 ? "bg-emerald-50 text-emerald-700" : "bg-rose-50 text-rose-700")}>
+                                {roas.toFixed(2)}x
+                              </span>
+                           </td>
+                           <td className="px-6 py-4 text-right text-[#6B7280] text-[12px]">{formatRupiah(cpp)}</td>
+                           <td className="px-6 py-4 text-right text-[#6B7280] text-[12px]">{cr.toFixed(1)}%</td>
+                           <td className="px-6 py-4 text-center">
+                             <span className={cn("px-2 py-1 rounded-full text-[10px] font-bold tracking-tight border", getStatusLabelAndColor(ph.healthScore).badge)}>
+                               {getStatusLabelAndColor(ph.healthScore).label.toLowerCase()}
+                             </span>
+                           </td>
                         </tr>
                       )
                     })}

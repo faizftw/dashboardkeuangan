@@ -64,6 +64,7 @@ export default async function DashboardPage({
             isCustomDateRange={data.isCustomDateRange}
             startDate={searchParams.startDate}
             endDate={searchParams.endDate}
+            metricValues={data.metricValues}
           />
         </Suspense>
       )}
