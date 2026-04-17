@@ -4,6 +4,7 @@ import { createClient } from '@/lib/supabase/server'
 import { Database } from '@/types/database'
 
 export type MetricValue = Database['public']['Tables']['daily_metric_values']['Row']
+export type MetricDefinition = Database['public']['Tables']['program_metric_definitions']['Row']
 export type DailyInput = Database['public']['Tables']['daily_inputs']['Row']
 export type MilestoneCompletion = Database['public']['Tables']['milestone_completions']['Row']
 export type Period = Database['public']['Tables']['periods']['Row']

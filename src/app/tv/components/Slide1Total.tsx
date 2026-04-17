@@ -38,7 +38,7 @@ export function Slide1Total({ data }: Slide1Props) {
             Ringkasan Performa
           </h1>
           <p className="text-2xl font-bold text-indigo-400 uppercase tracking-widest">
-            Periode {activePeriod ? `${getMonthName(activePeriod.month)} ${activePeriod.year}` : '-'}
+            Bulan {activePeriod ? getMonthName(activePeriod.month) : '-'} Tahun {activePeriod?.year || ''}
           </p>
         </div>
         <DigitalClock />

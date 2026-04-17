@@ -34,7 +34,7 @@ type Program = Database['public']['Tables']['programs']['Row'] & {
 }
 
 type DailyInput = Database['public']['Tables']['daily_inputs']['Row'] & {
-  programs: { name: string; target_type: 'quantitative' | 'qualitative' | 'hybrid' } | null
+  programs: { name: string; target_type: Database['public']['Enums']['target_type'] } | null
   profiles?: { name: string } | null
 }
 type Period = Database['public']['Tables']['periods']['Row']

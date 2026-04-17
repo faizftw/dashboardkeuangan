@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { Database } from '@/types/database'
 import { InputHarianContainer } from './input-harian-container'
+import { formatMonth } from '@/lib/utils'
 
 export const dynamic = 'force-dynamic'
 
@@ -132,7 +133,7 @@ export default async function InputHarianPage() {
           <div className="bg-indigo-50 border border-indigo-100 rounded-xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div className="flex flex-col">
               <span className="text-xs font-bold text-indigo-400 uppercase tracking-widest mb-1">Periode Aktif Saat Ini</span>
-              <span className="text-lg font-semibold text-indigo-900">Bulan {activePeriod.month} Tahun {activePeriod.year}</span>
+              <span className="text-lg font-semibold text-indigo-900">Bulan {formatMonth(activePeriod.month)} Tahun {activePeriod.year}</span>
             </div>
             <div className="bg-white px-4 py-2 rounded-lg text-sm font-medium text-slate-700 shadow-sm border border-slate-100">
               Total Hari Kerja: <span className="font-bold text-indigo-600">{activePeriod.working_days} Hari</span>

@@ -46,7 +46,7 @@ export default async function DashboardPage({
             <div className="bg-indigo-50 border border-indigo-100 px-4 py-2 rounded-xl flex items-center gap-3 shrink-0 h-10">
               <div className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
               <span className="text-sm font-bold text-indigo-900">
-                Periode: {monthName} {data.activePeriod.year} · {data.activePeriod.working_days} HK
+                Periode: Bulan {monthName} Tahun {data.activePeriod.year} · {data.activePeriod.working_days} HK
               </span>
             </div>
           </div>
@@ -76,6 +76,7 @@ export default async function DashboardPage({
             metricValues={data.metricValues}
             dailyInputs={data.dailyInputs}
             activePeriod={data.activePeriod}
+            milestoneCompletions={data.milestoneCompletions}
           />
         </Suspense>
       )}

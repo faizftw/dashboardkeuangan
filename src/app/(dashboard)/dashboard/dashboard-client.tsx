@@ -3,10 +3,11 @@
 import { useState, useMemo, useEffect } from 'react'
 import { useRouter, useSearchParams, usePathname } from 'next/navigation'
 import { Database } from '@/types/database'
-import { ProgramWithRelations, MetricValue, DailyInput } from './actions'
+import { ProgramWithRelations, MetricValue, DailyInput, MilestoneCompletion } from './actions'
 import { 
   calculateProgramHealth, 
   isAdsProgram, 
+  isMouProgram,
   aggregateAdsMetrics, 
   buildAdsDailySeries,
   buildTargetTrendSeries
@@ -19,7 +20,8 @@ import {
 } from 'recharts'
 import {
   HeartPulse, Layers, Target, CheckSquare,
-  Search, ArrowUpRight, ArrowDownRight, TrendingUp
+  Search, ArrowUpRight, ArrowDownRight, TrendingUp, Handshake, FileDown,
+  Users
 } from 'lucide-react'
 
 import { DashboardSummary } from '@/lib/dashboard-service'
@@ -43,9 +45,10 @@ interface OverviewClientProps {
   metricValues: MetricValue[]
   dailyInputs: DailyInput[]
   activePeriod: Database['public']['Tables']['periods']['Row']
+  milestoneCompletions: MilestoneCompletion[]
 }
 
-type TabType = 'overview' | 'target' | 'ads'
+type TabType = 'overview' | 'target' | 'ads' | 'mou'
 
 // ── Status helpers ───────────────────────────────────────────────────────────
 function getStatusLabelAndColor(score: number): { label: string; dot: string; badge: string, accent: string } {
@@ -303,7 +306,8 @@ export function OverviewClient({
   endDate,
   metricValues,
   dailyInputs,
-  activePeriod
+  activePeriod,
+  milestoneCompletions
 }: OverviewClientProps) {
   const router = useRouter()
   const pathname = usePathname()
@@ -315,7 +319,7 @@ export function OverviewClient({
   
   useEffect(() => {
     const tab = searchParams.get('tab') as TabType
-    if (tab && ['overview', 'target', 'ads'].includes(tab)) {
+    if (tab && ['overview', 'target', 'ads', 'mou'].includes(tab)) {
       setActiveTab(tab)
     }
   }, [searchParams])
@@ -445,8 +449,68 @@ export function OverviewClient({
 
   const adsChartData = useMemo(() => 
     buildAdsDailySeries(targetAdsPrograms, metricValuesByProgram, metricX, metricY),
-    [targetAdsPrograms, metricValuesByProgram, metricX, metricY]
+  [targetAdsPrograms, metricValuesByProgram, metricX, metricY])
+
+  const mouProgramHealths = useMemo(() => 
+    programHealths.filter(ph => isMouProgram(ph.program.program_metric_definitions || [])),
+    [programHealths]
   )
+
+  const handleExport = () => {
+    const headers = [
+      'Program', 
+      'Department', 
+      'Type',
+      'Revenue Actual', 
+      'Revenue Target', 
+      'User Actual', 
+      'User Target',
+      'Milestones Done',
+      'Milestones Total',
+      'Health Score', 
+      'Status'
+    ]
+    
+    const rows = filteredPrograms.map(ph => {
+      const p = ph.program
+      const metrics = ph.calculatedMetrics || {}
+      
+      const revActual = metrics.revenue || metrics.omzet || 0
+      const revTarget = ph.absoluteTargets?.revenue || ph.absoluteTargets?.omzet || ph.program.monthly_target_rp || 0
+      
+      const userActual = metrics.user_count || metrics.closing || metrics.user_acquisition || 0
+      const userTarget = ph.absoluteTargets?.user_count || ph.absoluteTargets?.closing || ph.absoluteTargets?.user_acquisition || ph.program.monthly_target_user || 0
+      
+      const milestones = p.program_milestones || []
+      const completedMilestones = milestones.filter(m => 
+        milestoneCompletions.some(mc => mc.milestone_id === m.id && mc.is_completed)
+      ).length
+
+      return [
+        `"${p.name}"`,
+        `"${p.department || '-'}"`,
+        `"${p.target_type}"`,
+        revActual,
+        revTarget,
+        userActual,
+        userTarget,
+        completedMilestones,
+        milestones.length,
+        `${Math.round(ph.healthScore)}%`,
+        `"${getStatusLabelAndColor(ph.healthScore).label}"`
+      ]
+    })
+    
+    const csvContent = [headers, ...rows].map(e => e.join(",")).join("\n")
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement("a")
+    link.setAttribute("href", url)
+    link.setAttribute("download", `dashboard_report_${new Date().toISOString().split('T')[0]}.csv`)
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+  }
 
   const adsMetricOptionsX = [
     { key: 'ads_spent', label: 'Ads Spent' },
@@ -511,6 +575,7 @@ export function OverviewClient({
   return (
     <div className="space-y-6 pb-24">
       {/* ── Tab Switcher ─────────────────────────────────────────── */}
+    <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
       <div className="flex items-center gap-1 p-1 bg-slate-50 border border-[#E5E7EB] rounded-xl w-fit">
         <button
           onClick={() => handleTabChange('overview')}
@@ -529,9 +594,9 @@ export function OverviewClient({
             activeTab === 'target' ? "bg-white text-[#534AB7] border border-[#E5E7EB] shadow-sm" : "text-slate-500 hover:text-slate-700 hover:bg-white/50"
           )}
         >
-            <Target className="h-3.5 w-3.5" />
-            Omzet
-          </button>
+          <Target className="h-3.5 w-3.5" />
+          Omzet
+        </button>
         <button
           onClick={() => handleTabChange('ads')}
           className={cn(
@@ -542,7 +607,26 @@ export function OverviewClient({
           <Layers className="h-3.5 w-3.5" />
           Iklan & Ads
         </button>
+        <button
+          onClick={() => handleTabChange('mou')}
+          className={cn(
+            "flex items-center gap-2 px-4 py-1.5 rounded-lg text-[13px] font-semibold transition-all",
+            activeTab === 'mou' ? "bg-white text-[#534AB7] border border-[#E5E7EB] shadow-sm" : "text-slate-500 hover:text-slate-700 hover:bg-white/50"
+          )}
+        >
+          <Handshake className="h-3.5 w-3.5" />
+          Program MoU
+        </button>
       </div>
+
+      <button
+        onClick={handleExport}
+        className="flex items-center gap-2 px-4 py-2 bg-white border border-[#E5E7EB] rounded-xl text-[13px] font-semibold text-slate-600 hover:bg-slate-50 transition-all shadow-sm w-fit"
+      >
+        <FileDown className="h-4 w-4" />
+        Export Spreadsheet
+      </button>
+    </div>
       
       {/* Motivational Banner relocated here (Global) */}
       <div className={cn("px-8 py-10 rounded-2xl border flex flex-col items-center justify-center text-center gap-6 shadow-sm transition-all", banner.bg, banner.border)}>
@@ -1079,6 +1163,198 @@ export function OverviewClient({
                  </tbody>
                </table>
              </div>
+          </div>
+        </div>
+      )}
+      {activeTab === 'mou' && (
+        <div className="space-y-6 animate-in fade-in duration-500">
+          {/* MoU Aggregates */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            <RadialProgressCard 
+              title="Kesehatan MoU"
+              value={mouProgramHealths.length > 0 ? mouProgramHealths.reduce((s, ph) => s + ph.healthScore, 0) / mouProgramHealths.length : 0} 
+              percentage={mouProgramHealths.length > 0 ? mouProgramHealths.reduce((s, ph) => s + ph.healthScore, 0) / mouProgramHealths.length : 0} 
+              target={100}
+              displayValue={(mouProgramHealths.length > 0 ? mouProgramHealths.reduce((s, ph) => s + ph.healthScore, 0) / mouProgramHealths.length : 0).toFixed(1) + "%"}
+              displayTarget="100"
+              unitLabel="%"
+              color="#534AB7"
+            />
+            <KpiCard 
+              icon={Users} 
+              label="Total Closing MoU" 
+              value={mouProgramHealths.reduce((s, ph) => s + (ph.calculatedMetrics?.user_count || ph.calculatedMetrics?.user_acquisition || 0), 0)}
+              sub="akumulasi periode ini"
+              accentColor="#639922"
+            />
+            <KpiCard 
+              icon={CheckSquare} 
+              label="Milestones Done" 
+              value={mouProgramHealths.reduce((s, ph) => s + (ph.program.program_milestones?.filter(m => milestoneCompletions.some(mc => mc.milestone_id === m.id && mc.is_completed)).length || 0), 0)}
+              sub={`dari ${mouProgramHealths.reduce((s, ph) => s + (ph.program.program_milestones?.length || 0), 0)} total`}
+              accentColor="#378ADD"
+            />
+            <KpiCard 
+              icon={Handshake} 
+              label="Program Kerja Sama" 
+              value={mouProgramHealths.length}
+              sub="aktif dalam sistem"
+              accentColor="#534AB7"
+            />
+          </div>
+
+          <div className="bg-white rounded-xl border border-[#E5E7EB] overflow-hidden shadow-sm">
+            <div className="px-6 py-4 border-b border-[#E5E7EB] bg-slate-50/50 flex items-center justify-between">
+              <h3 className="font-semibold text-[#111827] text-sm flex items-center gap-2">
+                <Handshake className="h-4 w-4 text-[#534AB7]" />
+                Performa Program Kerja Sama (MoU)
+              </h3>
+              <div className="text-[11px] font-bold text-[#6B7280] uppercase tracking-wider">
+                {mouProgramHealths.length} Program Aktif
+              </div>
+            </div>
+
+            {/* MoU Aggregates Row */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 p-6 bg-slate-50/30">
+              <div className="bg-white p-4 rounded-xl border border-[#E5E7EB] shadow-sm">
+                <p className="text-[10px] font-bold text-[#6B7280] uppercase tracking-wider mb-1">Total Closing MoU</p>
+                <div className="text-2xl font-black text-[#111827]">
+                  {mouProgramHealths.reduce((sum, ph) => {
+                    return sum + (ph.calculatedMetrics?.user_count || ph.calculatedMetrics?.user_acquisition || 0)
+                  }, 0)}
+                </div>
+                <p className="text-[10px] text-slate-400 mt-1 font-medium italic">Akumulasi seluruh program MoU</p>
+              </div>
+              <div className="bg-white p-4 rounded-xl border border-[#E5E7EB] shadow-sm">
+                <p className="text-[10px] font-bold text-[#6B7280] uppercase tracking-wider mb-1">Total Milestone Done</p>
+                <div className="text-2xl font-black text-[#534AB7]">
+                  {mouProgramHealths.reduce((sum, ph) => {
+                    const progMilestones = ph.program.program_milestones || []
+                    const doneForProg = progMilestones.filter(m => 
+                      milestoneCompletions.some(mc => mc.milestone_id === m.id)
+                    ).length
+                    return sum + doneForProg
+                  }, 0)}
+                </div>
+                <p className="text-[10px] text-slate-400 mt-1 font-medium">dari {mouProgramHealths.reduce((sum, ph) => sum + (ph.program.program_milestones?.length || 0), 0)} total milestone</p>
+              </div>
+              <div className="bg-white p-4 rounded-xl border border-[#E5E7EB] shadow-sm">
+                <p className="text-[10px] font-bold text-[#6B7280] uppercase tracking-wider mb-1">Avg Health MoU</p>
+                <div className="text-2xl font-black text-emerald-600">
+                  {mouProgramHealths.length > 0 
+                    ? Math.round(mouProgramHealths.reduce((sum, ph) => sum + ph.healthScore, 0) / mouProgramHealths.length)
+                    : 0}%
+                </div>
+                <p className="text-[10px] text-slate-400 mt-1 font-medium italic">Rata-rata kesehatan kerja sama</p>
+              </div>
+            </div>
+            
+            <div className="overflow-x-auto">
+              <table className="w-full text-left">
+                <thead>
+                  <tr className="border-b border-[#E5E7EB] text-[10px] font-bold text-[#6B7280] uppercase tracking-wider">
+                    <th className="px-6 py-4">Program</th>
+                    <th className="px-6 py-4">PIC / Team</th>
+                    <th className="px-6 py-4 text-center">Closing / User</th>
+                    <th className="px-6 py-4 text-center">Milestones</th>
+                    <th className="px-6 py-4 text-center">Health</th>
+                    <th className="px-6 py-4 text-center">Status</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-[#E5E7EB]">
+                  {mouProgramHealths.length === 0 ? (
+                    <tr>
+                      <td colSpan={6} className="px-6 py-12 text-center text-slate-400 italic">
+                        Belum ada program dengan tipe MoU / Kerja Sama.
+                      </td>
+                    </tr>
+                  ) : (
+                    programHealths
+                      .filter(ph => isMouProgram(ph.program.program_metric_definitions || []))
+                      .map(ph => {
+                        const metrics = ph.calculatedMetrics || {}
+                        const userActual = metrics.user_count || metrics.user_acquisition || 0
+                        const userTarget = ph.absoluteTargets?.user_count || ph.absoluteTargets?.user_acquisition || 0
+                        const userPct = userTarget > 0 ? (userActual / userTarget) * 100 : 0
+                        
+                        const programMilestones = ph.program.program_milestones || []
+                        const completedMilestones = programMilestones.filter(m => 
+                          milestoneCompletions.some(mc => mc.milestone_id === m.id)
+                        ).length
+                        const totalMilestones = programMilestones.length
+                        const milestonePct = totalMilestones > 0 ? (completedMilestones / totalMilestones) * 100 : 0
+
+                        const pics = (ph.program.program_pics || [])
+                          .map(pic => profiles.find(pr => pr.id === pic.profile_id))
+                          .filter(Boolean)
+
+                        return (
+                          <tr 
+                            key={ph.program.id} 
+                            className="hover:bg-slate-50 transition-colors group cursor-pointer"
+                            onClick={() => setSelectedProgramId(ph.program.id)}
+                          >
+                            <td className="px-6 py-4">
+                              <div className="font-semibold text-[#111827] text-[13px] group-hover:text-[#534AB7] transition-colors">{ph.program.name}</div>
+                              {ph.program.department && <div className="text-[10px] text-slate-400 font-bold uppercase mt-0.5">{ph.program.department}</div>}
+                            </td>
+                            <td className="px-6 py-4">
+                              <div className="flex -space-x-1.5">
+                                {pics.slice(0, 3).map(p => (
+                                  <div key={p!.id} className="h-6 w-6 rounded-full bg-[#EEEDFE] border-2 border-white flex items-center justify-center text-[9px] font-bold text-[#534AB7] uppercase shadow-sm">
+                                    {p!.name?.[0]}
+                                  </div>
+                                ))}
+                                {pics.length > 3 && (
+                                  <div className="h-6 w-6 rounded-full bg-slate-50 border-2 border-white flex items-center justify-center text-[9px] font-bold text-slate-500 shadow-sm">
+                                    +{pics.length - 3}
+                                  </div>
+                                )}
+                              </div>
+                            </td>
+                            <td className="px-6 py-4">
+                              <div className="flex flex-col items-center gap-1.5 min-w-[120px]">
+                                <div className="flex justify-between w-full text-[11px] font-bold">
+                                  <span className="text-[#111827]">{userActual}</span>
+                                  <span className="text-slate-400">/ {userTarget}</span>
+                                </div>
+                                <div className="h-1.5 w-full bg-slate-100 rounded-full overflow-hidden">
+                                  <div 
+                                    className={cn("h-full transition-all duration-1000", getProgressColor(userPct))}
+                                    style={{ width: `${Math.min(userPct, 100)}%` }}
+                                  />
+                                </div>
+                              </div>
+                            </td>
+                            <td className="px-6 py-4">
+                              <div className="flex flex-col items-center gap-1.5 min-w-[100px]">
+                                <div className="flex justify-between w-full text-[11px] font-bold">
+                                  <span className="text-slate-700">{completedMilestones}</span>
+                                  <span className="text-slate-400">/ {totalMilestones}</span>
+                                </div>
+                                <div className="h-1.5 w-full bg-slate-100 rounded-full overflow-hidden">
+                                  <div 
+                                    className="h-full bg-[#534AB7] opacity-80 transition-all duration-1000"
+                                    style={{ width: `${Math.min(milestonePct, 100)}%` }}
+                                  />
+                                </div>
+                              </div>
+                            </td>
+                            <td className="px-6 py-4 text-center">
+                              <span className="text-sm font-bold text-[#111827] tabular-nums">{Math.round(ph.healthScore)}%</span>
+                            </td>
+                            <td className="px-6 py-4 text-center">
+                              <span className={cn("px-2 py-0.5 rounded-full text-[10px] font-bold tracking-tight border whitespace-nowrap", getStatusLabelAndColor(ph.healthScore).badge)}>
+                                {getStatusLabelAndColor(ph.healthScore).label}
+                              </span>
+                            </td>
+                          </tr>
+                        )
+                      })
+                  )}
+                </tbody>
+              </table>
+            </div>
           </div>
         </div>
       )}

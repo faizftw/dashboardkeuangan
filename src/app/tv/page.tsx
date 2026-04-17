@@ -135,6 +135,7 @@ export default function TVDashboardPage() {
       return (
         <SlideProgramDetail
           program={program}
+          period={data.activePeriod}
           inputs={programInputs}
           metricDefinitions={programMetricDefs}
           metricValues={programMetricValues}

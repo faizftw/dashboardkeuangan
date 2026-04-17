@@ -111,12 +111,14 @@ export function calculateProgramHealth(
 
       metrics.forEach(m => {
         let mTarget = m.monthly_target || 0
+        
+        // Only use legacy as fallback if NO data at all in the metric definition
         if (mTarget === 0) {
-          if (m.data_type === 'currency' && !appliedLegacyInHealth.has('revenue')) {
-            mTarget = program.monthly_target_rp || 0
+          if (m.metric_key === 'revenue' || (m.data_type === 'currency' && !appliedLegacyInHealth.has('revenue'))) {
+            mTarget = Number(program.monthly_target_rp) || 0
             appliedLegacyInHealth.add('revenue')
-          } else if (m.data_type === 'integer' && !appliedLegacyInHealth.has('user')) {
-            mTarget = program.monthly_target_user || 0
+          } else if (m.metric_key === 'user_count' || (m.data_type === 'integer' && !appliedLegacyInHealth.has('user'))) {
+            mTarget = Number(program.monthly_target_user) || 0
             appliedLegacyInHealth.add('user')
           }
         }
@@ -160,13 +162,29 @@ export function calculateProgramHealth(
         }
       })
 
-      const healthScore = validMetrics > 0 ? sumPercentage / validMetrics : 0
+      // Fallback: If no primary metrics have non-zero targets, use Milestone progress
+      let healthScore = validMetrics > 0 ? sumPercentage / validMetrics : 0
+      
+      let isQualitativeOnly = false
+      const progMilestones = program.program_milestones || []
+      if (validMetrics === 0) {
+        if (progMilestones.length > 0) {
+          const completedMilestones = progMilestones.filter(m => milestoneCompletionsByMilestone.get(m.id)?.is_completed).length
+          healthScore = (completedMilestones / progMilestones.length) * 100
+          isQualitativeOnly = true
+        } else {
+          // New: If no primary metrics have targets, check if there's any achievement in primary metrics
+          const hasAnyAchievement = primaryMetrics.some(m => (evaluatedMetrics[m.metric_key] || 0) > 0)
+          if (hasAnyAchievement) healthScore = 100
+        }
+      }
+
       return {
         programId: program.id,
         healthScore,
         status: getHealthStatus(healthScore),
         totalTargetMetrics: validMetrics,
-        isQualitativeOnly: false,
+        isQualitativeOnly,
         calculatedMetrics: evaluatedMetrics,
         effectiveTargets,
         absoluteTargets
@@ -176,9 +194,10 @@ export function calculateProgramHealth(
 
   // ── Case 2: Qualitative only (milestone-based) ────────────────────────────
   const isExplicitlyQualitative = program.target_type === 'qualitative'
+  const isMoU = (program.target_type as string) === 'mou'
   const hasNoLegacyTargets = (program.monthly_target_rp || 0) === 0 && (program.monthly_target_user || 0) === 0
 
-  if (isExplicitlyQualitative || (hasCustomMetrics && hasNoLegacyTargets) || (!hasCustomMetrics && hasNoLegacyTargets)) {
+  if (isExplicitlyQualitative || isMoU || (hasCustomMetrics && hasNoLegacyTargets) || (!hasCustomMetrics && hasNoLegacyTargets)) {
     const milestones = program.program_milestones || []
     if (milestones.length > 0) {
       const completed = milestones.filter(ms =>
@@ -224,10 +243,17 @@ export function calculateProgramHealth(
 
   const healthScore = totalValidMetrics > 0 ? (scoreRp + scoreUser) / totalValidMetrics : 0
 
+  // Improvement: if both targets are 0 but there is achievement, give it a tiny health boost or at least 0.
+  // This handles the user case where they record achievement but targets are unset.
+  let finalHealth = healthScore
+  if (totalValidMetrics === 0 && (cumulativeRp > 0 || cumulativeUser > 0)) {
+    finalHealth = 100 // Or some logic to indicate activity
+  }
+
   return {
     programId: program.id,
-    healthScore,
-    status: getHealthStatus(healthScore),
+    healthScore: finalHealth,
+    status: getHealthStatus(finalHealth),
     totalTargetMetrics: totalValidMetrics,
     isQualitativeOnly: false,
     calculatedMetrics: evaluatedMetrics,
@@ -441,21 +467,26 @@ export function getPerformanceGrade(score: number): { label: string, color: stri
 // ─── Ads Performance Utilities ────────────────────────────────────────────────
 
 
-/**
- * Detects if a program is an "Ads Program"
- */
-export function isAdsProgram(metricDefinitions: MetricDefinition[]): boolean {
-  if (!metricDefinitions || metricDefinitions.length === 0) return false
-  
-  return metricDefinitions.some(
-    m => 
-      m.metric_group === 'ad_spend' || 
-      m.metric_group === 'leads' ||
-      m.metric_key === 'ads_spent' ||
-      m.metric_key === 'leads' ||
-      m.metric_key === 'roas' ||
-      m.metric_key === 'cpp'
+export function isAdsProgram(metrics: MetricDefinition[]): boolean {
+  if (!metrics || metrics.length === 0) return false
+  return metrics.some(m => 
+    ['ad_spend', 'ads_spent', 'roas', 'cpp'].includes(m.metric_group || '') ||
+    ['ads_spent', 'ad_spend', 'roas', 'cpp', 'budget_iklan'].includes(m.metric_key)
   )
+}
+
+export function isMouProgram(metrics: MetricDefinition[]): boolean {
+  if (!metrics || metrics.length === 0) return false
+  
+  // MoU program tracks users/closing but NOT revenue as a target
+  const hasUserTarget = metrics.some(m => 
+    (m.metric_group === 'user_acquisition' || m.metric_key === 'user_count') && m.is_target_metric
+  )
+  const hasRevenueTarget = metrics.some(m => 
+    (m.metric_group === 'revenue' || m.metric_key === 'revenue') && m.is_target_metric
+  )
+  
+  return hasUserTarget && !hasRevenueTarget
 }
 
 export interface AdsAggregateResult {

@@ -239,6 +239,7 @@ export function ProgramClient({
     if (type === 'quantitative') return 'Kuantitatif'
     if (type === 'qualitative') return 'Kualitatif'
     if (type === 'hybrid') return 'Hybrid'
+    if (type === 'mou') return 'MoU'
     return 'Unknown'
   }
 
@@ -426,14 +427,14 @@ export function ProgramClient({
                       <label className="text-xs font-bold text-slate-700 uppercase tracking-wider">Tipe Target</label>
                     </div>
                     <div className="flex gap-2">
-                      {(['quantitative', 'qualitative', 'hybrid'] as const).map(type => (
+                      {(['quantitative', 'qualitative', 'hybrid', 'mou'] as const).map(type => (
                         <label key={type} className={`flex-1 group relative cursor-pointer border-2 rounded-xl p-3 text-center transition-all ${
                           selectedTargetType === type 
                             ? 'bg-indigo-600 border-indigo-600 text-white shadow-lg shadow-indigo-100' 
                             : 'bg-white border-slate-100 text-slate-600 hover:border-indigo-200 hover:bg-slate-50'
                         }`}>
                           <input type="radio" name="type_selector" className="hidden" checked={selectedTargetType === type} onChange={() => setSelectedTargetType(type)} />
-                          <span className="block text-xs font-bold uppercase tracking-tight">{getTypeLabel(type)}</span>
+                          <span className="block text-[10px] font-bold uppercase tracking-tight">{getTypeLabel(type)}</span>
                         </label>
                       ))}
                     </div>

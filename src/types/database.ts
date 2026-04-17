@@ -457,7 +457,7 @@ export type Database = {
     }
     Enums: {
       qualitative_status: "not_started" | "in_progress" | "completed"
-      target_type: "quantitative" | "qualitative" | "hybrid"
+      target_type: "quantitative" | "qualitative" | "hybrid" | "mou"
       user_role: "admin" | "pic"
     }
     CompositeTypes: {
@@ -587,7 +587,7 @@ export const Constants = {
   public: {
     Enums: {
       qualitative_status: ["not_started", "in_progress", "completed"],
-      target_type: ["quantitative", "qualitative", "hybrid"],
+      target_type: ["quantitative", "qualitative", "hybrid", "mou"],
       user_role: ["admin", "pic"],
     },
   },
