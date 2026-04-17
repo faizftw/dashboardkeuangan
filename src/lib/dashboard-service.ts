@@ -279,6 +279,8 @@ export async function getUnifiedDashboardData(options: {
         Array.from(valsByProg.values()).flat(),
         Array.from(inputsByProg.values()).flat(),
         activePeriod,
+        undefined,
+        undefined,
         options.startDate,
         options.endDate
       ),

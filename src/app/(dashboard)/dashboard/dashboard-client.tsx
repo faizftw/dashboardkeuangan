@@ -833,12 +833,8 @@ export function OverviewClient({
                       <Bar yAxisId="left" dataKey="actualRevenue" name="Omzet Harian" fill="#639922" radius={[4, 4, 0, 0]} barSize={20} />
                       <Line yAxisId="right" type="monotone" dataKey="actualUser" name="User Harian" stroke="#378ADD" strokeWidth={3} dot={{ r: 4, fill: '#378ADD' }} activeDot={{ r: 6 }} />
                       
-                      {/* Reference Lines for daily targets */}
                       {omzetSummary.targetTrend && omzetSummary.targetTrend.length > 0 && (
-                        <>
-                 <ReferenceLine yAxisId="left" y={omzetSummary.targetTrend[0].targetRevenue} stroke="#639922" strokeDasharray="5 5" label={{ position: 'right', value: 'Target Harian', fill: '#639922', fontSize: 10 }} />
-                 <ReferenceLine yAxisId="right" y={omzetSummary.targetTrend[0].targetUser} stroke="#378ADD" strokeDasharray="3 3" label={{ position: 'left', value: 'Target User', fill: '#378ADD', fontSize: 10 }} />
-                        </>
+                        <ReferenceLine yAxisId="left" y={omzetSummary.targetTrend[0].targetRevenue} stroke="#639922" strokeDasharray="5 5" label={{ position: 'right', value: 'Target Harian', fill: '#639922', fontSize: 10 }} />
                       )}
                     </ComposedChart>
                   </ResponsiveContainer>

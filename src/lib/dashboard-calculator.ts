@@ -827,9 +827,9 @@ export function buildTargetTrendSeries(
       date: d,
       displayDate: new Intl.DateTimeFormat('id-ID', { day: 'numeric', month: 'short' }).format(new Date(d)),
       actualRevenue: Math.round(dailyActualRevenue),
-      targetRevenue: Math.round(totalMonthlyTargetRevenue / workingDays),
+      targetRevenue: Math.round(dailyTargetRevenue),
       actualUser: Math.round(dailyActualUser),
-      targetUser: Math.round(totalMonthlyTargetUser / workingDays)
+      targetUser: Math.round(dailyTargetUser)
     }
   })
 }
