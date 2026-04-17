@@ -62,10 +62,10 @@ export function RadialProgressCard({
       <CardHeader className="items-center pb-0">
         <CardTitle className="text-xs font-black text-slate-400 uppercase tracking-widest">{title}</CardTitle>
       </CardHeader>
-      <CardContent className="flex-1 pb-0">
+      <CardContent className="flex-1 flex items-center justify-center pb-0">
         <ChartContainer
           config={chartConfig}
-          className="mx-auto aspect-square max-h-[200px]"
+          className="mx-auto aspect-square w-full max-w-[250px] min-h-[240px]"
         >
           <RadialBarChart
             data={chartData}

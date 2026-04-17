@@ -777,6 +777,7 @@ export function OverviewClient({
                   displayTarget={formatRupiah(omzetSummary.aggregates.revenue?.totalTarget || 0)}
                   unitLabel="Rp"
                   color="#639922"
+                  className="h-full"
                 />
              </div>
 
