@@ -3,12 +3,13 @@
 import { useState, useMemo, useEffect } from 'react'
 import { useRouter, useSearchParams, usePathname } from 'next/navigation'
 import { Database } from '@/types/database'
-import { ProgramWithRelations, MetricValue } from './actions'
+import { ProgramWithRelations, MetricValue, DailyInput } from './actions'
 import { 
   calculateProgramHealth, 
   isAdsProgram, 
   aggregateAdsMetrics, 
-  buildAdsDailySeries 
+  buildAdsDailySeries,
+  buildTargetTrendSeries
 } from '@/lib/dashboard-calculator'
 import { formatRupiah, cn, getPreviousPeriodLabel } from '@/lib/utils'
 import { formatMetricValue } from '@/lib/formula-evaluator'
@@ -40,6 +41,8 @@ interface OverviewClientProps {
   startDate?: string
   endDate?: string
   metricValues: MetricValue[]
+  dailyInputs: DailyInput[]
+  activePeriod: Database['public']['Tables']['periods']['Row']
 }
 
 type TabType = 'overview' | 'target' | 'ads'
@@ -298,7 +301,9 @@ export function OverviewClient({
   previousSummary,
   startDate,
   endDate,
-  metricValues
+  metricValues,
+  dailyInputs,
+  activePeriod
 }: OverviewClientProps) {
   const router = useRouter()
   const pathname = usePathname()
@@ -330,12 +335,84 @@ export function OverviewClient({
 
   // Ads Specific States
   const [selectedAdsProgramId, setSelectedAdsProgramId] = useState('all')
+  const [selectedOmzetProgramId, setSelectedOmzetProgramId] = useState<'all' | string>('all')
+
+  // Process data for easy access
+  const programHealths = summary.programHealths
+  const globalKPIs = summary.globalKPIs
+
+  // ── Calculated Data for Omzet Tab ──────────────────────────────────────────
+  const filteredOmzetSummary = useMemo(() => {
+    if (selectedOmzetProgramId === 'all') {
+      const revenueAchievement = (summary.aggregates.revenue.actual / (summary.aggregates.revenue.totalTarget || 1)) * 100
+      return {
+        aggregates: summary.aggregates,
+        health: revenueAchievement,
+        targetTrend: summary.targetTrend,
+        previousAggregates: previousSummary?.aggregates
+      }
+    }
+
+    const program = programs.find(p => p.id === selectedOmzetProgramId)
+    const ph = summary.programHealths.find(h => h.programId === selectedOmzetProgramId)
+    const prevPh = previousSummary?.programHealths.find(h => h.programId === selectedOmzetProgramId)
+
+    if (!program || !ph) return null
+
+    const targetRevenue = ph.absoluteTargets?.revenue || Number(program.monthly_target_rp) || 0
+    const targetUser = ph.absoluteTargets?.user_count || ph.absoluteTargets?.user_acquisition || Number(program.monthly_target_user) || 0
+
+    // Recalculate trend for this single program
+    const trend = buildTargetTrendSeries(
+      [program],
+      metricValues,
+      dailyInputs,
+      activePeriod,
+      targetRevenue,
+      targetUser,
+      startDate,
+      endDate
+    )
+
+    return {
+      aggregates: {
+        revenue: { 
+          actual: ph.calculatedMetrics?.revenue || 0, 
+          totalTarget: targetRevenue
+        },
+        user_acquisition: { 
+          actual: ph.calculatedMetrics?.user_count || ph.calculatedMetrics?.user_acquisition || 0, 
+          totalTarget: targetUser
+        }
+      },
+      health: ( (ph.calculatedMetrics?.revenue || 0) / (targetRevenue || 1) ) * 100,
+      targetTrend: trend,
+      previousAggregates: prevPh ? {
+        revenue: { 
+          actual: prevPh.calculatedMetrics?.revenue || 0, 
+          totalTarget: prevPh.absoluteTargets?.revenue || 0 
+        },
+        user_acquisition: { 
+          actual: prevPh.calculatedMetrics?.user_count || prevPh.calculatedMetrics?.user_acquisition || 0, 
+          totalTarget: prevPh.absoluteTargets?.user_count || prevPh.absoluteTargets?.user_acquisition || 0 
+        }
+      } : undefined
+    }
+  }, [selectedOmzetProgramId, summary, previousSummary, programs, metricValues, dailyInputs, activePeriod, startDate, endDate])
+
+  const omzetSummary = filteredOmzetSummary || { 
+    aggregates: summary.aggregates, 
+    health: (summary.aggregates.revenue.actual / (summary.aggregates.revenue.totalTarget || 1)) * 100,
+    targetTrend: summary.targetTrend, 
+    previousAggregates: previousSummary?.aggregates 
+  }
   const [metricX, setMetricX] = useState('ads_spent')
   const [metricY, setMetricY] = useState('roas')
 
-  // Process data from summary
-  const programHealths = summary.programHealths
-  const globalKPIs = summary.globalKPIs
+  const filteredProgramHealths = useMemo(() => {
+    if (selectedOmzetProgramId === 'all') return programHealths
+    return programHealths.filter(ph => ph.programId === selectedOmzetProgramId)
+  }, [programHealths, selectedOmzetProgramId])
   
   // ── Ads Data Processing ───────────────────────────────────────────────────
   const adsPrograms = useMemo(() => 
@@ -425,7 +502,11 @@ export function OverviewClient({
     [programHealths]
   )
 
-  const banner = getBannerInfo(globalKPIs.avgHealth)
+  const currentHealth = (activeTab === 'target' && selectedOmzetProgramId !== 'all') 
+    ? (omzetSummary.health)
+    : globalKPIs.avgHealth
+
+  const banner = getBannerInfo(currentHealth)
 
   return (
     <div className="space-y-6 pb-24">
@@ -630,43 +711,56 @@ export function OverviewClient({
 
        {activeTab === 'target' && (
         <div className="space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-500">
-          {/* Row 1: Omzet Aggregate Cards */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+          {/* Header with Filter */}
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <h2 className="text-xl font-black text-slate-800 tracking-tight uppercase">Capaian Omzet & User</h2>
+            <div className="flex bg-white border border-slate-200 rounded-xl p-1 shadow-sm">
+              <select 
+                value={selectedOmzetProgramId} 
+                onChange={e => setSelectedOmzetProgramId(e.target.value)}
+                className="bg-transparent border-none text-xs font-bold text-slate-600 focus:ring-0 px-3 py-1 cursor-pointer"
+              >
+                <option value="all">Semua Program</option>
+                {programs.map(p => (
+                  <option key={p.id} value={p.id}>{p.name}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          {/* Row 1: KPI Cards */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
             <KpiCard 
-              icon={Target} 
+              icon={Layers} 
               label="Total capaian Omzet" 
-              value={formatRupiah(summary.aggregates.revenue?.actual || 0)} 
-              sub={`Target: ${formatRupiah(summary.aggregates.revenue?.totalTarget || 0)}`}
+              value={formatRupiah(omzetSummary.aggregates.revenue?.actual || 0)} 
+              sub={`Target: ${formatRupiah(omzetSummary.aggregates.revenue?.totalTarget || 0)}`}
               accentColor="#639922"
-              comparison={previousSummary ? {
-                value: calculateGrowth(summary.aggregates.revenue?.actual || 0, previousSummary.aggregates.revenue?.actual || 0),
+              comparison={omzetSummary.previousAggregates ? {
+                value: calculateGrowth(omzetSummary.aggregates.revenue?.actual || 0, omzetSummary.previousAggregates.revenue?.actual || 0),
                 label: prevPeriodLabel
               } : undefined}
             />
             <KpiCard 
               icon={TrendingUp} 
               label="Sisa target Rp" 
-              value={formatRupiah(Math.max(0, (summary.aggregates.revenue?.totalTarget || 0) - (summary.aggregates.revenue?.actual || 0)))} 
+              value={formatRupiah(Math.max(0, (omzetSummary.aggregates.revenue?.totalTarget || 0) - (omzetSummary.aggregates.revenue?.actual || 0)))} 
               sub="jumlah sisa periode ini" 
               accentColor="#534AB7"
-              comparison={previousSummary ? {
+              comparison={omzetSummary.previousAggregates ? {
                 value: calculateGrowth(
-                  Math.max(0, (summary.aggregates.revenue?.totalTarget || 0) - (summary.aggregates.revenue?.actual || 0)),
-                  Math.max(0, (previousSummary.aggregates.revenue?.totalTarget || 0) - (previousSummary.aggregates.revenue?.actual || 0))
+                  Math.max(0, (omzetSummary.aggregates.revenue?.totalTarget || 0) - (omzetSummary.aggregates.revenue?.actual || 0)),
+                  Math.max(0, (omzetSummary.previousAggregates.revenue?.totalTarget || 0) - (omzetSummary.previousAggregates.revenue?.actual || 0))
                 ),
                 label: prevPeriodLabel
               } : undefined}
             />
              <KpiCard 
               icon={HeartPulse} 
-              label="Progres global" 
-              value={`${Math.round(summary.overallHealth)}%`} 
-              sub={summary.globalKPIs.healthStatus}
-              accentColor={getStatusLabelAndColor(summary.overallHealth).accent}
-              comparison={previousSummary ? {
-                value: calculateGrowth(summary.overallHealth, previousSummary.overallHealth),
-                label: prevPeriodLabel
-              } : undefined}
+              label="Tingkat Capaian" 
+              value={`${Math.round(omzetSummary.health)}%`} 
+              sub={selectedOmzetProgramId === 'all' ? 'Rata-rata Global' : 'Program ini'}
+              accentColor={getStatusLabelAndColor(omzetSummary.health).accent}
             />
           </div>
 
@@ -676,11 +770,11 @@ export function OverviewClient({
              <div className="lg:col-span-4 gap-6">
                 <RadialProgressCard 
                   title="Revenue Progress"
-                  value={summary.aggregates.revenue?.actual || 0}
-                  target={summary.aggregates.revenue?.totalTarget || 0}
-                  percentage={(summary.aggregates.revenue?.actual / (summary.aggregates.revenue?.totalTarget || 1)) * 100}
-                  displayValue={formatRupiah(summary.aggregates.revenue?.actual || 0)}
-                  displayTarget={formatRupiah(summary.aggregates.revenue?.totalTarget || 0)}
+                  value={omzetSummary.aggregates.revenue?.actual || 0}
+                  target={omzetSummary.aggregates.revenue?.totalTarget || 0}
+                  percentage={(omzetSummary.aggregates.revenue?.actual / (omzetSummary.aggregates.revenue?.totalTarget || 1)) * 100}
+                  displayValue={formatRupiah(omzetSummary.aggregates.revenue?.actual || 0)}
+                  displayTarget={formatRupiah(omzetSummary.aggregates.revenue?.totalTarget || 0)}
                   unitLabel="Rp"
                   color="#639922"
                 />
@@ -696,7 +790,7 @@ export function OverviewClient({
                 </h3>
                 <div className="h-[460px]">
                   <ResponsiveContainer width="100%" height="100%">
-                    <ComposedChart data={summary.targetTrend}>
+                    <ComposedChart data={omzetSummary.targetTrend}>
                       <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
                       <XAxis dataKey="displayDate" axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: '#94a3b8' }} />
                       <YAxis 
@@ -704,9 +798,9 @@ export function OverviewClient({
                         axisLine={false} 
                         tickLine={false} 
                         tick={{ fontSize: 10, fill: '#94a3b8' }} 
-                        tickFormatter={(v) => `Rp${v/1000000}jt`} 
+                        tickFormatter={(v) => v >= 1000000 ? `Rp${(v/1000000).toFixed(1)}jt` : `Rp${(v/1000).toFixed(0)}rb`} 
                         domain={[0, (dataMax: number) => {
-                          const target = summary.targetTrend?.[0]?.targetRevenue || 0
+                          const target = omzetSummary.targetTrend?.[0]?.targetRevenue || 0
                           return Math.max(dataMax, target) * 1.1
                         }]}
                       />
@@ -717,7 +811,7 @@ export function OverviewClient({
                         tickLine={false} 
                         tick={{ fontSize: 10, fill: '#378ADD' }} 
                         domain={[0, (dataMax: number) => {
-                          const target = summary.targetTrend?.[0]?.targetUser || 0
+                          const target = omzetSummary.targetTrend?.[0]?.targetUser || 0
                           return Math.max(dataMax, target) * 1.2
                         }]}
                       />
@@ -740,10 +834,10 @@ export function OverviewClient({
                       <Line yAxisId="right" type="monotone" dataKey="actualUser" name="User Harian" stroke="#378ADD" strokeWidth={3} dot={{ r: 4, fill: '#378ADD' }} activeDot={{ r: 6 }} />
                       
                       {/* Reference Lines for daily targets */}
-                      {summary.targetTrend && summary.targetTrend.length > 0 && (
+                      {omzetSummary.targetTrend && omzetSummary.targetTrend.length > 0 && (
                         <>
-                 <ReferenceLine yAxisId="left" y={summary.targetTrend[0].targetRevenue} stroke="#639922" strokeDasharray="5 5" label={{ position: 'right', value: 'Target Harian', fill: '#639922', fontSize: 10 }} />
-                 <ReferenceLine yAxisId="right" y={summary.targetTrend[0].targetUser} stroke="#378ADD" strokeDasharray="3 3" label={{ position: 'left', value: 'Target User', fill: '#378ADD', fontSize: 10 }} />
+                 <ReferenceLine yAxisId="left" y={omzetSummary.targetTrend[0].targetRevenue} stroke="#639922" strokeDasharray="5 5" label={{ position: 'right', value: 'Target Harian', fill: '#639922', fontSize: 10 }} />
+                 <ReferenceLine yAxisId="right" y={omzetSummary.targetTrend[0].targetUser} stroke="#378ADD" strokeDasharray="3 3" label={{ position: 'left', value: 'Target User', fill: '#378ADD', fontSize: 10 }} />
                         </>
                       )}
                     </ComposedChart>
@@ -760,7 +854,7 @@ export function OverviewClient({
             </h3>
             <div className="h-80">
               <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={programHealths.sort((a, b) => (b.calculatedMetrics?.revenue || 0) - (a.calculatedMetrics?.revenue || 0)).slice(0, 10)}>
+                <BarChart data={filteredProgramHealths.sort((a, b) => (b.calculatedMetrics?.revenue || 0) - (a.calculatedMetrics?.revenue || 0)).slice(0, 10)}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
                   <XAxis 
                     dataKey="program.name" 

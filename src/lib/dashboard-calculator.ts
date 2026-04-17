@@ -104,6 +104,11 @@ export function calculateProgramHealth(
 
       // First, calculate absolute targets for ALL metrics
       const appliedLegacyInHealth = new Set<string>()
+      
+      // Default to legacy fields to ensure targets are visible even if no metric definitions exist
+      absoluteTargets['revenue'] = Number(program.monthly_target_rp) || 0
+      absoluteTargets['user_count'] = Number(program.monthly_target_user) || 0
+
       metrics.forEach(m => {
         let mTarget = m.monthly_target || 0
         if (mTarget === 0) {
@@ -737,6 +742,8 @@ export function buildTargetTrendSeries(
   metricValues: MetricValue[],
   dailyInputs: DailyInput[],
   activePeriod: Database['public']['Tables']['periods']['Row'],
+  overriddenTargetRevenue?: number,
+  overriddenTargetUser?: number,
   startDate?: string,
   endDate?: string
 ): TargetTrendPoint[] {
@@ -753,18 +760,23 @@ export function buildTargetTrendSeries(
     }
   }
 
-  // Pre-calculate total targets for all active programs
-  let totalMonthlyTargetRevenue = 0
-  let totalMonthlyTargetUser = 0
+  // Use overridden values if provided, otherwise sum up from programs
+  let totalMonthlyTargetRevenue = overriddenTargetRevenue ?? 0
+  let totalMonthlyTargetUser = overriddenTargetUser ?? 0
 
-  programs.forEach(p => {
-    const metrics = p.program_metric_definitions || []
-    const revMetric = metrics.find(m => m.metric_key === 'revenue')
-    const userMetric = metrics.find(m => m.metric_key === 'user_count')
+  if (overriddenTargetRevenue === undefined && overriddenTargetUser === undefined) {
+    programs.forEach(p => {
+      const metrics = p.program_metric_definitions || []
+      const revMetric = metrics.find(m => m.metric_key === 'revenue')
+      const userMetric = metrics.find(m => m.metric_key === 'user_count')
 
-    totalMonthlyTargetRevenue += (revMetric?.monthly_target || p.monthly_target_rp || 0)
-    totalMonthlyTargetUser += (userMetric?.monthly_target || p.monthly_target_user || 0)
-  })
+      totalMonthlyTargetRevenue += (Number(revMetric?.monthly_target) || Number(p.monthly_target_rp) || 0)
+      totalMonthlyTargetUser += (Number(userMetric?.monthly_target) || Number(p.monthly_target_user) || 0)
+    })
+  }
+
+  const dailyTargetRevenue = totalMonthlyTargetRevenue / workingDays
+  const dailyTargetUser = totalMonthlyTargetUser / workingDays
 
   // Group data by program to avoid quadratic lookups
   const metricsByProgram = new Map<string, MetricValue[]>()

@@ -107,7 +107,7 @@ function PICCard({ pic }: { pic: PICPerformance }) {
                   strokeDashoffset={2 * Math.PI * 45 * (1 - Math.min(pic.avgHealthScore, 100) / 100)}
                   strokeLinecap="round"
                   className={cn(
-                    "transition-all duration-[2000ms] ease-out",
+                    "transition-all duration-&lsqb;2000ms&rsqb; ease-out",
                     pic.avgHealthScore >= 80 ? 'text-emerald-500' : 
                     pic.avgHealthScore >= 60 ? 'text-amber-500' : 'text-rose-400'
                   )}

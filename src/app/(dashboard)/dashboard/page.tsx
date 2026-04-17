@@ -74,6 +74,8 @@ export default async function DashboardPage({
             startDate={searchParams.startDate}
             endDate={searchParams.endDate}
             metricValues={data.metricValues}
+            dailyInputs={data.dailyInputs}
+            activePeriod={data.activePeriod}
           />
         </Suspense>
       )}
