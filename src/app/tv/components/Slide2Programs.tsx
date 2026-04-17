@@ -131,7 +131,7 @@ function ProgramCard({ program }: { program: ProgramPerformance }) {
                </div>
                <div className="h-2.5 bg-slate-950 rounded-full overflow-hidden border border-slate-800 p-0.5">
                  <div 
-                   className="h-full bg-purple-500 transition-all duration-1000 rounded-full"
+                   className="h-full bg-purple-500 rounded-full"
                    style={{ width: `${Math.min(program.qualitativePercentage, 100)}%` }}
                  />
                </div>

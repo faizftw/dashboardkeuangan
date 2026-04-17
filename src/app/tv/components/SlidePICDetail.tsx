@@ -155,6 +155,7 @@ export function SlidePICDetail({ pic, programs }: SlidePICDetailProps) {
                          dataKey="health" 
                          radius={[0, 8, 8, 0]} 
                          barSize={40}
+                         isAnimationActive={false}
                        >
                           <LabelList 
                              dataKey="health" 

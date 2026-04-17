@@ -17,7 +17,8 @@ import {
   BarChart,
   Bar,
   ComposedChart,
-  Line
+  Line,
+  LabelList
 } from 'recharts'
 import { CheckCircle2, ClipboardList, Target, TrendingUp, BarChart3 } from 'lucide-react'
 
@@ -59,7 +60,6 @@ function RingProgress({
         strokeDasharray={`${dash} ${circ - dash}`}
         strokeDashoffset={circ * 0.25}
         strokeLinecap="round"
-        style={{ transition: 'stroke-dasharray 1.5s ease' }}
       />
       <text
         x="60" y="54"
@@ -153,7 +153,7 @@ export function SlideProgramDetail({ program, inputs, metricDefinitions = [], me
   const isAds = useMemo(() => {
     return metricDefinitions.some(m => 
       ['ad_spend', 'ads_spent', 'roas', 'cpp'].includes(m.metric_group || '') ||
-      ['ads_spent', 'ad_spend', 'roas', 'cpp'].includes(m.metric_key)
+      ['ads_spent', 'ad_spend', 'roas', 'cpp', 'budget_iklan'].includes(m.metric_key)
     )
   }, [metricDefinitions])
 
@@ -170,7 +170,7 @@ export function SlideProgramDetail({ program, inputs, metricDefinitions = [], me
 
   if (isAds) {
     // Specialized Ads Chart: Daily Spend (Bar) vs ROAS (Line)
-    const spendDef = metricDefinitions.find(m => m.metric_group === 'ad_spend' || m.metric_key === 'ads_spent')
+    const spendDef = metricDefinitions.find(m => m.metric_group === 'ad_spend' || m.metric_key === 'ad_spend' || m.metric_key === 'ads_spent')
     const roasDef = metricDefinitions.find(m => m.metric_group === 'efficiency' || m.metric_key === 'roas')
 
     if (spendDef) {
@@ -470,13 +470,33 @@ export function SlideProgramDetail({ program, inputs, metricDefinitions = [], me
                         <YAxis yAxisId="right" orientation="right" hide />
                         <Tooltip contentStyle={{ backgroundColor: '#0d1a2e', borderColor: 'rgba(255,100,255,0.2)', borderRadius: '12px' }} />
                         <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(255,255,255,0.05)" />
-                        <Bar yAxisId="left" dataKey="spend" fill="#f43f5e" radius={[4, 4, 0, 0]} barSize={20} isAnimationActive={false} />
-                        <Line yAxisId="right" type="monotone" dataKey="roas" stroke="#22d3ee" strokeWidth={3} dot={{ r: 4, fill: '#22d3ee' }} isAnimationActive={false} />
+                        <Bar yAxisId="left" dataKey="spend" fill="#f43f5e" radius={[4, 4, 0, 0]} barSize={20} isAnimationActive={false}>
+                          <LabelList dataKey="spend" position="top" content={(props: any) => {
+                            const { x, y, width, value } = props;
+                            if (!value) return null;
+                            return (
+                              <text x={x + width/2} y={y - 10} fill="#f43f5e" fontSize={10} fontWeight={900} textAnchor="middle">
+                                {fmtVal(value)}
+                              </text>
+                            )
+                          }} />
+                        </Bar>
+                        <Line yAxisId="right" type="monotone" dataKey="roas" stroke="#22d3ee" strokeWidth={3} dot={{ r: 4, fill: '#22d3ee' }} isAnimationActive={false}>
+                          <LabelList dataKey="roas" position="top" content={(props: any) => {
+                            const { x, y, value } = props;
+                            if (value === undefined) return null;
+                            return (
+                              <text x={x} y={y - 15} fill="#22d3ee" fontSize={12} fontWeight={900} textAnchor="middle">
+                                {value.toFixed(1)}x
+                              </text>
+                            )
+                          }} />
+                        </Line>
                       </ComposedChart>
                     </ResponsiveContainer>
                   ) : (
                     <ResponsiveContainer width="100%" height="100%" minHeight={300}>
-                      <AreaChart data={chartData} margin={{ top: 24, right: 20, left: 10, bottom: 10 }}>
+                      <AreaChart data={chartData} margin={{ top: 24, right: 24, left: 15, bottom: 20 }}>
                         <defs>
                           <linearGradient id="gradAchTV" x1="0" y1="0" x2="0" y2="1">
                             <stop offset="5%" stopColor="#00d4ff" stopOpacity={0.25} />

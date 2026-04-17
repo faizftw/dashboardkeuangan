@@ -64,7 +64,7 @@ export function Slide1Total({ data }: Slide1Props) {
                 strokeDasharray={2 * Math.PI * 140}
                 strokeDashoffset={2 * Math.PI * 140 * (1 - Math.min(aggregate.healthScore, 100) / 100)}
                 strokeLinecap="round"
-                className="text-indigo-500 transition-all duration-1000 ease-out"
+                className="text-indigo-500"
                 style={{ filter: 'drop-shadow(0 0 12px rgba(99,102,241,0.5))' }}
               />
             </svg>
@@ -80,7 +80,7 @@ export function Slide1Total({ data }: Slide1Props) {
           {activeGroups.map(key => {
             const group = aggregate.metricGroups[key];
             const config = groupConfig[key];
-            const pct = group.target > 0 ? (group.actual / group.target) * 100 : 0;
+            const pct = group.totalTarget > 0 ? (group.actual / group.totalTarget) * 100 : 0;
             const Icon = config.icon;
 
             return (
@@ -97,22 +97,22 @@ export function Slide1Total({ data }: Slide1Props) {
                     {config.isCurrency ? formatRupiah(group.actual) : group.actual.toLocaleString()}
                     {!config.isCurrency && key === 'efficiency' && 'x'}
                   </div>
-                  {group.target > 0 && (
+                  {group.totalTarget > 0 && (
                     <div className="text-sm font-bold text-slate-500 uppercase mt-2">
-                      Target: {config.isCurrency ? formatRupiah(group.target) : group.target.toLocaleString()}
+                      Target Bulanan: {config.isCurrency ? formatRupiah(group.totalTarget) : group.totalTarget.toLocaleString()}
                     </div>
                   )}
                 </div>
 
-                {group.target > 0 && (
+                {group.totalTarget > 0 && (
                   <div className="space-y-2">
                     <div className="flex justify-between text-xs font-black">
-                      <span className="text-slate-400 uppercase">Progres</span>
+                      <span className="text-slate-400 uppercase">Progres Bulanan</span>
                       <span className={config.color}>{pct.toFixed(1)}%</span>
                     </div>
                     <div className="h-2.5 bg-slate-950 rounded-full border border-slate-800 overflow-hidden">
                       <div 
-                        className={`h-full rounded-full transition-all duration-1000 bg-indigo-500`}
+                        className={`h-full rounded-full bg-indigo-500`}
                         style={{ width: `${Math.min(pct, 100)}%` }}
                       />
                     </div>

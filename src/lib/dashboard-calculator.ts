@@ -103,11 +103,17 @@ export function calculateProgramHealth(
       const absoluteTargets: Record<string, number> = {}
 
       // First, calculate absolute targets for ALL metrics
+      const appliedLegacyInHealth = new Set<string>()
       metrics.forEach(m => {
         let mTarget = m.monthly_target || 0
         if (mTarget === 0) {
-          if (m.data_type === 'currency') mTarget = program.monthly_target_rp || 0
-          else if (m.data_type === 'integer') mTarget = program.monthly_target_user || 0
+          if (m.data_type === 'currency' && !appliedLegacyInHealth.has('revenue')) {
+            mTarget = program.monthly_target_rp || 0
+            appliedLegacyInHealth.add('revenue')
+          } else if (m.data_type === 'integer' && !appliedLegacyInHealth.has('user')) {
+            mTarget = program.monthly_target_user || 0
+            appliedLegacyInHealth.add('user')
+          }
         }
         
         const vals = progMetricValues.filter(mv => mv.metric_definition_id === m.id)
@@ -294,6 +300,7 @@ export function aggregateByMetricGroup(
       let customTarget = 0
       let customAbsolute = 0
       let foundCustom = false
+      let legacyApplied = false
 
       definitions.forEach(m => {
         const k = m.metric_key?.toLowerCase()
@@ -302,14 +309,27 @@ export function aggregateByMetricGroup(
           const vals = progMetricValues.filter(mv => mv.metric_definition_id === m.id)
           foundCustom = true
           customSum += vals.reduce((s, v) => s + (Number(v.value) || 0), 0)
-          customTarget += vals.reduce((s, v) => s + (Number(v.target_value) || 0), 0)
+          
+          const sumCustomTarget = vals.reduce((s, v) => s + (Number(v.target_value) || 0), 0)
+          customTarget += sumCustomTarget
           
           let mTarget = m.monthly_target || 0
-          if (mTarget === 0) {
-            if (m.data_type === 'currency') mTarget = prog.monthly_target_rp || 0
-            else if (m.data_type === 'integer') mTarget = prog.monthly_target_user || 0
+          if (mTarget === 0 && !legacyApplied) {
+            if (m.data_type === 'currency' && prog.monthly_target_rp) {
+              mTarget = prog.monthly_target_rp
+              legacyApplied = true
+            } else if (m.data_type === 'integer' && prog.monthly_target_user) {
+              mTarget = prog.monthly_target_user
+              legacyApplied = true
+            }
           }
-          customAbsolute += mTarget
+
+          // Important: Reconstruct absolute target from periodized targets if monthly is 0
+          const absTarget = (m.monthly_target || 0) === 0 && sumCustomTarget > 0 
+            ? sumCustomTarget / prorationFactor 
+            : mTarget
+
+          customAbsolute += absTarget
         }
       })
       
@@ -333,7 +353,9 @@ export function aggregateByMetricGroup(
 
       if (data.found) {
         existingGroups.add(g)
-        actual = data.actual
+        // Merge actuals to support migration phase (some data in legacy, some in custom)
+        actual = data.actual + legacyActual
+        
         // If custom target is 0, use legacy target as fallback for the target value
         target = data.target > 0 ? data.target : 
                  legacyDaily > 0 ? (legacyDaily * daysInSelection) : (legacyTarget * prorationFactor)
