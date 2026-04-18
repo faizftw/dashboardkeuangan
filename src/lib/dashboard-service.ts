@@ -12,7 +12,9 @@ import {
   ProgramWithRelations,
   ProgramHealthResult,
   HealthTrendPoint,
-  TargetTrendPoint
+  TargetTrendPoint,
+  getRollingAverage,
+  calculateGrowth
 } from './dashboard-calculator'
 
 type DailyInput = Database['public']['Tables']['daily_inputs']['Row']
@@ -200,7 +202,16 @@ export async function getUnifiedDashboardData(options: {
   // 7. Proration Factor & Summary
   const workingDays = activePeriod.working_days || 30
   const today = new Date().getDate()
+  const todayIso = new Date().toISOString().split('T')[0]
   
+  // Preliminary max date check for pro-rata adjustment
+  const allMetricValues = metricValues || []
+  const allDailyInputs = dailyInputs || []
+  const maxMetricDate = allMetricValues.reduce((max, v) => (max === '' || v.date > max ? v.date : max), '')
+  const maxInputDate = allDailyInputs.reduce((max, i) => (max === '' || i.date > max ? i.date : max), '')
+  const maxAchievementDate = maxMetricDate > maxInputDate ? maxMetricDate : maxInputDate
+  const isTodayDone = maxAchievementDate === todayIso
+
   let prorationFactor = 1
   if (options.startDate && options.endDate) {
     const start = new Date(options.startDate)
@@ -209,7 +220,9 @@ export async function getUnifiedDashboardData(options: {
     const daysInSelection = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1
     prorationFactor = daysInSelection / workingDays
   } else {
-    prorationFactor = Math.min(today / workingDays, 1)
+    // If today is not input yet, we only expect progress up to yesterday
+    const effectiveDay = isTodayDone ? today : Math.max(0, today - 1)
+    prorationFactor = Math.min(effectiveDay / workingDays, 1)
   }
 
   const processSummary = (
@@ -241,15 +254,157 @@ export async function getUnifiedDashboardData(options: {
 
     const aggregates = aggregateByMetricGroup(programs, valsByProg, inputsByProg, prorationFactor)
 
+    // ─── 8. ENHANCED KPI COMPARISON LOGIC ──────────────────────────────────────
+    const allVals = Array.from(valsByProg.values()).flat()
+    const allInputs = Array.from(inputsByProg.values()).flat()
+    const maxValDate = allVals.reduce((max, v) => (max === '' || v.date > max ? v.date : max), '')
+    const maxInputDate = allInputs.reduce((max, i) => (max === '' || i.date > max ? i.date : max), '')
+    
+    let lastDate = options.endDate || (maxValDate > maxInputDate ? maxValDate : maxInputDate) || new Date().toISOString().split('T')[0]
+    
+    // Safety check: if lastDate is from a different month/year than activePeriod, 
+    // it's likely very old data. Default to today for a meaningful "rolling average" attempt.
+    if (activePeriod && !options.endDate) {
+      const activeMonthStr = `${activePeriod.year}-${String(activePeriod.month).padStart(2, '0')}`
+      if (!lastDate.startsWith(activeMonthStr)) {
+        lastDate = new Date().toISOString().split('T')[0]
+      }
+    }
+
+    const getDailySeries = (group: string, synonyms: string[]) => {
+      const dailyMap = new Map<string, number>()
+      
+      // 1. Data from modern daily_metric_values
+      programs.forEach(p => {
+        const defs = p.program_metric_definitions || []
+        const pVals = valsByProg.get(p.id) || []
+        defs.forEach(m => {
+          if (m.metric_group === group || synonyms.includes(m.metric_key?.toLowerCase())) {
+            const mVals = pVals.filter(mv => mv.metric_definition_id === m.id)
+            mVals.forEach(mv => {
+              dailyMap.set(mv.date, (dailyMap.get(mv.date) || 0) + (mv.value || 0))
+            })
+          }
+        })
+      })
+
+      // 2. Data from legacy daily_inputs (if group matches)
+      if (group === 'revenue' || group === 'user_acquisition') {
+        programs.forEach(p => {
+          const pInps = inputsByProg.get(p.id) || []
+          pInps.forEach(i => {
+            const val = group === 'revenue' ? Number(i.achievement_rp || 0) : Number(i.achievement_user || 0)
+            // Only add if we don't already have modern data for this specific program+date? 
+            // Actually, in dashboard aggregation, we should probably be careful about double counting.
+            // But if a program has defs, it USUALLY won't have legacy achievement_rp filled UNLESS it's a legacy program.
+            // For safety, we only add legacy value if the map for this date doesn't exist, OR we just add it?
+            // Standardizing on "add it" because legacy programs won't have modern MVals.
+            if (val > 0) {
+              dailyMap.set(i.date, (dailyMap.get(i.date) || 0) + val)
+            }
+          })
+        })
+      }
+      return Array.from(dailyMap.entries()).map(([date, value]) => ({ date, value }))
+    }
+
+    // FLOW METRICS: 3-day average comparison
+    const flowGroups = [
+      { key: 'ad_spend', syn: ['ads_spent', 'ad_spend', 'budget_iklan'], label: 'ads spent' },
+      { key: 'leads', syn: ['leads', 'lead_masuk'], label: 'leads' }
+    ]
+
+    flowGroups.forEach(g => {
+      if (aggregates[g.key]) {
+        const series = getDailySeries(g.key, g.syn)
+        const last3 = getRollingAverage(series, lastDate, 3)
+        const prev3 = getRollingAverage(series, new Date(new Date(lastDate).getTime() - 3*24*60*60*1000).toISOString().split('T')[0], 3)
+        const change = calculateGrowth(last3, prev3)
+
+        aggregates[g.key].comparison = {
+          value: last3,
+          percentage: change,
+          status: change === null ? undefined : change >= 0 ? 'improving' : 'declining',
+          label: 'vs avg previous 3 days',
+          type: 'flow'
+        }
+      }
+    })
+
+    // TARGET METRICS SPECIFIC ADDITIONS (Required Daily)
+    if (aggregates.revenue) {
+      // If today is not done, today is a remaining day
+      const effectiveElapsed = isTodayDone ? today : Math.max(0, today - 1)
+      const remainingDays = Math.max(1, workingDays - effectiveElapsed)
+      const remainingTarget = Math.max(0, aggregates.revenue.totalTarget - aggregates.revenue.actual)
+      aggregates.revenue.requiredDaily = remainingTarget / remainingDays
+    }
+
+    // RATIO METRICS: Ads Metrics (weighted average windows)
+    const adsMetrics = aggregateAdsMetrics(programs, valsByProg, inputsByProg)
+    
+    // We compute RATIO comparison for ROAS and CPP manually using weighted values from windows
+    const adsSpendSeries = getDailySeries('ad_spend', ['ads_spent', 'ad_spend', 'budget_iklan'])
+    const adsRevSeries = getDailySeries('revenue', ['revenue', 'omzet', 'revenue_from_paid_traffic'])
+    const adsGoalSeries = getDailySeries('user_acquisition', ['user_count', 'closing'])
+
+    const calculateWeightedRatio = (numSeries: {date:string,value:number}[], denSeries: {date:string,value:number}[], date: string, window: number) => {
+      const start = new Date(date); start.setDate(start.getDate() - window + 1)
+      const startStr = start.toISOString().split('T')[0]
+      
+      const numSum = numSeries.filter(s => s.date >= startStr && s.date <= date).reduce((sum, s) => sum + s.value, 0)
+      const denSum = denSeries.filter(s => s.date >= startStr && s.date <= date).reduce((sum, s) => sum + s.value, 0)
+      
+      return denSum > 0 ? numSum / denSum : 0
+    }
+
+    const prevDate = new Date(new Date(lastDate).getTime() - 3*24*60*60*1000).toISOString().split('T')[0]
+    
+    // ROAS comparison
+    const curRoas = calculateWeightedRatio(adsRevSeries, adsSpendSeries, lastDate, 3)
+    const oldRoas = calculateWeightedRatio(adsRevSeries, adsSpendSeries, prevDate, 3)
+    const roasChange = calculateGrowth(curRoas, oldRoas)
+    
+    // CPP comparison
+    const curCpp = calculateWeightedRatio(adsSpendSeries, adsGoalSeries, lastDate, 3)
+    const oldCpp = calculateWeightedRatio(adsSpendSeries, adsGoalSeries, prevDate, 3)
+    const cppChange = calculateGrowth(curCpp, oldCpp)
+
+    // Goals comparison (flow type)
+    const curGoalsAvg = getRollingAverage(adsGoalSeries, lastDate, 3)
+    const oldGoalsAvg = getRollingAverage(adsGoalSeries, prevDate, 3)
+    const goalsChange = calculateGrowth(curGoalsAvg, oldGoalsAvg)
+
+    adsMetrics.comparisons = {
+      totalGoals: {
+        value: curGoalsAvg,
+        percentage: goalsChange,
+        status: goalsChange === null ? undefined : goalsChange >= 0 ? 'improving' : 'declining',
+        label: 'vs avg previous 3 days',
+        type: 'flow'
+      },
+      roas: {
+        value: curRoas,
+        percentage: roasChange,
+        status: roasChange === null ? undefined : roasChange >= 0 ? 'improving' : 'declining',
+        label: 'rolling 3-day avg',
+        type: 'ratio'
+      },
+      cpp: {
+        value: curCpp,
+        percentage: cppChange,
+        status: cppChange === null ? undefined : cppChange <= 0 ? 'improving' : 'declining', // CPP lower is better
+        label: 'rolling 3-day avg',
+        type: 'ratio'
+      }
+    }
+
     // Calculate Global KPIs for Overview Tab
     const globalKPIs = aggregateGlobalKPIs(
       programHealths,
       programs,
       Array.from(compsByMilestone.values())
     )
-
-    // Calculate Ads Metrics for Ads Tab
-    const adsMetrics = aggregateAdsMetrics(programs, valsByProg)
 
     // Calculate Ads Daily Series for Ads Tab Chart
     // Default chart: spend vs roas
@@ -294,7 +449,7 @@ export async function getUnifiedDashboardData(options: {
   if (options.includePrevious) {
     let prevStartStr: string = ''
     let prevEndStr: string = ''
-    let isThreeDayComparison = false
+
 
     if (options.startDate && options.endDate) {
       const start = new Date(options.startDate)
@@ -311,7 +466,7 @@ export async function getUnifiedDashboardData(options: {
       prevEndStr = prevEnd.toISOString().split('T')[0]
     } else if (activePeriod) {
       // DEFAULT VIEW (Active Period): Compare vs Snapshot from 3 days ago
-      isThreeDayComparison = true
+
       const today = new Date()
       const threeDaysAgo = new Date(today)
       threeDaysAgo.setDate(today.getDate() - 3)
@@ -354,7 +509,6 @@ export async function getUnifiedDashboardData(options: {
       // For 3-day comparison, we use the SAME proration as today (or 1 if snapshotting end of month)
       // Actually, processSummary uses current-day-of-month based proration if no dates provided.
       // We want to calculate previous summary based on its OWN proration (snapshot cumulative)
-      const prevProration = isThreeDayComparison ? 1 : prorationFactor // For cumulative snapshot, target doesn't matter much for delta growth if we only compare actuals
 
       previousData = {
         dailyInputs: pDailyInputs,

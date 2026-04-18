@@ -96,18 +96,81 @@ export function PivotTableClient({
   // localValues state to support Optimistic UI and real-time recalculation
   const [localValues, setLocalValues] = useState<Record<string, number | null>>({})
 
-  // Re-initialize local values when program changes
+  // Editing state
+  const [editingCell, setEditingCell] = useState<{ date: string; metricId: string } | null>(null)
+  const [editValue, setEditValue] = useState<string>('')
+  const [isSaving, setIsSaving] = useState<string | null>(null) // the cell key currently saving
+  const inputRef = useRef<HTMLInputElement>(null)
+
+  // Initialization / Sync from Props
   useEffect(() => {
+    // We only want to sync when the active program or view mode changes, 
+    // or when we get new data from props and ARE NOT currently editing/saving anything.
+    if (isSaving || editingCell) return
+
     const initVals: Record<string, number | null> = {}
     if (activeProgram) {
-      allPeriodMetricValues
-        .filter(mv => mv.program_id === activeProgram.id)
-        .forEach(mv => {
-          initVals[`${mv.date}_${mv.metric_definition_id}`] = viewMode === 'actual' ? mv.value : mv.target_value
-        })
+      // 1. Primary data from daily_metric_values (modern)
+      const modernVals = allPeriodMetricValues.filter(mv => mv.program_id === activeProgram.id)
+      modernVals.forEach(mv => {
+        initVals[`${mv.date}_${mv.metric_definition_id}`] = viewMode === 'actual' ? mv.value : mv.target_value
+      })
+
+      // 2. Legacy Fallback (daily_inputs)
+      // This ensures legacy data (achievement_rp/user) shows up in the new pivot table
+      if (viewMode === 'actual' && pastInputs) {
+        const revMetricId = activeProgram.program_metric_definitions.find(m => m.metric_group === 'revenue')?.id
+        const acqMetricId = activeProgram.program_metric_definitions.find(m => m.metric_group === 'user_acquisition')?.id
+        
+        pastInputs
+          .filter(pi => pi.program_id === activeProgram.id)
+          .forEach(pi => {
+            // Check if initVals is empty OR 0 to fallback. 
+            // This fix allows data (15-17 Apr) to show if modern values are empty/0.
+            if (revMetricId) {
+              const currentVal = initVals[`${pi.date}_${revMetricId}`]
+              if (currentVal === undefined || currentVal === null || currentVal === 0) {
+                initVals[`${pi.date}_${revMetricId}`] = Number(pi.achievement_rp || 0)
+              }
+            }
+            if (acqMetricId) {
+              const currentVal = initVals[`${pi.date}_${acqMetricId}`]
+              if (currentVal === undefined || currentVal === null || currentVal === 0) {
+                initVals[`${pi.date}_${acqMetricId}`] = Number(pi.achievement_user || 0)
+              }
+            }
+          })
+      }
+
+      // 3. Fallback Targets for Legacy Programs
+      if (viewMode === 'target' && activePeriod) {
+        const revMetricId = activeProgram.program_metric_definitions.find(m => m.metric_group === 'revenue')?.id
+        const acqMetricId = activeProgram.program_metric_definitions.find(m => m.metric_group === 'user_acquisition')?.id
+        
+        const workingDays = activePeriod.working_days || 30
+        const revTarget = (activeProgram.monthly_target_rp || 0) / workingDays
+        const acqTarget = (activeProgram.monthly_target_user || 0) / workingDays
+
+        for (let d = 1; d <= 31; d++) {
+          const dateStr = buildDateString(d)
+          const dateObj = new Date(activePeriod.year, activePeriod.month - 1, d)
+          if (dateObj.getMonth() !== activePeriod.month - 1) continue
+          const isWorkingDay = dateObj.getDay() >= 1 && dateObj.getDay() <= 5
+
+          if (isWorkingDay) {
+            if (revMetricId && !initVals[`${dateStr}_${revMetricId}`]) {
+              initVals[`${dateStr}_${revMetricId}`] = revTarget
+            }
+            if (acqMetricId && !initVals[`${dateStr}_${acqMetricId}`]) {
+              initVals[`${dateStr}_${acqMetricId}`] = acqTarget
+            }
+          }
+        }
+      }
+      
+      setLocalValues(initVals)
     }
-    setLocalValues(initVals)
-  }, [activeProgram, allPeriodMetricValues, viewMode])
+  }, [activeProgram, viewMode, allPeriodMetricValues, pastInputs, activePeriod, isSaving, editingCell, buildDateString])
 
   // Computed row values helper
   // For a specific date, we evaluate all formulas
@@ -133,17 +196,14 @@ export function PivotTableClient({
     return evaluatedValues
   }
 
-  // Editing state
-  const [editingCell, setEditingCell] = useState<{ date: string; metricId: string } | null>(null)
-  const [editValue, setEditValue] = useState<string>('')
-  const [isSaving, setIsSaving] = useState<string | null>(null) // the cell key currently saving
-  const inputRef = useRef<HTMLInputElement>(null)
-
   useEffect(() => {
     if (editingCell && inputRef.current) {
       inputRef.current.focus()
-      // Put cursor at the end
-      inputRef.current.setSelectionRange(inputRef.current.value.length, inputRef.current.value.length)
+      // Only call setSelectionRange on input types that support it (text, search, tel, url, or password)
+      // type="number" does NOT support it and throws InvalidStateError
+      if (['text', 'search', 'tel', 'url', 'password'].includes(inputRef.current.type)) {
+        inputRef.current.setSelectionRange(inputRef.current.value.length, inputRef.current.value.length)
+      }
     }
   }, [editingCell])
 
@@ -404,7 +464,6 @@ export function PivotTableClient({
         if ((isQuantitative && !isAds) || metrics.length === 0) {
           return (
             <div className="relative overflow-x-auto rounded-xl border border-slate-200 shadow-sm bg-white">
-              {/* ... existing legacy table ... */}
               <table className="w-full text-sm text-left">
                 <thead className="bg-slate-800 text-slate-100 font-bold">
                   <tr>

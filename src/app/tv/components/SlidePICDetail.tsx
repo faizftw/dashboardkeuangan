@@ -60,8 +60,8 @@ export function SlidePICDetail({ pic, programs }: SlidePICDetailProps) {
         <div className="flex flex-col items-end">
            <div className={cn(
              "px-10 py-4 rounded-3xl border-2 text-4xl font-black text-slate-50 uppercase tracking-tighter shadow-2xl transition-all duration-1000",
-             pic.status === 'EXCELLENT' || pic.status === 'BAIK' ? 'text-emerald-400 border-emerald-500 bg-emerald-500/10' :
-             pic.status === 'CUKUP' ? 'text-amber-400 border-amber-500 bg-amber-500/10' :
+             pic.status === 'SEHAT' ? 'text-emerald-400 border-emerald-500 bg-emerald-500/10' :
+             pic.status === 'PERHATIAN' ? 'text-amber-400 border-amber-500 bg-amber-500/10' :
              'text-rose-400 border-rose-500 bg-rose-500/10'
            )}>
              {pic.status}

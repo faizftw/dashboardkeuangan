@@ -10,9 +10,11 @@ import {
   isMouProgram,
   aggregateAdsMetrics, 
   buildAdsDailySeries,
-  buildTargetTrendSeries
+  buildTargetTrendSeries,
+  MetricComparison,
+  AggregateItem
 } from '@/lib/dashboard-calculator'
-import { formatRupiah, cn, getPreviousPeriodLabel } from '@/lib/utils'
+import { formatRupiah, cn } from '@/lib/utils'
 import { formatMetricValue } from '@/lib/formula-evaluator'
 import {
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
@@ -75,22 +77,73 @@ function getBannerInfo(score: number) {
   return { text: 'Target tercapai — luar biasa! 🏆', bg: 'bg-emerald-50', border: 'border-emerald-200', textCol: 'text-emerald-800' }
 }
 
-function calculateGrowth(current: number, previous: number): number {
-  if (current === 0 && previous === 0) return 0
-  if (!previous || previous === 0) return current > 0 ? 100 : 0
-  return ((current - previous) / previous) * 100
-}
 
-// ── KPI Card ─────────────────────────────────────────────────────────────────
-function KpiCard({ icon: Icon, label, value, sub, accentColor, comparison, tooltip }: {
+
+interface KpiCardProps {
   icon: React.ElementType
   label: string
   value: string | number
   sub?: string
   accentColor?: string
-  comparison?: { value: number; label: string }
+  comparison?: MetricComparison
   tooltip?: string
-}) {
+}
+
+function KpiCard({ icon: Icon, label, value, sub, accentColor, comparison, tooltip }: KpiCardProps) {
+  const getStatusDisplay = (comp: MetricComparison) => {
+    const isPositive = (comp.percentage ?? 0) >= 0
+    const isImproving = comp.status === 'improving' || comp.status === 'ahead' || comp.status === 'sehat'
+    const isDeclining = comp.status === 'declining' || comp.status === 'behind' || comp.status === 'kritis'
+    
+    // Status colors
+    const colorClass = isImproving ? "text-emerald-600" : 
+                       isDeclining ? "text-rose-600" : "text-slate-500"
+
+    if (comp.type === 'flow' || comp.type === 'ratio') {
+      return (
+        <div className="flex items-center gap-1.5 mt-3 pt-3 border-t border-[#E5E7EB]">
+          <span className={cn("text-[12px] font-medium flex items-center gap-0.5", colorClass)}>
+            {isPositive ? <ArrowUpRight className="h-3 w-3" /> : <ArrowDownRight className="h-3 w-3" />}
+            {Math.abs(comp.percentage ?? 0).toFixed(1)}%
+          </span>
+          <span className="text-[12px] text-slate-400">{comp.label}</span>
+        </div>
+      )
+    }
+
+    if (comp.type === 'target') {
+      return (
+        <div className="flex items-center gap-1.5 mt-3 pt-3 border-t border-[#E5E7EB]">
+          <span className={cn(
+            "text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded border",
+            comp.status === 'ahead' ? "bg-emerald-50 text-emerald-700 border-emerald-100" :
+            comp.status === 'behind' ? "bg-rose-50 text-rose-700 border-rose-100" :
+            "bg-slate-50 text-slate-700 border-slate-100"
+          )}>
+            {comp.status === 'ahead' ? 'On Track' : comp.status === 'behind' ? 'Behind' : 'Steady'}
+          </span>
+          <span className="text-[12px] text-slate-400">{comp.label}</span>
+        </div>
+      )
+    }
+
+    if (comp.type === 'index' || comp.type === 'status') {
+       // Index uses status dots
+       const dotColor = comp.status === 'sehat' ? 'bg-emerald-500' :
+                        comp.status === 'perhatian' ? 'bg-amber-400' :
+                        comp.status === 'kritis' ? 'bg-red-500' : 'bg-slate-300'
+       return (
+         <div className="flex items-center gap-1.5 mt-3 pt-3 border-t border-[#E5E7EB]">
+           <div className={cn("h-2 w-2 rounded-full", dotColor)} />
+           <span className="text-[12px] text-slate-500 font-medium capitalize">{comp.status || 'Normal'}</span>
+           <span className="text-[12px] text-slate-400 ml-auto">{comp.label}</span>
+         </div>
+       )
+    }
+
+    return null
+  }
+
   return (
     <div className="bg-white p-4 rounded-xl border border-[#E5E7EB] flex flex-col justify-between relative overflow-hidden group">
       {/* 3px Vertical Accent */}
@@ -115,26 +168,14 @@ function KpiCard({ icon: Icon, label, value, sub, accentColor, comparison, toolt
           )}
         </div>
         <div className="flex items-baseline gap-2 w-full flex-wrap min-w-0">
-          <span className="text-[clamp(1rem,3.5vw,1.375rem)] font-semibold text-[#111827] leading-tight tabular-nums break-words" title={String(value)}>
+          <span className="text-[clamp(1.125rem,4vw,1.5rem)] font-bold text-[#111827] leading-tight tabular-nums break-words" title={String(value)}>
             {value}
           </span>
           {sub && <span className="text-[12px] text-[#6B7280] font-normal truncate min-w-0">{sub}</span>}
         </div>
       </div>
 
-      {comparison && (
-        <div className="flex items-center gap-1.5 mt-3 pt-3 border-t border-[#E5E7EB]">
-          <span className={cn(
-            "text-[12px] font-medium flex items-center gap-0.5",
-            comparison.value > 0 ? "text-emerald-600" : 
-            comparison.value < 0 ? "text-rose-600" : "text-slate-500"
-          )}>
-            {comparison.value > 0 ? <ArrowUpRight className="h-3 w-3" /> : comparison.value < 0 ? <ArrowDownRight className="h-3 w-3" /> : null}
-            {Math.abs(comparison.value).toFixed(1)}%
-          </span>
-          <span className="text-[12px] text-slate-400">{comparison.label}</span>
-        </div>
-      )}
+      {comparison && getStatusDisplay(comparison)}
     </div>
   )
 }
@@ -347,8 +388,36 @@ export function OverviewClient({
 
     if (!program || !ph) return null
 
+    const actualRevenue = ph.calculatedMetrics?.revenue || 0
+    const actualUser = ph.calculatedMetrics?.user_count || ph.calculatedMetrics?.user_acquisition || 0
     const targetRevenue = ph.absoluteTargets?.revenue || 0
     const targetUser = ph.absoluteTargets?.user_count || ph.absoluteTargets?.user_acquisition || 0
+    
+    // Calculate required daily for this program
+    const todayIso = new Date().toISOString().split('T')[0]
+    const hasTodayData =
+      metricValues.some(v => v.date === todayIso && v.program_id === selectedOmzetProgramId && v.value !== null) ||
+      dailyInputs.some(v => v.date === todayIso && v.program_id === selectedOmzetProgramId)
+
+    const workingDays      = activePeriod?.working_days || 30
+    const totalCalendarDays = new Date(activePeriod.year, activePeriod.month, 0).getDate()
+    const today            = new Date().getDate()
+    const calendarElapsed  = hasTodayData ? today : Math.max(0, today - 1)
+    const workingDaysElapsed = Math.round((calendarElapsed / totalCalendarDays) * workingDays)
+    const prorationFactor    = Math.min(workingDaysElapsed / workingDays, 1)
+    const remainingDays      = Math.max(1, workingDays - workingDaysElapsed)
+    const remainingTarget    = Math.max(0, targetRevenue - actualRevenue)
+    const requiredDaily      = remainingTarget / remainingDays
+    
+
+    // Calculate target comparison for this program
+    const actualProgress = targetRevenue > 0 ? actualRevenue / targetRevenue : 0
+    const comparison: MetricComparison = {
+      value: actualRevenue,
+      type: 'target',
+      label: 'vs expected progress',
+      status: actualProgress >= prorationFactor ? 'ahead' : 'behind'
+    }
 
     // Recalculate trend for this single program
     const trend = buildTargetTrendSeries(
@@ -362,18 +431,28 @@ export function OverviewClient({
       endDate
     )
 
+    const healthResult = ( actualRevenue / (targetRevenue || 1) ) * 100
+
     return {
       aggregates: {
         revenue: { 
-          actual: ph.calculatedMetrics?.revenue || 0, 
-          totalTarget: targetRevenue
+          actual: actualRevenue, 
+          totalTarget: targetRevenue,
+          requiredDaily,
+          comparison
         },
         user_acquisition: { 
-          actual: ph.calculatedMetrics?.user_count || ph.calculatedMetrics?.user_acquisition || 0, 
-          totalTarget: targetUser
+          actual: actualUser, 
+          totalTarget: targetUser,
+          comparison: {
+            value: actualUser,
+            type: 'target',
+            label: 'vs expected progress',
+            status: (targetUser > 0 ? actualUser / targetUser : 0) >= prorationFactor ? 'ahead' : 'behind'
+          }
         }
       },
-      health: ( (ph.calculatedMetrics?.revenue || 0) / (targetRevenue || 1) ) * 100,
+      health: healthResult,
       targetTrend: trend,
       previousAggregates: prevPh ? {
         revenue: { 
@@ -513,7 +592,7 @@ export function OverviewClient({
     { key: 'leads', label: 'Leads' },
   ]
 
-  const prevPeriodLabel = useMemo(() => getPreviousPeriodLabel(startDate, endDate), [startDate, endDate])
+
 
   const departments = useMemo(() => {
     const depts = Array.from(new Set(programs.map(p => p.department).filter(Boolean))) as string[]
@@ -635,10 +714,7 @@ export function OverviewClient({
               sub={globalKPIs.healthStatus} 
               accentColor={getStatusLabelAndColor(globalKPIs.avgHealth).accent}
               tooltip="Health Score adalah rata-rata pencapaian target dari metrik utama (Omzet & User) di seluruh program aktif."
-              comparison={previousSummary ? { 
-                value: calculateGrowth(globalKPIs.avgHealth, previousSummary.globalKPIs.avgHealth), 
-                label: prevPeriodLabel 
-              } : undefined} 
+              comparison={globalKPIs.comparison} 
             />
             <KpiCard 
               icon={Layers} 
@@ -646,10 +722,7 @@ export function OverviewClient({
               value={globalKPIs.activeProgramsCount} 
               sub={`dari ${globalKPIs.totalPrograms} total`} 
               accentColor="#378ADD"
-              comparison={previousSummary ? {
-                value: calculateGrowth(globalKPIs.activeProgramsCount, previousSummary.globalKPIs.activeProgramsCount),
-                label: prevPeriodLabel
-              } : undefined}
+              comparison={undefined}
             />
             <KpiCard 
               icon={Target} 
@@ -658,10 +731,7 @@ export function OverviewClient({
               sub={`program periode ini`} 
               accentColor="#639922"
               tooltip="Jumlah program yang sudah mencapai atau melampaui 100% target utamanya bulan ini."
-              comparison={previousSummary ? { 
-                value: calculateGrowth(globalKPIs.targetsHit, previousSummary.globalKPIs.targetsHit), 
-                label: prevPeriodLabel 
-              } : undefined} 
+              comparison={undefined}
             />
             <KpiCard 
               icon={CheckSquare} 
@@ -669,10 +739,7 @@ export function OverviewClient({
               value={globalKPIs.completedMilestones} 
               sub={`dari ${globalKPIs.totalMilestones} total`} 
               accentColor="#534AB7"
-              comparison={previousSummary ? {
-                value: calculateGrowth(globalKPIs.completedMilestones, previousSummary.globalKPIs.completedMilestones),
-                label: prevPeriodLabel
-              } : undefined}
+              comparison={undefined}
             />
           </div>
 
@@ -805,26 +872,20 @@ export function OverviewClient({
               icon={Layers} 
               label="Total capaian Omzet" 
               value={formatRupiah(omzetSummary.aggregates.revenue?.actual || 0)} 
-              sub={`Target: ${formatRupiah(omzetSummary.aggregates.revenue?.totalTarget || 0)}`}
+              sub={`Target: ${formatRupiah(omzetSummary.aggregates.revenue?.totalTarget || 0)} | Sisa: ${formatRupiah(Math.max(0, (omzetSummary.aggregates.revenue?.totalTarget || 0) - (omzetSummary.aggregates.revenue?.actual || 0)))}`}
               accentColor="#639922"
-              comparison={omzetSummary.previousAggregates ? {
-                value: calculateGrowth(omzetSummary.aggregates.revenue?.actual || 0, omzetSummary.previousAggregates.revenue?.actual || 0),
-                label: prevPeriodLabel
-              } : undefined}
+              comparison={(omzetSummary.aggregates.revenue as AggregateItem)?.comparison}
             />
             <KpiCard 
               icon={TrendingUp} 
-              label="Sisa target Rp" 
-              value={formatRupiah(Math.max(0, (omzetSummary.aggregates.revenue?.totalTarget || 0) - (omzetSummary.aggregates.revenue?.actual || 0)))} 
-              sub="jumlah sisa periode ini" 
+              label="Target Harian Dibutuhkan" 
+              value={formatRupiah((omzetSummary.aggregates.revenue as AggregateItem)?.requiredDaily || 0)} 
+              sub={`Target normal: ${formatRupiah(
+                (omzetSummary.aggregates.revenue as AggregateItem)?.totalTarget / 
+                (activePeriod?.working_days || 30)
+              )}/hari`}
               accentColor="#534AB7"
-              comparison={omzetSummary.previousAggregates ? {
-                value: calculateGrowth(
-                  Math.max(0, (omzetSummary.aggregates.revenue?.totalTarget || 0) - (omzetSummary.aggregates.revenue?.actual || 0)),
-                  Math.max(0, (omzetSummary.previousAggregates.revenue?.totalTarget || 0) - (omzetSummary.previousAggregates.revenue?.actual || 0))
-                ),
-                label: prevPeriodLabel
-              } : undefined}
+              tooltip="Omzet yang harus dicapai setiap hari di sisa hari kerja untuk mencapai target 100%. Lebih tinggi dari target normal jika program tertinggal dari jadwal"
             />
              <KpiCard 
               icon={HeartPulse} 
@@ -832,7 +893,12 @@ export function OverviewClient({
               value={`${Math.round(omzetSummary.health)}%`} 
               sub={selectedOmzetProgramId === 'all' ? 'Rata-rata Global' : 'Program ini'}
               accentColor={getStatusLabelAndColor(omzetSummary.health).accent}
-              tooltip="Persentase capaian riil dibandingkan dengan target omzet yang telah ditetapkan untuk periode ini."
+              comparison={{
+                value: omzetSummary.health,
+                type: 'index',
+                label: '● Health Rate',
+                status: getStatusLabelAndColor(omzetSummary.health).label.toLowerCase() as 'sehat' | 'perhatian' | 'kritis'
+              }}
             />
           </div>
 
@@ -842,11 +908,11 @@ export function OverviewClient({
              <div className="lg:col-span-4 gap-6">
                 <RadialProgressCard 
                   title="Revenue Progress"
-                  value={omzetSummary.aggregates.revenue?.actual || 0}
-                  target={omzetSummary.aggregates.revenue?.totalTarget || 0}
-                  percentage={(omzetSummary.aggregates.revenue?.actual / (omzetSummary.aggregates.revenue?.totalTarget || 1)) * 100}
-                  displayValue={formatRupiah(omzetSummary.aggregates.revenue?.actual || 0)}
-                  displayTarget={formatRupiah(omzetSummary.aggregates.revenue?.totalTarget || 0)}
+                  value={(omzetSummary.aggregates.revenue as AggregateItem)?.actual || 0}
+                  target={(omzetSummary.aggregates.revenue as AggregateItem)?.totalTarget || 0}
+                  percentage={((omzetSummary.aggregates.revenue as AggregateItem)?.actual / ((omzetSummary.aggregates.revenue as AggregateItem)?.totalTarget || 1)) * 100}
+                  displayValue={formatRupiah((omzetSummary.aggregates.revenue as AggregateItem)?.actual || 0)}
+                  displayTarget={formatRupiah((omzetSummary.aggregates.revenue as AggregateItem)?.totalTarget || 0)}
                   unitLabel="Rp"
                   color="#639922"
                   className="h-full"
@@ -987,10 +1053,7 @@ export function OverviewClient({
               value={formatRupiah(adsAggregate.totalAdsSpent)} 
               sub="periode ini"
               accentColor="#378ADD" 
-              comparison={previousSummary ? {
-                value: calculateGrowth(adsAggregate.totalAdsSpent, previousSummary.adsMetrics.totalAdsSpent),
-                label: prevPeriodLabel
-              } : undefined}
+              comparison={adsAggregate.comparisons?.ad_spend || summary.aggregates.ad_spend?.comparison}
             />
             <KpiCard 
               icon={Target} 
@@ -998,10 +1061,7 @@ export function OverviewClient({
               value={adsAggregate.totalGoals} 
               sub="jumlah closing" 
               accentColor="#639922" 
-              comparison={previousSummary ? {
-                value: calculateGrowth(adsAggregate.totalGoals, previousSummary.adsMetrics.totalGoals),
-                label: prevPeriodLabel
-              } : undefined}
+              comparison={summary.aggregates.user_acquisition?.comparison}
             />
             <KpiCard 
               icon={HeartPulse} 
@@ -1009,10 +1069,7 @@ export function OverviewClient({
               value={`${adsAggregate.avgRoas.toFixed(2)}x`} 
               sub={adsAggregate.avgRoas >= 1 ? "Profitable (>1x)" : "Ditinjau (<1x)"}
               accentColor="#534AB7" 
-              comparison={previousSummary ? {
-                value: calculateGrowth(adsAggregate.avgRoas, previousSummary.adsMetrics.avgRoas),
-                label: prevPeriodLabel
-              } : undefined}
+              comparison={adsAggregate.comparisons?.roas}
             />
             <KpiCard 
               icon={CheckSquare} 
@@ -1020,10 +1077,7 @@ export function OverviewClient({
               value={formatRupiah(adsAggregate.avgCpp)} 
               sub="biaya per goal"
               accentColor={adsAggregate.avgCpp > 60000 ? "#E24B4A" : "#639922"} 
-              comparison={previousSummary ? {
-                value: calculateGrowth(adsAggregate.avgCpp, previousSummary.adsMetrics.avgCpp),
-                label: prevPeriodLabel
-              } : undefined}
+              comparison={adsAggregate.comparisons?.cpp}
             />
           </div>
 

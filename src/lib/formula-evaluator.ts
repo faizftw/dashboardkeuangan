@@ -424,12 +424,7 @@ export function formatMetricValue(
   
   switch (dataType) {
     case 'currency': {
-      if (value >= 1_000_000_000) {
-        return `Rp ${(value / 1_000_000_000).toFixed(1).replace(/\.0$/, '')}M`
-      }
-      if (value >= 1_000_000) {
-        return `Rp ${(value / 1_000_000).toFixed(1).replace(/\.0$/, '')}jt`
-      }
+      // Return full formatted number as requested by user
       return `Rp ${value.toLocaleString('id-ID')}`
     }
     case 'percentage':

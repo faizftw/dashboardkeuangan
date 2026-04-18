@@ -16,7 +16,7 @@ export type ProgramWithRelations = Database['public']['Tables']['programs']['Row
 export interface ProgramHealthResult {
   programId: string
   healthScore: number
-  status: 'KRITIS' | 'PERLU PERHATIAN' | 'CUKUP' | 'BAIK' | 'EXCELLENT'
+  status: 'KRITIS' | 'PERHATIAN' | 'SEHAT'
   totalTargetMetrics: number
   isQualitativeOnly: boolean
   calculatedMetrics?: Record<string, number | null>
@@ -24,12 +24,18 @@ export interface ProgramHealthResult {
   absoluteTargets?: Record<string, number>  // Stores full monthly targets for UI display
 }
 
+export interface MetricComparison {
+  value: number | null
+  percentage?: number | null
+  status?: 'ahead' | 'behind' | 'on track' | 'sehat' | 'perhatian' | 'kritis' | 'improving' | 'declining'
+  label: string
+  type: 'flow' | 'ratio' | 'target' | 'status' | 'index'
+}
+
 export function getHealthStatus(score: number): ProgramHealthResult['status'] {
-  if (score < 40) return 'KRITIS'
-  if (score < 60) return 'PERLU PERHATIAN'
-  if (score < 80) return 'CUKUP'
-  if (score < 100) return 'BAIK'
-  return 'EXCELLENT'
+  if (score < 50) return 'KRITIS'
+  if (score <= 80) return 'PERHATIAN'
+  return 'SEHAT'
 }
 
 /**
@@ -240,12 +246,21 @@ export function calculateDepartmentHealth(
 /**
  * Aggregates all metrics grouped by metric_group across programs.
  */
+export interface AggregateItem {
+  actual: number
+  target: number
+  totalTarget: number
+  isComputed: boolean
+  comparison?: MetricComparison
+  requiredDaily?: number
+}
+
 export function aggregateByMetricGroup(
   programs: ProgramWithRelations[],
   metricValuesByProgram: Map<string, MetricValue[]>,
   dailyInputsByProgram: Map<string, DailyInput[]>,
   prorationFactor: number
-) {
+): Record<string, AggregateItem> {
   const groupRawTotals: Record<string, { actual: number, target: number, totalTarget: number }> = {
     revenue: { actual: 0, target: 0, totalTarget: 0 },
     user_acquisition: { actual: 0, target: 0, totalTarget: 0 },
@@ -277,8 +292,17 @@ export function aggregateByMetricGroup(
           const sumCustomTarget = vals.reduce((s, v) => s + (Number(v.target_value) || 0), 0)
           customTarget += sumCustomTarget
           
-          const mTarget = m.monthly_target || 0
+          let mTarget = m.monthly_target || 0
           
+          // Fallback to program-level target if metric definition is uninitialized (0)
+          if (mTarget === 0) {
+            if (m.metric_group === 'revenue' || keys.includes('revenue')) {
+              mTarget = (prog as unknown as { monthly_target_rp: number }).monthly_target_rp || 0
+            } else if (m.metric_group === 'user_acquisition' || keys.includes('user_count')) {
+              mTarget = (prog as unknown as { monthly_target_user: number }).monthly_target_user || 0
+            }
+          }
+
           // Important: Reconstruct absolute target from periodized targets if monthly is 0
           const absTarget = (m.monthly_target || 0) === 0 && sumCustomTarget > 0 
             ? sumCustomTarget / prorationFactor 
@@ -292,9 +316,17 @@ export function aggregateByMetricGroup(
       if (customSum === 0) {
         const legacyInputs = dailyInputsByProgram.get(prog.id) || []
         if (group === 'revenue' || keys.includes('revenue')) {
-          customSum = legacyInputs.reduce((sum, i) => sum + Number(i.achievement_rp || 0), 0)
+          const lSum = legacyInputs.reduce((sum, i) => sum + Number(i.achievement_rp || 0), 0)
+          if (lSum > 0) {
+            customSum = lSum
+            foundCustom = true
+          }
         } else if (group === 'user_acquisition' || keys.includes('user_count')) {
-          customSum = legacyInputs.reduce((sum, i) => sum + Number(i.achievement_user || 0), 0)
+          const lSum = legacyInputs.reduce((sum, i) => sum + Number(i.achievement_user || 0), 0)
+          if (lSum > 0) {
+            customSum = lSum
+            foundCustom = true
+          }
         }
       }
       
@@ -338,15 +370,25 @@ export function aggregateByMetricGroup(
   })
 
 
-  const result: Record<string, { actual: number, target: number, totalTarget: number, isComputed: boolean }> = {}
+  const result: Record<string, AggregateItem> = {}
 
   Object.keys(groupRawTotals).forEach(g => {
     if (existingGroups.has(g)) {
-      result[g] = { ...groupRawTotals[g], isComputed: false }
+      const { actual, target, totalTarget } = groupRawTotals[g]
+      const actualProgress = totalTarget > 0 ? actual / totalTarget : 0
+      
+      const comparison: MetricComparison | undefined = (g === 'revenue' || g === 'user_acquisition') ? {
+        value: actual,
+        type: 'target',
+        label: 'vs expected progress',
+        status: actualProgress >= prorationFactor ? 'ahead' : 'behind'
+      } : undefined
+
+      result[g] = { actual, target, totalTarget, isComputed: false, comparison }
     }
   })
 
-  // Group by metric_group handled by aggregateByMetricGroup
+  // Conversion
   if (existingGroups.has('conversion')) {
     const acq = groupRawTotals['user_acquisition']?.actual || 0
     const lds = groupRawTotals['leads']?.actual || 0
@@ -354,6 +396,7 @@ export function aggregateByMetricGroup(
     result['conversion'] = { actual, target: 0, totalTarget: 0, isComputed: true }
   }
 
+  // Efficiency
   if (existingGroups.has('efficiency')) {
     const rev = groupRawTotals['revenue']?.actual || 0
     const spd = groupRawTotals['ad_spend']?.actual || 0
@@ -415,6 +458,7 @@ export interface AdsAggregateResult {
   avgRoas: number   // total_revenue / total_ads_spent (weighted)
   avgCpp: number    // total_ads_spent / total_goals (weighted)
   avgCr: number     // total_goals / total_leads (weighted)
+  comparisons?: Record<string, MetricComparison>
 }
 
 /**
@@ -422,7 +466,8 @@ export interface AdsAggregateResult {
  */
 export function aggregateAdsMetrics(
   programs: ProgramWithRelations[],
-  metricValuesByProgram: Map<string, MetricValue[]>
+  metricValuesByProgram: Map<string, MetricValue[]>,
+  dailyInputsByProgram?: Map<string, DailyInput[]>
 ): AdsAggregateResult {
   let totalAdsSpent = 0
   let totalRevenue = 0
@@ -450,6 +495,15 @@ export function aggregateAdsMetrics(
         totalLeads += sum
       }
     })
+
+    // If no goals from modern metrics, fallback to legacy achievement_user ONLY IF it's an ads program
+    if (totalGoals === 0 && isAdsProgram(defs)) {
+      const legacyInputs = dailyInputsByProgram?.get(prog.id) || []
+      const lGoals = legacyInputs.reduce((sum: number, i: Database['public']['Tables']['daily_inputs']['Row']) => sum + Number(i.achievement_user || 0), 0)
+      const lRev = legacyInputs.reduce((sum: number, i: Database['public']['Tables']['daily_inputs']['Row']) => sum + Number(i.achievement_rp || 0), 0)
+      totalGoals += lGoals
+      totalRevenue += lRev
+    }
   })
 
   return {
@@ -538,6 +592,17 @@ export function buildAdsDailySeries(
     })
 }
 
+export interface GlobalKPIResult {
+  avgHealth: number
+  activeProgramsCount: number
+  totalPrograms: number
+  targetsHit: number
+  totalMilestones: number
+  completedMilestones: number
+  healthStatus: ProgramHealthResult['status']
+  comparison?: MetricComparison
+}
+
 /**
  * Universal KPI aggregation for Overview Tab
  */
@@ -545,7 +610,7 @@ export function aggregateGlobalKPIs(
   programResults: ProgramHealthResult[],
   programs: ProgramWithRelations[],
   milestoneCompletions: MilestoneCompletion[]
-) {
+): GlobalKPIResult {
   const totalPrograms = programs.length
   const activeProgramsCount = programs.filter(p => 
     (p.program_metric_definitions?.length || 0) > 0 || 
@@ -561,6 +626,8 @@ export function aggregateGlobalKPIs(
   const totalMilestones = programs.reduce((sum, p) => sum + (p.program_milestones?.length || 0), 0)
   const completedMilestones = milestoneCompletions.filter(c => c.is_completed).length
 
+  const healthStatus = getHealthStatus(avgHealth)
+
   return {
     avgHealth,
     activeProgramsCount,
@@ -568,7 +635,13 @@ export function aggregateGlobalKPIs(
     targetsHit,
     totalMilestones,
     completedMilestones,
-    healthStatus: getHealthStatus(avgHealth)
+    healthStatus,
+    comparison: {
+      value: avgHealth,
+      type: 'index',
+      label: '● Health Score',
+      status: healthStatus.toLowerCase() as 'sehat' | 'perhatian' | 'kritis'
+    }
   }
 }
 
@@ -777,4 +850,49 @@ export function buildTargetTrendSeries(
       targetUser: Math.round(dailyTargetUser)
     }
   })
+}
+
+// ─── Stat Helpers ─────────────────────────────────────────────────────────────
+
+/**
+ * Calculates a rolling average for a sequence of daily values.
+ * windowDays: number of days to look back for the average.
+ * endDate: the reference end date (ISO string).
+ * values: array of { date, value } objects.
+ */
+export function getRollingAverage(
+  values: { date: string; value: number }[],
+  endDate: string,
+  windowDays: number = 3
+): number {
+  if (values.length === 0) return 0
+  
+  const targetDate = new Date(endDate)
+  const windowStart = new Date(targetDate)
+  windowStart.setDate(targetDate.getDate() - windowDays + 1)
+  
+  const startStr = windowStart.toISOString().split('T')[0]
+  
+  const windowValues = values.filter(v => v.date >= startStr && v.date <= endDate)
+  if (windowValues.length === 0) return 0
+  
+  const sum = windowValues.reduce((acc, v) => acc + (v.value || 0), 0)
+  return sum / windowDays // Always divide by window length for consistency
+}
+
+/**
+ * Calculates expected progress (0.0 to 1.0) based on elapsed days.
+ */
+export function calculateExpectedProgress(elapsedDays: number, totalDays: number): number {
+  if (totalDays <= 0) return 0
+  return Math.min(elapsedDays / totalDays, 1)
+}
+
+/**
+ * Standard growth / change calculation with safety checks.
+ */
+export function calculateGrowth(current: number, previous: number): number | null {
+  if (previous === 0) return current > 0 ? 100 : 0
+  if (previous === null || current === null) return null
+  return ((current - previous) / previous) * 100
 }

@@ -118,7 +118,7 @@ export function ProgramDetailView({ program, health, metricValues, dailyInputs }
         }
       })
     }
-  }, [program.id, isAds, metricDefs, metricValues, health.absoluteTargets])
+  }, [program.id, isAds, metricDefs, metricValues, dailyInputs, health.absoluteTargets])
 
   const statusInfo = useMemo(() => {
     const score = health.healthScore
