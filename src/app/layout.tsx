@@ -10,7 +10,7 @@ const plusJakartaSans = Plus_Jakarta_Sans({
 });
 
 export const metadata: Metadata = {
-  title: "Target Keuangan",
+  title: "KPI Mentorbox",
   description: "Dashboard KPI",
 };
 

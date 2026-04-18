@@ -21,7 +21,7 @@ import {
 import {
   HeartPulse, Layers, Target, CheckSquare,
   Search, ArrowUpRight, ArrowDownRight, TrendingUp, Handshake, FileDown,
-  Users
+  Users, Info
 } from 'lucide-react'
 
 import { DashboardSummary } from '@/lib/dashboard-service'
@@ -82,16 +82,17 @@ function calculateGrowth(current: number, previous: number): number {
 }
 
 // ── KPI Card ─────────────────────────────────────────────────────────────────
-function KpiCard({ icon: Icon, label, value, sub, accentColor, comparison }: {
+function KpiCard({ icon: Icon, label, value, sub, accentColor, comparison, tooltip }: {
   icon: React.ElementType
   label: string
   value: string | number
   sub?: string
   accentColor?: string
   comparison?: { value: number; label: string }
+  tooltip?: string
 }) {
   return (
-    <div className="bg-white p-4 rounded-xl border border-[#E5E7EB] flex flex-col justify-between relative overflow-hidden">
+    <div className="bg-white p-4 rounded-xl border border-[#E5E7EB] flex flex-col justify-between relative overflow-hidden group">
       {/* 3px Vertical Accent */}
       {accentColor && (
         <div 
@@ -100,12 +101,19 @@ function KpiCard({ icon: Icon, label, value, sub, accentColor, comparison }: {
         />
       )}
       
-      <div className="absolute top-0 right-0 p-3 opacity-5 pointer-events-none">
+      <div className="absolute top-0 right-0 p-3 opacity-5 pointer-events-none transition-opacity group-hover:opacity-10">
         <Icon className="w-16 h-16" />
       </div>
 
       <div>
-        <p className="text-[10px] font-bold tracking-[0.05em] text-[#6B7280] uppercase mb-2 truncate" title={label}>{label}</p>
+        <div className="flex items-center gap-1.5 mb-2">
+          <p className="text-[10px] font-bold tracking-[0.05em] text-[#6B7280] uppercase truncate" title={label}>{label}</p>
+          {tooltip && (
+            <div className="text-slate-300 hover:text-indigo-500 transition-colors cursor-help" title={tooltip}>
+              <Info className="h-3 w-3" />
+            </div>
+          )}
+        </div>
         <div className="flex items-baseline gap-2 w-full flex-wrap min-w-0">
           <span className="text-[clamp(1rem,3.5vw,1.375rem)] font-semibold text-[#111827] leading-tight tabular-nums break-words" title={String(value)}>
             {value}
@@ -626,6 +634,7 @@ export function OverviewClient({
               value={`${Math.round(globalKPIs.avgHealth)}%`} 
               sub={globalKPIs.healthStatus} 
               accentColor={getStatusLabelAndColor(globalKPIs.avgHealth).accent}
+              tooltip="Health Score adalah rata-rata pencapaian target dari metrik utama (Omzet & User) di seluruh program aktif."
               comparison={previousSummary ? { 
                 value: calculateGrowth(globalKPIs.avgHealth, previousSummary.globalKPIs.avgHealth), 
                 label: prevPeriodLabel 
@@ -648,6 +657,7 @@ export function OverviewClient({
               value={globalKPIs.targetsHit} 
               sub={`program periode ini`} 
               accentColor="#639922"
+              tooltip="Jumlah program yang sudah mencapai atau melampaui 100% target utamanya bulan ini."
               comparison={previousSummary ? { 
                 value: calculateGrowth(globalKPIs.targetsHit, previousSummary.globalKPIs.targetsHit), 
                 label: prevPeriodLabel 
@@ -822,6 +832,7 @@ export function OverviewClient({
               value={`${Math.round(omzetSummary.health)}%`} 
               sub={selectedOmzetProgramId === 'all' ? 'Rata-rata Global' : 'Program ini'}
               accentColor={getStatusLabelAndColor(omzetSummary.health).accent}
+              tooltip="Persentase capaian riil dibandingkan dengan target omzet yang telah ditetapkan untuk periode ini."
             />
           </div>
 
@@ -1352,6 +1363,7 @@ export function OverviewClient({
                 program={ph.program} 
                 health={ph} 
                 metricValues={metricValues} 
+                dailyInputs={dailyInputs}
               />
             )
           })()}

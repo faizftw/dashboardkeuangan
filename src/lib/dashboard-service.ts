@@ -291,48 +291,76 @@ export async function getUnifiedDashboardData(options: {
   const summary = processSummary(metricValuesByProgram, dailyInputsByProgram, milestoneCompletionsByMilestone)
 
   let previousData: UnifiedDashboardData['previousData'] = undefined
-  if (options.includePrevious && options.startDate && options.endDate) {
-    const start = new Date(options.startDate)
-    const end = new Date(options.endDate)
-    const diffTime = Math.abs(end.getTime() - start.getTime())
-    const daysInSelection = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1
-    
-    const prevEnd = new Date(start)
-    prevEnd.setDate(prevEnd.getDate() - 1)
-    const prevStart = new Date(prevEnd)
-    prevStart.setDate(prevStart.getDate() - daysInSelection + 1)
-    
-    const prevStartStr = prevStart.toISOString().split('T')[0]
-    const prevEndStr = prevEnd.toISOString().split('T')[0]
+  if (options.includePrevious) {
+    let prevStartStr: string = ''
+    let prevEndStr: string = ''
+    let isThreeDayComparison = false
 
-    // Fetch previous data in parallel
-    const [prevInpRes, prevMVRes] = await Promise.all([
-      supabase.from('daily_inputs').select('*').in('program_id', programIds).gte('date', prevStartStr).lte('date', prevEndStr),
-      supabase.from('daily_metric_values').select('*').in('program_id', programIds).gte('date', prevStartStr).lte('date', prevEndStr)
-    ])
+    if (options.startDate && options.endDate) {
+      const start = new Date(options.startDate)
+      const end = new Date(options.endDate)
+      const diffTime = Math.abs(end.getTime() - start.getTime())
+      const daysInSelection = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1
+      
+      const prevEnd = new Date(start)
+      prevEnd.setDate(prevEnd.getDate() - 1)
+      const prevStart = new Date(prevEnd)
+      prevStart.setDate(prevStart.getDate() - daysInSelection + 1)
+      
+      prevStartStr = prevStart.toISOString().split('T')[0]
+      prevEndStr = prevEnd.toISOString().split('T')[0]
+    } else if (activePeriod) {
+      // DEFAULT VIEW (Active Period): Compare vs Snapshot from 3 days ago
+      isThreeDayComparison = true
+      const today = new Date()
+      const threeDaysAgo = new Date(today)
+      threeDaysAgo.setDate(today.getDate() - 3)
 
-    const pDailyInputs = prevInpRes.data || []
-    const pMetricValues = prevMVRes.data || []
+      // Start of current period
+      prevStartStr = `${activePeriod.year}-${String(activePeriod.month).padStart(2, '0')}-01`
+      prevEndStr = threeDaysAgo.toISOString().split('T')[0]
 
-    // Index previous data
-    const pMVByProg = new Map<string, MetricValue[]>()
-    pMetricValues.forEach(mv => {
-      const list = pMVByProg.get(mv.program_id) || []
-      list.push(mv)
-      pMVByProg.set(mv.program_id, list)
-    })
+      // Cap at period start to avoid crossing months
+      if (prevEndStr < prevStartStr) {
+        prevEndStr = prevStartStr
+      }
+    }
 
-    const pInpByProg = new Map<string, DailyInput[]>()
-    pDailyInputs.forEach(di => {
-      const list = pInpByProg.get(di.program_id) || []
-      list.push(di)
-      pInpByProg.set(di.program_id, list)
-    })
+    if (prevStartStr && prevEndStr) {
+      // Fetch previous data in parallel
+      const [prevInpRes, prevMVRes] = await Promise.all([
+        supabase.from('daily_inputs').select('*').in('program_id', programIds).gte('date', prevStartStr).lte('date', prevEndStr),
+        supabase.from('daily_metric_values').select('*').in('program_id', programIds).gte('date', prevStartStr).lte('date', prevEndStr)
+      ])
 
-    previousData = {
-      dailyInputs: pDailyInputs,
-      metricValues: pMetricValues,
-      summary: processSummary(pMVByProg, pInpByProg, milestoneCompletionsByMilestone)
+      const pDailyInputs = prevInpRes.data || []
+      const pMetricValues = prevMVRes.data || []
+
+      // Index previous data
+      const pMVByProg = new Map<string, MetricValue[]>()
+      pMetricValues.forEach(mv => {
+        const list = pMVByProg.get(mv.program_id) || []
+        list.push(mv)
+        pMVByProg.set(mv.program_id, list)
+      })
+
+      const pInpByProg = new Map<string, DailyInput[]>()
+      pDailyInputs.forEach(di => {
+        const list = pInpByProg.get(di.program_id) || []
+        list.push(di)
+        pInpByProg.set(di.program_id, list)
+      })
+
+      // For 3-day comparison, we use the SAME proration as today (or 1 if snapshotting end of month)
+      // Actually, processSummary uses current-day-of-month based proration if no dates provided.
+      // We want to calculate previous summary based on its OWN proration (snapshot cumulative)
+      const prevProration = isThreeDayComparison ? 1 : prorationFactor // For cumulative snapshot, target doesn't matter much for delta growth if we only compare actuals
+
+      previousData = {
+        dailyInputs: pDailyInputs,
+        metricValues: pMetricValues,
+        summary: processSummary(pMVByProg, pInpByProg, milestoneCompletionsByMilestone)
+      }
     }
   }
 

@@ -14,15 +14,16 @@ import {
 import { cn } from '@/lib/utils'
 import { formatMetricValue } from '@/lib/formula-evaluator'
 import { ProgramWithRelations, ProgramHealthResult } from '@/lib/dashboard-calculator'
-import { MetricValue } from '@/app/(dashboard)/dashboard/actions'
+import { MetricValue, DailyInput } from '@/app/(dashboard)/dashboard/actions'
 
 interface ProgramDetailViewProps {
   program: ProgramWithRelations
   health: ProgramHealthResult
   metricValues: MetricValue[]
+  dailyInputs: DailyInput[]
 }
 
-export function ProgramDetailView({ program, health, metricValues }: ProgramDetailViewProps) {
+export function ProgramDetailView({ program, health, metricValues, dailyInputs }: ProgramDetailViewProps) {
   const metricDefs = useMemo(() => program.program_metric_definitions || [], [program.program_metric_definitions])
 
   const isAds = useMemo(() => {
@@ -80,18 +81,38 @@ export function ProgramDetailView({ program, health, metricValues }: ProgramDeta
       const primaryMetric = metricDefs.find(m => m.is_primary && m.is_target_metric) || metricDefs[0]
       if (!primaryMetric) return []
 
-      const mValues = metricValues.filter(mv => mv.program_id === program.id && mv.metric_definition_id === primaryMetric.id)
-      const sortedMValues = [...mValues].sort((a,b) => new Date(a.date).getTime() - new Date(b.date).getTime())
+      // FALLBACK: If no metricValues, check dailyInputs for revenue/user_count
+      const progMetricValues = metricValues.filter(mv => mv.program_id === program.id && mv.metric_definition_id === primaryMetric.id)
+      
+      const mergedData = new Map<string, number>()
+      
+      // Add metric values
+      progMetricValues.forEach(mv => {
+        mergedData.set(mv.date, (mergedData.get(mv.date) || 0) + Number(mv.value || 0))
+      })
+
+      // Add legacy inputs if relevant to the primary metric
+      if (primaryMetric.metric_key === 'revenue' || primaryMetric.metric_key === 'user_count') {
+        const progInputs = dailyInputs.filter(di => di.program_id === program.id)
+        progInputs.forEach(di => {
+          const val = primaryMetric.metric_key === 'revenue' ? (di.achievement_rp || 0) : (di.achievement_user || 0)
+          if (val > 0) {
+            mergedData.set(di.date, (mergedData.get(di.date) || 0) + Number(val))
+          }
+        })
+      }
+
+      const sortedDates = Array.from(mergedData.keys()).sort((a, b) => new Date(a).getTime() - new Date(b).getTime())
 
       let cumulative = 0
       const chartMaxTarget = health.absoluteTargets?.[primaryMetric.metric_key] || primaryMetric.monthly_target || 0
       const targetPerDay = chartMaxTarget / 30
 
-      return sortedMValues.map((mv, i) => {
-        cumulative += Number(mv.value || 0)
+      return sortedDates.map((date, i) => {
+        cumulative += mergedData.get(date) || 0
         return {
-          date: mv.date,
-          displayDate: new Intl.DateTimeFormat('id-ID', { day: 'numeric', month: 'short' }).format(new Date(mv.date)),
+          date: date,
+          displayDate: new Intl.DateTimeFormat('id-ID', { day: 'numeric', month: 'short' }).format(new Date(date)),
           pencapaian: cumulative,
           targetIdeal: targetPerDay * (i + 1)
         }
@@ -109,7 +130,7 @@ export function ProgramDetailView({ program, health, metricValues }: ProgramDeta
   }, [health.healthScore])
 
   return (
-    <div className="space-y-8 py-4 overflow-y-auto max-h-[calc(100vh-100px)] pr-2 scrollbar-hide">
+    <div className="space-y-8 py-4 px-6 overflow-y-auto max-h-[calc(100vh-100px)] scrollbar-hide">
       <div className="flex flex-col gap-4">
         <div className="flex items-center gap-3">
           <span className={cn("px-3 py-1 rounded-full text-xs font-bold border", statusInfo.color)}>

@@ -381,9 +381,15 @@ export function getPerformanceGrade(score: number): { label: string, color: stri
 
 export function isAdsProgram(metrics: MetricDefinition[]): boolean {
   if (!metrics || metrics.length === 0) return false
+  
+  // Exclude MoU programs as they have their own tab
+  if (isMouProgram(metrics)) return false
+
+  // Include if it has specific ads metrics OR if it has primary target metrics (Legacy)
   return metrics.some(m => 
-    ['ad_spend', 'ads_spent', 'roas', 'cpp'].includes(m.metric_group || '') ||
-    ['ads_spent', 'ad_spend', 'roas', 'cpp', 'budget_iklan'].includes(m.metric_key)
+    (['ad_spend', 'ads_spent', 'roas', 'cpp'].includes(m.metric_group || '')) ||
+    (['ads_spent', 'ad_spend', 'roas', 'cpp', 'budget_iklan'].includes(m.metric_key)) ||
+    (m.is_primary && m.is_target_metric)
   )
 }
 

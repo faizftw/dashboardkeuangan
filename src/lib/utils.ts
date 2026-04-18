@@ -23,7 +23,7 @@ export function formatMonth(monthNumber: number): string {
 }
 
 export function getPreviousPeriodLabel(startDate?: string, endDate?: string): string {
-  if (!startDate || !endDate) return 'vs periode sblmnya'
+  if (!startDate || !endDate) return 'vs 3 hr lalu'
   
   try {
     const start = new Date(startDate)
