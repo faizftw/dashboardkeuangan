@@ -41,3 +41,5 @@ AGENTS.md
 
 # scratch
 /scratch/
+schema.sql
+schema_clean.sql
