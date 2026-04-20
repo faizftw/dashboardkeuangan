@@ -4,7 +4,6 @@
  */
 
 import * as XLSX from 'xlsx'
-import { formatMetricValue } from './formula-evaluator'
 
 // ── Types (local mirrors to avoid circular imports) ──────────────────────────
 interface Program {
@@ -78,20 +77,7 @@ function formatPeriod(period: ActivePeriod): string {
   return `${months[period.month - 1]} ${period.year}`
 }
 
-function styleHeaderRow(ws: XLSX.WorkSheet, range: XLSX.Range) {
-  for (let col = range.s.c; col <= range.e.c; col++) {
-    const cellAddr = XLSX.utils.encode_cell({ r: range.s.r, c: col })
-    if (!ws[cellAddr]) continue
-    ws[cellAddr].s = {
-      font: { bold: true, color: { rgb: 'FFFFFF' } },
-      fill: { fgColor: { rgb: '534AB7' } },
-      alignment: { horizontal: 'center', vertical: 'center', wrapText: true },
-      border: {
-        bottom: { style: 'thin', color: { rgb: 'CBD5E1' } }
-      }
-    }
-  }
-}
+
 
 // ── Sheet 1: Dashboard Summary ────────────────────────────────────────────────
 
