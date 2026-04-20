@@ -15,6 +15,7 @@ import {
   AggregateItem
 } from '@/lib/dashboard-calculator'
 import { formatRupiah, cn } from '@/lib/utils'
+import { exportDashboardToExcel } from '@/lib/export-spreadsheet'
 import { formatMetricValue } from '@/lib/formula-evaluator'
 import {
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
@@ -520,60 +521,15 @@ export function OverviewClient({
   )
 
   const handleExport = () => {
-    const headers = [
-      'Program', 
-      'Department', 
-      'Type',
-      'Revenue Actual', 
-      'Revenue Target', 
-      'User Actual', 
-      'User Target',
-      'Milestones Done',
-      'Milestones Total',
-      'Health Score', 
-      'Status'
-    ]
-    
-    const rows = filteredPrograms.map(ph => {
-      const p = ph.program
-      const metrics = ph.calculatedMetrics || {}
-      
-      const revActual = metrics.revenue || metrics.omzet || 0
-      const revTarget = ph.absoluteTargets?.revenue || ph.absoluteTargets?.omzet || 0
-      
-      const userActual = metrics.user_count || metrics.closing || metrics.user_acquisition || 0
-      const userTarget = ph.absoluteTargets?.user_count || ph.absoluteTargets?.closing || ph.absoluteTargets?.user_acquisition || 0
-      
-      const milestones = p.program_milestones || []
-      const completedMilestones = milestones.filter(m => 
-        milestoneCompletions.some(mc => mc.milestone_id === m.id && mc.is_completed)
-      ).length
-
-      return [
-        `"${p.name}"`,
-        `"${p.department || '-'}"`,
-        `"${p.target_type}"`,
-        revActual,
-        revTarget,
-        userActual,
-        userTarget,
-        completedMilestones,
-        milestones.length,
-        `${Math.round(ph.healthScore)}%`,
-        `"${getStatusLabelAndColor(ph.healthScore).label}"`
-      ]
+    if (!activePeriod) return
+    exportDashboardToExcel({
+      programHealths,
+      metricValues,
+      dailyInputs,
+      milestoneCompletions,
+      activePeriod,
+      globalHealth: globalKPIs.avgHealth,
     })
-    
-    const csvContent = "\uFEFF" + [headers, ...rows].map(e => e.join(",")).join("\n")
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8' })
-    const url = URL.createObjectURL(blob)
-    const link = document.createElement("a")
-    link.href = url
-    link.download = `report_dashboard_${new Date().toISOString().split('T')[0]}.csv`
-    document.body.appendChild(link)
-    link.click()
-    document.body.removeChild(link)
-    URL.revokeObjectURL(url)
   }
 
   const adsMetricOptionsX = [
