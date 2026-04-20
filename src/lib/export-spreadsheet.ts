@@ -13,6 +13,7 @@ interface Program {
   target_type?: string | null
   program_milestones?: { id: string; title: string; display_order?: number | null }[]
   program_metric_definitions?: {
+    id: string
     metric_key: string
     label: string
     data_type: string
@@ -36,7 +37,7 @@ interface ProgramHealth {
 interface MetricValue {
   program_id: string
   date: string
-  metric_key: string
+  metric_definition_id: string
   value: number | null
 }
 
@@ -226,9 +227,19 @@ function buildDailyDataSheet(
   ]
 
   // Build lookup maps
+  // metric_definition_id → metric_key (via program definitions)
+  const defIdToKeyMap = new Map<string, string>()
+  programHealths.forEach(ph => {
+    ph.program.program_metric_definitions?.forEach(def => {
+      defIdToKeyMap.set(def.id, def.metric_key)
+    })
+  })
+
   const metricValueMap = new Map<string, number | null>()
   metricValues.forEach(mv => {
-    const key = `${mv.program_id}|${mv.date}|${mv.metric_key}`
+    const metricKey = defIdToKeyMap.get(mv.metric_definition_id)
+    if (!metricKey) return
+    const key = `${mv.program_id}|${mv.date}|${metricKey}`
     metricValueMap.set(key, mv.value)
   })
 
@@ -321,9 +332,18 @@ function buildAdsSheet(
     ...ADS_KEYS.map(k => ADS_LABELS[k]),
   ]
 
+  const defIdToKeyMap = new Map<string, string>()
+  programHealths.forEach(ph => {
+    ph.program.program_metric_definitions?.forEach(def => {
+      defIdToKeyMap.set(def.id, def.metric_key)
+    })
+  })
+
   const metricValueMap = new Map<string, number | null>()
   metricValues.forEach(mv => {
-    const key = `${mv.program_id}|${mv.date}|${mv.metric_key}`
+    const metricKey = defIdToKeyMap.get(mv.metric_definition_id)
+    if (!metricKey) return
+    const key = `${mv.program_id}|${mv.date}|${metricKey}`
     metricValueMap.set(key, mv.value)
   })
 
