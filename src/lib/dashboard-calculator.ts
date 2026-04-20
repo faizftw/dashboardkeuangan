@@ -66,15 +66,19 @@ export function calculateProgramHealth(
   })
 
   // ── RE-INTRODUCTION OF LEGACY ACHIEVEMENT FALLBACK ─────────────────────────
-  // If we have 0/null in revenue or user_count from metrics, check daily_inputs
+  // If we have 0/null in revenue/omzet or user_count/closing from metrics, check daily_inputs
   const legacyInputs = dailyInputsByProgram.get(program.id) || []
-  if (!manualValues['revenue'] || manualValues['revenue'] === 0) {
-    const legacySum = legacyInputs.reduce((sum, i) => sum + Number(i.achievement_rp || 0), 0)
-    if (legacySum > 0) manualValues['revenue'] = legacySum
+  
+  const legacyRpSum = legacyInputs.reduce((sum, i) => sum + Number(i.achievement_rp || 0), 0)
+  if (legacyRpSum > 0) {
+    if (!manualValues['revenue'] || manualValues['revenue'] === 0) manualValues['revenue'] = legacyRpSum
+    if (!manualValues['omzet'] || manualValues['omzet'] === 0) manualValues['omzet'] = legacyRpSum
   }
-  if (!manualValues['user_count'] || manualValues['user_count'] === 0) {
-    const legacySum = legacyInputs.reduce((sum, i) => sum + Number(i.achievement_user || 0), 0)
-    if (legacySum > 0) manualValues['user_count'] = legacySum
+
+  const legacyUserSum = legacyInputs.reduce((sum, i) => sum + Number(i.achievement_user || 0), 0)
+  if (legacyUserSum > 0) {
+    if (!manualValues['user_count'] || manualValues['user_count'] === 0) manualValues['user_count'] = legacyUserSum
+    if (!manualValues['closing'] || manualValues['closing'] === 0) manualValues['closing'] = legacyUserSum
   }
   // ───────────────────────────────────────────────────────────────────────────
 
