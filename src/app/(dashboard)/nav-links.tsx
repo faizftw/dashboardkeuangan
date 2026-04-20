@@ -22,25 +22,25 @@ interface NavLinksProps {
 
 const dashboardSubItems = [
   {
-    name: 'Ringkasan',
+    name: 'Overview Kinerja',
     href: '/dashboard?tab=overview',
     activeTab: 'overview',
     icon: HeartPulse,
   },
   {
-    name: 'Omzet',
+    name: 'Target & Omzet',
     href: '/dashboard?tab=target',
     activeTab: 'target',
     icon: Target,
   },
   {
-    name: 'Ads Performance',
+    name: 'Performa Iklan',
     href: '/dashboard?tab=ads',
     activeTab: 'ads',
     icon: Layers,
   },
   {
-    name: 'MoU Tracker',
+    name: 'Progres MoU',
     href: '/dashboard?tab=mou',
     activeTab: 'mou',
     icon: Handshake,
@@ -64,7 +64,7 @@ export function NavLinks({ isCollapsed, onClick }: NavLinksProps) {
   return (
     <nav className="flex flex-col gap-1 px-3">
       {!isCollapsed && (
-        <p className="px-3 mb-2 text-[10px] font-bold text-slate-400 uppercase tracking-[0.15em]">Main Menu</p>
+        <p className="px-3 mb-2 text-[10px] font-bold text-slate-400 uppercase tracking-[0.15em]">Menu Utama</p>
       )}
       
       {/* ── Dashboard group ───────────────────────────────── */}
@@ -152,13 +152,13 @@ export function NavLinks({ isCollapsed, onClick }: NavLinksProps) {
       </div>
 
       {!isCollapsed && (
-        <p className="px-3 mt-4 mb-2 text-[10px] font-bold text-slate-400 uppercase tracking-[0.15em]">Manajemen</p>
+        <p className="px-3 mt-4 mb-2 text-[10px] font-bold text-slate-400 uppercase tracking-[0.15em]">Kelola Data</p>
       )}
 
       {/* ── Other top-level links ─────────────────────────── */}
       {[
-        { name: 'Pencapaian Harian', href: '/input-harian', icon: FileInput },
-        { name: 'Master Data', href: '/master-data', icon: Database },
+        { name: 'Input Harian', href: '/input-harian', icon: FileInput },
+        { name: 'Pengaturan Sistem', href: '/master-data', icon: Database },
       ].map(link => {
         const active = pathname?.startsWith(link.href)
         return (

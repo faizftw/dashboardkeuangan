@@ -679,6 +679,7 @@ export function OverviewClient({
               sub={`dari ${globalKPIs.totalPrograms} total`} 
               accentColor="#378ADD"
               comparison={undefined}
+              tooltip="Jumlah program yang sedang berjalan dan dipantau pada periode ini."
             />
             <KpiCard 
               icon={Target} 
@@ -695,6 +696,7 @@ export function OverviewClient({
               value={globalKPIs.completedMilestones} 
               sub={`dari ${globalKPIs.totalMilestones} total`} 
               accentColor="#534AB7"
+              tooltip="Total tugas/milestone yang sudah diselesaikan dari seluruh program berbasis pencapaian (kualitatif)."
               comparison={undefined}
             />
           </div>
@@ -1010,6 +1012,7 @@ export function OverviewClient({
               sub="periode ini"
               accentColor="#378ADD" 
               comparison={adsAggregate.comparisons?.ad_spend || summary.aggregates.ad_spend?.comparison}
+              tooltip="Total anggaran iklan yang sudah dikeluarkan oleh semua program berbayar (Meta, Google, dll)."
             />
             <KpiCard 
               icon={Target} 
@@ -1018,6 +1021,7 @@ export function OverviewClient({
               sub="jumlah closing" 
               accentColor="#639922" 
               comparison={summary.aggregates.user_acquisition?.comparison}
+              tooltip="Total closing/pembelian yang berhasil dari semua program iklan."
             />
             <KpiCard 
               icon={HeartPulse} 
@@ -1026,6 +1030,7 @@ export function OverviewClient({
               sub={adsAggregate.avgRoas >= 1 ? "Profitable (>1x)" : "Ditinjau (<1x)"}
               accentColor="#534AB7" 
               comparison={adsAggregate.comparisons?.roas}
+              tooltip="ROAS (Return on Ad Spend): Setiap Rp1 yang dikeluarkan untuk iklan menghasilkan Rp berapa? Angka di atas 1x berarti untung. Di atas 3x dianggap sangat baik."
             />
             <KpiCard 
               icon={CheckSquare} 
@@ -1034,6 +1039,7 @@ export function OverviewClient({
               sub="biaya per goal"
               accentColor={adsAggregate.avgCpp > 60000 ? "#E24B4A" : "#639922"} 
               comparison={adsAggregate.comparisons?.cpp}
+              tooltip="CPP (Cost per Purchase/Goal): Rata-rata biaya yang dikeluarkan untuk mendapatkan satu closing. Semakin kecil semakin efisien."
             />
           </div>
 
