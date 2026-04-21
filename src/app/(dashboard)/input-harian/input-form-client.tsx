@@ -20,7 +20,8 @@ import {
   ArrowUpDown,
   ChevronUp,
   ChevronDown,
-  TrendingUp
+  TrendingUp,
+  Users
 } from 'lucide-react'
 
 type ProgramMilestone = Database['public']['Tables']['program_milestones']['Row']
@@ -46,7 +47,8 @@ export function InputFormClient({
   activePeriod,
   milestoneCompletions,
   existingMetricValues = [],
-  allPeriodMetricValues = []
+  allPeriodMetricValues = [],
+  layoutMode = 'table'
 }: { 
   programs: Program[], 
   pastInputs: DailyInput[], 
@@ -55,6 +57,7 @@ export function InputFormClient({
   milestoneCompletions: MilestoneCompletion[]
   existingMetricValues?: MetricValue[]
   allPeriodMetricValues?: MetricValue[]
+  layoutMode?: 'table' | 'card'
 }) {
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
@@ -299,186 +302,312 @@ export function InputFormClient({
         )}
       </div>
 
-      <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-sm">
-        <table className="w-full text-sm text-left">
-          <thead className="bg-slate-50 text-slate-600 font-bold border-b border-slate-200">
-            <tr>
-              <th className="px-6 py-4 cursor-pointer hover:bg-slate-100 transition-colors select-none group" onClick={() => handleSort('date')}>
-                <div className="flex items-center gap-1.5">
-                  Tanggal
-                  {sortConfig?.key === 'date' ? (
-                    sortConfig.direction === 'asc' ? <ChevronUp className="h-3 w-3 text-indigo-600" /> : <ChevronDown className="h-3 w-3 text-indigo-600" />
-                  ) : <ArrowUpDown className="h-3 w-3 text-slate-300 group-hover:text-slate-400" />}
-                </div>
-              </th>
-              {isAdmin && (
-                <th className="px-6 py-4 cursor-pointer hover:bg-slate-100 transition-colors select-none group" onClick={() => handleSort('pic')}>
-                  <div className="flex items-center gap-1.5">
-                    Pengisi (PIC)
-                    {sortConfig?.key === 'pic' ? (
-                      sortConfig.direction === 'asc' ? <ChevronUp className="h-3 w-3 text-indigo-600" /> : <ChevronDown className="h-3 w-3 text-indigo-600" />
-                    ) : <ArrowUpDown className="h-3 w-3 text-slate-300 group-hover:text-slate-400" />}
-                  </div>
-                </th>
-              )}
-              <th className="px-6 py-4 cursor-pointer hover:bg-slate-100 transition-colors select-none group" onClick={() => handleSort('program')}>
-                <div className="flex items-center gap-1.5">
-                  Program
-                  {sortConfig?.key === 'program' ? (
-                    sortConfig.direction === 'asc' ? <ChevronUp className="h-3 w-3 text-indigo-600" /> : <ChevronDown className="h-3 w-3 text-indigo-600" />
-                  ) : <ArrowUpDown className="h-3 w-3 text-slate-300 group-hover:text-slate-400" />}
-                </div>
-              </th>
-              <th className="px-6 py-4 text-center">Capaian Harian</th>
-              {!isLocked && <th className="px-6 py-4 text-right">Aksi</th>}
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-slate-100">
-            {sortedInputs.length === 0 ? (
-              <tr>
-                <td colSpan={isAdmin ? (isLocked ? 4 : 5) : (isLocked ? 3 : 4)} className="px-6 py-12 text-center text-slate-400 font-medium italic">
-                  Belum ada catatan aktivitas hari ini.
-                </td>
-              </tr>
-            ) : (
-              sortedInputs.map((input) => {
-                const prog = programs.find(p => p.id === input.program_id)
-                const percentageHarian = (prog?.daily_target_rp && input.achievement_rp) 
-                  ? ((input.achievement_rp / prog.daily_target_rp) * 100).toFixed(1) 
-                  : null
-
-                return (
-                <tr key={input.id} className="hover:bg-slate-50/50 transition-colors">
-                  <td className="px-6 py-4 font-bold text-slate-900 whitespace-nowrap">
-                    {formatDateLabel(input.date)}
-                  </td>
-                  {isAdmin && (
-                    <td className="px-6 py-4 text-slate-700 font-medium">
-                      {input.profiles?.name || '??'}
-                    </td>
-                  )}
-                  <td className="px-6 py-4 max-w-[250px] align-top">
-                    <div className="font-bold text-slate-800">{input.programs?.name || 'Unknown'}</div>
-                    {input.notes && (
-                      <div className="mt-2 text-[10px] text-slate-500 bg-slate-50 p-2 rounded-lg border border-slate-100 leading-relaxed font-medium">
-                        {input.notes}
+      {layoutMode === 'card' ? (
+        <div className="flex flex-col gap-4 animate-in fade-in">
+          {sortedInputs.length === 0 ? (
+            <div className="bg-white rounded-xl border border-slate-200 p-12 text-center text-slate-400 font-medium italic shadow-sm">
+               Belum ada catatan aktivitas hari ini.
+            </div>
+          ) : (
+            sortedInputs.map((input) => {
+              const prog = programs.find(p => p.id === input.program_id)
+              const percentageHarian = (prog?.daily_target_rp && input.achievement_rp) 
+                ? ((input.achievement_rp / prog.daily_target_rp) * 100).toFixed(1) 
+                : null
+                
+              return (
+                <div key={input.id} className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm hover:border-indigo-200 transition-all">
+                  <div className="flex justify-between items-start mb-4">
+                    <div>
+                      <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-0.5">
+                        {formatDateLabel(input.date)}
                       </div>
+                      <h4 className="font-bold text-slate-900 text-lg">{input.programs?.name || 'Unknown'}</h4>
+                      {isAdmin && (
+                        <div className="flex items-center gap-2 mt-1 text-xs text-slate-500 font-medium">
+                          <Users className="h-3 w-3" />
+                          {input.profiles?.name || '??'}
+                        </div>
+                      )}
+                    </div>
+                    {!isLocked && (
+                       <div className="flex gap-1.5 shrink-0 ml-4">
+                         <button
+                           onClick={() => handleOpenEdit(input)}
+                           className="p-2.5 text-slate-400 hover:text-indigo-600 bg-slate-50 hover:bg-indigo-50 border border-slate-100 rounded-xl transition-all shadow-sm"
+                           title="Edit Data"
+                         >
+                           <Edit3 className="h-4 w-4" />
+                         </button>
+                         <button
+                           onClick={() => handleDelete(input.id)}
+                           className="p-2.5 text-slate-400 hover:text-rose-600 bg-slate-50 hover:bg-rose-50 border border-slate-100 rounded-xl transition-all shadow-sm"
+                           title="Hapus Data"
+                         >
+                           <Trash2 className="h-4 w-4" />
+                         </button>
+                       </div>
                     )}
-                  </td>
-                  <td className="px-6 py-4 text-center align-top">
+                  </div>
+
+                  <div className="bg-slate-50/80 rounded-2xl p-4 border border-slate-100">
                     {(() => {
                       const programMetrics = prog?.program_metric_definitions || [];
                       const isAds = isAdsProgram(programMetrics);
                       const isQuantitative = prog?.target_type === 'quantitative' || prog?.target_type === 'hybrid';
                       
-                      // Legacy-first display for quantitative programs that aren't Ads-heavy
                       if (isQuantitative && !isAds) {
                         return (
-                          <div className="inline-flex flex-col items-center p-2 rounded-lg bg-indigo-50/30 border border-indigo-50">
-                            <span className="font-extrabold text-indigo-700 text-xs">{formatRupiah(Number(input.achievement_rp || 0))}</span>
-                            <div className="flex items-center gap-1.5 mt-0.5">
-                              <span className="text-[10px] text-slate-500 font-bold">{input.achievement_user || 0} user</span>
-                              {percentageHarian && (
-                                <span className={cn(
-                                  "text-[9px] px-1.5 rounded-full font-black uppercase",
-                                  Number(percentageHarian) >= 100 ? "bg-emerald-100 text-emerald-700" : "bg-indigo-100 text-indigo-700"
-                                )}>
-                                  {percentageHarian}%
-                                </span>
-                              )}
+                          <div className="flex flex-wrap gap-4 items-center justify-between">
+                            <div className="flex flex-wrap gap-4">
+                              <div className="flex flex-col">
+                                <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mb-1">Capaian (Rp)</span>
+                                <span className="font-extrabold text-indigo-700 text-base">{formatRupiah(Number(input.achievement_rp || 0))}</span>
+                              </div>
+                              <div className="flex flex-col">
+                                <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mb-1">User/Closing</span>
+                                <span className="font-bold text-slate-700 text-base">{input.achievement_user || 0} user</span>
+                              </div>
                             </div>
+                            {percentageHarian && (
+                               <div className="flex flex-col items-end">
+                                 <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mb-1">Progres Target</span>
+                                 <span className={cn(
+                                   "text-[10px] px-2.5 py-1 rounded-full font-black uppercase shadow-sm border",
+                                   Number(percentageHarian) >= 100 
+                                     ? "bg-emerald-50 text-emerald-700 border-emerald-100" 
+                                     : "bg-indigo-50 text-indigo-700 border-indigo-100"
+                                 )}>
+                                   {percentageHarian}% tercapai
+                                 </span>
+                               </div>
+                            )}
                           </div>
                         )
                       }
 
                       if (programMetrics.length > 0) {
-                        // Adaptive display for custom metrics
                         const dateMetrics = allPeriodMetricValues?.filter(mv => 
                           mv.program_id === input.program_id && mv.date === input.date
                         ) || [];
-                        
-                        // Pick metrics to show: ideally targets first, then manuals
                         const allApplicableMetrics = programMetrics.filter(m => m.is_target_metric || m.input_type === 'manual');
-                        const isExpanded = expandedRows[input.id];
-                        const metricsToShow = isExpanded ? allApplicableMetrics : allApplicableMetrics.slice(0, 3);
-
-                        if (metricsToShow.length === 0) return <span className="text-slate-300">-</span>
+                        
+                        if (allApplicableMetrics.length === 0) return <span className="text-slate-300">-</span>
 
                         return (
-                          <div className="flex flex-col gap-1.5 items-center">
-                            <div className="flex flex-wrap justify-center gap-1.5 max-w-[220px]">
-                              {metricsToShow.map(mDef => {
-                                const v = dateMetrics.find(dm => dm.metric_definition_id === mDef.id)?.value;
-                                if (v === undefined || v === null) return null;
-                                
-                                return (
-                                  <div key={mDef.id} className="inline-flex flex-col items-center p-1.5 rounded-lg bg-indigo-50/50 border border-indigo-100/50 min-w-[100px] max-w-[105px]">
-                                    <span className="text-[9px] font-bold text-slate-500 uppercase tracking-widest leading-tight mb-1 line-clamp-1 w-full text-center" title={mDef.label}>{mDef.label}</span>
-                                    <span className="font-bold text-indigo-700 text-xs">{formatMetricValue(v, mDef.data_type, mDef.unit_label)}</span>
-                                  </div>
-                                )
-                              })}
-                            </div>
-                            {allApplicableMetrics.length > 3 && (
-                               <button 
-                                 onClick={() => setExpandedRows(prev => ({ ...prev, [input.id]: !prev[input.id] }))}
-                                 className="text-[9px] font-bold px-2 py-1 rounded bg-slate-100 text-slate-500 hover:bg-indigo-50 hover:text-indigo-600 transition-colors mt-0.5"
-                               >
-                                 {isExpanded ? 'Tutup Detail' : `+${allApplicableMetrics.length - 3} Lainnya (Lihat)`}
-                               </button>
-                            )}
+                          <div className="grid grid-cols-2 xs:grid-cols-3 gap-3">
+                            {allApplicableMetrics.map(mDef => {
+                              const v = dateMetrics.find(dm => dm.metric_definition_id === mDef.id)?.value;
+                              if (v === undefined || v === null) return null;
+                              
+                              return (
+                                <div key={mDef.id} className="flex flex-col p-2.5 rounded-xl bg-white border border-slate-100">
+                                  <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mb-1 line-clamp-1" title={mDef.label}>{mDef.label}</span>
+                                  <span className="font-bold text-indigo-700 text-sm">{formatMetricValue(v, mDef.data_type, mDef.unit_label)}</span>
+                                </div>
+                              )
+                            })}
                           </div>
                         )
                       }
                       
-                      // Legacy display
-                      if (input.programs?.target_type === 'quantitative' || input.programs?.target_type === 'hybrid') {
-                        return (
-                          <div className="inline-flex flex-col items-center p-2 rounded-lg bg-indigo-50/30 border border-indigo-50">
-                            <span className="font-extrabold text-indigo-700 text-xs">{formatRupiah(Number(input.achievement_rp || 0))}</span>
-                            <div className="flex items-center gap-1.5 mt-0.5">
-                              <span className="text-[10px] text-slate-500 font-bold">{input.achievement_user || 0} user</span>
-                              {percentageHarian && (
-                                <span className={cn(
-                                  "text-[9px] px-1.5 rounded-full font-black uppercase",
-                                  Number(percentageHarian) >= 100 ? "bg-emerald-100 text-emerald-700" : "bg-indigo-100 text-indigo-700"
-                                )}>
-                                  {percentageHarian}%
-                                </span>
-                              )}
-                            </div>
-                          </div>
-                        )
-                      }
-                      
-                      return <span className="text-slate-300">-</span>
+                      return <span className="text-slate-300 italic text-xs">Tidak ada data capaian numerik</span>
                     })()}
-                  </td>
-                  {!isLocked && (
-                    <td className="px-6 py-4 text-right">
-                      <div className="flex justify-end gap-1">
-                        <button
-                          onClick={() => handleOpenEdit(input)}
-                          className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-white rounded-lg transition-all"
-                        >
-                          <Edit3 className="h-4 w-4" />
-                        </button>
-                        <button
-                          onClick={() => handleDelete(input.id)}
-                          className="p-2 text-slate-400 hover:text-rose-600 hover:bg-white rounded-lg transition-all"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </button>
-                      </div>
-                    </td>
+                  </div>
+
+                  {input.notes && (
+                    <div className="mt-4 p-3 bg-indigo-50/50 border border-indigo-100/50 rounded-xl">
+                      <div className="text-[9px] font-bold text-indigo-400 uppercase tracking-widest mb-1">Catatan Kendala/Pencapaian</div>
+                      <p className="text-xs text-slate-700 font-medium leading-relaxed italic">&quot;{input.notes}&quot;</p>
+                    </div>
                   )}
-                </tr>
+                </div>
               )
             })
-            )}
-          </tbody>
-        </table>
-      </div>
+          )}
+        </div>
+      ) : (
+        <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-sm">
+          <table className="w-full text-sm text-left">
+            <thead className="bg-slate-50 text-slate-600 font-bold border-b border-slate-200">
+              <tr>
+                <th className="px-6 py-4 cursor-pointer hover:bg-slate-100 transition-colors select-none group" onClick={() => handleSort('date')}>
+                  <div className="flex items-center gap-1.5">
+                    Tanggal
+                    {sortConfig?.key === 'date' ? (
+                      sortConfig.direction === 'asc' ? <ChevronUp className="h-3 w-3 text-indigo-600" /> : <ChevronDown className="h-3 w-3 text-indigo-600" />
+                    ) : <ArrowUpDown className="h-3 w-3 text-slate-300 group-hover:text-slate-400" />}
+                  </div>
+                </th>
+                {isAdmin && (
+                  <th className="px-6 py-4 cursor-pointer hover:bg-slate-100 transition-colors select-none group" onClick={() => handleSort('pic')}>
+                    <div className="flex items-center gap-1.5">
+                      Pengisi (PIC)
+                      {sortConfig?.key === 'pic' ? (
+                        sortConfig.direction === 'asc' ? <ChevronUp className="h-3 w-3 text-indigo-600" /> : <ChevronDown className="h-3 w-3 text-indigo-600" />
+                      ) : <ArrowUpDown className="h-3 w-3 text-slate-300 group-hover:text-slate-400" />}
+                    </div>
+                  </th>
+                )}
+                <th className="px-6 py-4 cursor-pointer hover:bg-slate-100 transition-colors select-none group" onClick={() => handleSort('program')}>
+                  <div className="flex items-center gap-1.5">
+                    Program
+                    {sortConfig?.key === 'program' ? (
+                      sortConfig.direction === 'asc' ? <ChevronUp className="h-3 w-3 text-indigo-600" /> : <ChevronDown className="h-3 w-3 text-indigo-600" />
+                    ) : <ArrowUpDown className="h-3 w-3 text-slate-300 group-hover:text-slate-400" />}
+                  </div>
+                </th>
+                <th className="px-6 py-4 text-center">Capaian Harian</th>
+                {!isLocked && <th className="px-6 py-4 text-right">Aksi</th>}
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100">
+              {sortedInputs.length === 0 ? (
+                <tr>
+                  <td colSpan={isAdmin ? (isLocked ? 4 : 5) : (isLocked ? 3 : 4)} className="px-6 py-12 text-center text-slate-400 font-medium italic">
+                    Belum ada catatan aktivitas hari ini.
+                  </td>
+                </tr>
+              ) : (
+                sortedInputs.map((input) => {
+                  const prog = programs.find(p => p.id === input.program_id)
+                  const percentageHarian = (prog?.daily_target_rp && input.achievement_rp) 
+                    ? ((input.achievement_rp / prog.daily_target_rp) * 100).toFixed(1) 
+                    : null
+
+                  return (
+                  <tr key={input.id} className="hover:bg-slate-50/50 transition-colors">
+                    <td className="px-6 py-4 font-bold text-slate-900 whitespace-nowrap">
+                      {formatDateLabel(input.date)}
+                    </td>
+                    {isAdmin && (
+                      <td className="px-6 py-4 text-slate-700 font-medium">
+                        {input.profiles?.name || '??'}
+                      </td>
+                    )}
+                    <td className="px-6 py-4 max-w-[250px] align-top">
+                      <div className="font-bold text-slate-800">{input.programs?.name || 'Unknown'}</div>
+                      {input.notes && (
+                        <div className="mt-2 text-[10px] text-slate-500 bg-slate-50 p-2 rounded-lg border border-slate-100 leading-relaxed font-medium">
+                          {input.notes}
+                        </div>
+                      )}
+                    </td>
+                    <td className="px-6 py-4 text-center align-top">
+                      {(() => {
+                        const programMetrics = prog?.program_metric_definitions || [];
+                        const isAds = isAdsProgram(programMetrics);
+                        const isQuantitative = prog?.target_type === 'quantitative' || prog?.target_type === 'hybrid';
+                        
+                        // Legacy-first display for quantitative programs that aren't Ads-heavy
+                        if (isQuantitative && !isAds) {
+                          return (
+                            <div className="inline-flex flex-col items-center p-2 rounded-lg bg-indigo-50/30 border border-indigo-50">
+                              <span className="font-extrabold text-indigo-700 text-xs">{formatRupiah(Number(input.achievement_rp || 0))}</span>
+                              <div className="flex items-center gap-1.5 mt-0.5">
+                                <span className="text-[10px] text-slate-500 font-bold">{input.achievement_user || 0} user</span>
+                                {percentageHarian && (
+                                  <span className={cn(
+                                    "text-[9px] px-1.5 rounded-full font-black uppercase",
+                                    Number(percentageHarian) >= 100 ? "bg-emerald-100 text-emerald-700" : "bg-indigo-100 text-indigo-700"
+                                  )}>
+                                    {percentageHarian}%
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                          )
+                        }
+
+                        if (programMetrics.length > 0) {
+                          // Adaptive display for custom metrics
+                          const dateMetrics = allPeriodMetricValues?.filter(mv => 
+                            mv.program_id === input.program_id && mv.date === input.date
+                          ) || [];
+                          
+                          // Pick metrics to show: ideally targets first, then manuals
+                          const allApplicableMetrics = programMetrics.filter(m => m.is_target_metric || m.input_type === 'manual');
+                          const isExpanded = expandedRows[input.id];
+                          const metricsToShow = isExpanded ? allApplicableMetrics : allApplicableMetrics.slice(0, 3);
+
+                          if (metricsToShow.length === 0) return <span className="text-slate-300">-</span>
+
+                          return (
+                            <div className="flex flex-col gap-1.5 items-center">
+                              <div className="flex flex-wrap justify-center gap-1.5 max-w-[220px]">
+                                {metricsToShow.map(mDef => {
+                                  const v = dateMetrics.find(dm => dm.metric_definition_id === mDef.id)?.value;
+                                  if (v === undefined || v === null) return null;
+                                  
+                                  return (
+                                    <div key={mDef.id} className="inline-flex flex-col items-center p-1.5 rounded-lg bg-indigo-50/50 border border-indigo-100/50 min-w-[100px] max-w-[105px]">
+                                      <span className="text-[9px] font-bold text-slate-500 uppercase tracking-widest leading-tight mb-1 line-clamp-1 w-full text-center" title={mDef.label}>{mDef.label}</span>
+                                      <span className="font-bold text-indigo-700 text-xs">{formatMetricValue(v, mDef.data_type, mDef.unit_label)}</span>
+                                    </div>
+                                  )
+                                })}
+                              </div>
+                              {allApplicableMetrics.length > 3 && (
+                                 <button 
+                                   onClick={() => setExpandedRows(prev => ({ ...prev, [input.id]: !prev[input.id] }))}
+                                   className="text-[9px] font-bold px-2 py-1 rounded bg-slate-100 text-slate-500 hover:bg-indigo-50 hover:text-indigo-600 transition-colors mt-0.5"
+                                 >
+                                   {isExpanded ? 'Tutup Detail' : `+${allApplicableMetrics.length - 3} Lainnya (Lihat)`}
+                                 </button>
+                              )}
+                            </div>
+                          )
+                        }
+                        
+                        // Legacy display
+                        if (input.programs?.target_type === 'quantitative' || input.programs?.target_type === 'hybrid') {
+                          return (
+                            <div className="inline-flex flex-col items-center p-2 rounded-lg bg-indigo-50/30 border border-indigo-50">
+                              <span className="font-extrabold text-indigo-700 text-xs">{formatRupiah(Number(input.achievement_rp || 0))}</span>
+                              <div className="flex items-center gap-1.5 mt-0.5">
+                                <span className="text-[10px] text-slate-500 font-bold">{input.achievement_user || 0} user</span>
+                                {percentageHarian && (
+                                  <span className={cn(
+                                    "text-[9px] px-1.5 rounded-full font-black uppercase",
+                                    Number(percentageHarian) >= 100 ? "bg-emerald-100 text-emerald-700" : "bg-indigo-100 text-indigo-700"
+                                  )}>
+                                    {percentageHarian}%
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                          )
+                        }
+                        
+                        return <span className="text-slate-300">-</span>
+                      })()}
+                    </td>
+                    {!isLocked && (
+                      <td className="px-6 py-4 text-right">
+                        <div className="flex justify-end gap-1">
+                          <button
+                            onClick={() => handleOpenEdit(input)}
+                            className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-white rounded-lg transition-all"
+                          >
+                            <Edit3 className="h-4 w-4" />
+                          </button>
+                          <button
+                            onClick={() => handleDelete(input.id)}
+                            className="p-2 text-slate-400 hover:text-rose-600 hover:bg-white rounded-lg transition-all"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </button>
+                        </div>
+                      </td>
+                    )}
+                  </tr>
+                  )
+                })
+              )}
+            </tbody>
+          </table>
+        </div>
+      )}
 
       {/* Input Modal */}
       {isModalOpen && !isLocked && (

@@ -83,7 +83,11 @@ export function Sidebar({ profile, userEmail, isCollapsed, setIsCollapsed }: Sid
 
         {/* Navigation Section */}
         <div className="flex-1 py-8 overflow-y-auto overflow-x-hidden">
-          <NavLinks isCollapsed={isCollapsed} onClick={() => setIsMobileOpen(false)} />
+          <NavLinks 
+            isCollapsed={isCollapsed} 
+            onClick={() => setIsMobileOpen(false)} 
+            role={profile?.role}
+          />
         </div>
 
         <div className="p-4 border-t border-[#E5E7EB]">

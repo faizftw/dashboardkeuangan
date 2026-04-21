@@ -12,12 +12,14 @@ import {
   Target,
   Layers,
   Handshake,
+  User,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 interface NavLinksProps {
   isCollapsed?: boolean
   onClick?: () => void
+  role?: 'admin' | 'pic' | null
 }
 
 const dashboardSubItems = [
@@ -47,7 +49,7 @@ const dashboardSubItems = [
   },
 ]
 
-export function NavLinks({ isCollapsed, onClick }: NavLinksProps) {
+export function NavLinks({ isCollapsed, onClick, role }: NavLinksProps) {
   const pathname = usePathname()
   const searchParams = useSearchParams()
 
@@ -65,6 +67,34 @@ export function NavLinks({ isCollapsed, onClick }: NavLinksProps) {
     <nav className="flex flex-col gap-1 px-3">
       {!isCollapsed && (
         <p className="px-3 mb-2 text-[10px] font-bold text-slate-400 uppercase tracking-[0.15em]">Menu Utama</p>
+      )}
+
+      {/* ── My Dashboard (PIC Only) ─────────────────────────────────── */}
+      {role === 'pic' && (
+        <div className="mb-1">
+          <Link
+            href="/my-dashboard"
+            onClick={onClick}
+            className={cn(
+              "w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-[14px] font-semibold transition-all duration-200 group relative",
+              pathname === '/my-dashboard'
+                ? "bg-[#EEEDFE] text-[#534AB7]"
+                : "text-slate-600 hover:bg-slate-100 hover:text-slate-900",
+              isCollapsed ? "justify-center" : ""
+            )}
+            title={isCollapsed ? "Personal KPI" : undefined}
+          >
+            <User className={cn(
+              "h-5 w-5 shrink-0",
+               pathname === '/my-dashboard' ? "text-[#534AB7]" : "text-slate-500 group-hover:text-[#534AB7]"
+            )} />
+            {!isCollapsed && (
+              <span className="flex-1 text-left truncate animate-in fade-in slide-in-from-left-2 duration-300">
+                Personal KPI
+              </span>
+            )}
+          </Link>
+        </div>
       )}
       
       {/* ── Dashboard group ───────────────────────────────── */}

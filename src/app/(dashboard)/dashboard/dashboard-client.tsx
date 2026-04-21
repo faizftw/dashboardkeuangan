@@ -49,6 +49,7 @@ interface OverviewClientProps {
   dailyInputs: DailyInput[]
   activePeriod: Database['public']['Tables']['periods']['Row']
   milestoneCompletions: MilestoneCompletion[]
+  isPersonalMode?: boolean
 }
 
 type TabType = 'overview' | 'target' | 'ads' | 'mou'
@@ -333,7 +334,8 @@ export function OverviewClient({
   metricValues,
   dailyInputs,
   activePeriod,
-  milestoneCompletions
+  milestoneCompletions,
+  isPersonalMode,
 }: OverviewClientProps) {
   const router = useRouter()
   const pathname = usePathname()
@@ -592,8 +594,55 @@ export function OverviewClient({
 
   const banner = getBannerInfo(currentHealth)
 
+  const missingInputPrograms = useMemo(() => {
+    if (!activePeriod || programs.length === 0) return [];
+    
+    // Check if today is a working day within active period (approximate by matching year/month)
+    const today = new Date();
+    if (today.getFullYear() !== activePeriod.year || (today.getMonth() + 1) !== activePeriod.month) return [];
+
+    const pad = (n: number) => n.toString().padStart(2, '0')
+    const todayStr = `${today.getFullYear()}-${pad(today.getMonth() + 1)}-${pad(today.getDate())}`
+
+    const missing: ProgramWithRelations[] = [];
+    for (const p of programs) {
+        // Only programs with at least one manual metric need daily input
+        const hasManualMetrics = (p.program_metric_definitions || []).some(m => m.input_type === 'manual')
+        if (!hasManualMetrics) continue;
+        
+        const hasInputToday = 
+            metricValues.some(mv => mv.program_id === p.id && mv.date === todayStr && mv.value !== null) ||
+            dailyInputs.some(di => di.program_id === p.id && di.date === todayStr);
+            
+        if (!hasInputToday) {
+            missing.push(p)
+        }
+    }
+    return missing;
+  }, [programs, metricValues, dailyInputs, activePeriod]);
+
   return (
     <div className="space-y-6 pb-24">
+      {missingInputPrograms.length > 0 && (
+        <div className="bg-amber-50 border border-amber-200 text-amber-800 px-4 py-3 rounded-xl flex sm:items-center items-start gap-4 shadow-sm animate-in fade-in slide-in-from-top-2">
+          <div className="bg-amber-100 p-1.5 rounded-lg shrink-0 mt-0.5 sm:mt-0">
+            <Info className="w-5 h-5 text-amber-600" />
+          </div>
+          <div className="flex-1">
+            <p className="text-[13px] font-bold">Peringatan Kelengkapan Data</p>
+            <p className="text-[12px] opacity-90 mt-0.5">
+              Anda memiliki <strong className="font-bold">{missingInputPrograms.length} program</strong> yang belum diinput data aktual harian untuk hari ini.
+            </p>
+          </div>
+          <button 
+            onClick={() => router.push('/input-harian')}
+            className="text-[11px] bg-white text-amber-700 font-bold px-3 py-1.5 rounded-lg border border-amber-200 hover:bg-amber-100 transition-colors whitespace-nowrap shrink-0 shadow-sm"
+          >
+             Input Sekarang
+          </button>
+        </div>
+      )}
+
       {/* ── Tab Switcher ─────────────────────────────────────────── */}
     <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
       <div className="flex items-center gap-1 p-1 bg-slate-50 border border-[#E5E7EB] rounded-xl w-fit">
@@ -644,7 +693,7 @@ export function OverviewClient({
         className="flex items-center gap-2 px-4 py-2 bg-white border border-[#E5E7EB] rounded-xl text-[13px] font-semibold text-slate-600 hover:bg-slate-50 transition-all shadow-sm w-fit"
       >
         <FileDown className="h-4 w-4" />
-        Export Spreadsheet
+        {isPersonalMode ? 'Export My Data' : 'Export Spreadsheet'}
       </button>
     </div>
       

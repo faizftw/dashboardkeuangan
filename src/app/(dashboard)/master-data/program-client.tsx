@@ -24,7 +24,6 @@ import {
   UserCheck,
   BarChart2,
   AlertTriangle,
-  HelpCircle,
 } from 'lucide-react'
 
 type ProgramMilestone = Database['public']['Tables']['program_milestones']['Row']

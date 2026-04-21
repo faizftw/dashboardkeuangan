@@ -24,6 +24,7 @@ interface PivotTableClientProps {
   allPeriodMetricValues: MetricValue[]
   pastInputs?: DailyInput[]
   isAdmin?: boolean
+  layoutMode: 'table' | 'card'
 }
 
 export function PivotTableClient({
@@ -32,6 +33,7 @@ export function PivotTableClient({
   allPeriodMetricValues,
   pastInputs,
   isAdmin,
+  layoutMode,
 }: PivotTableClientProps) {
   const [selectedProgramId, setSelectedProgramId] = useState<string>(programs[0]?.id || '')
   const [viewMode, setViewMode] = useState<'actual' | 'target'>('actual')
@@ -429,6 +431,8 @@ export function PivotTableClient({
               Target Harian
             </button>
           </div>
+          
+
         </div>
 
         <div className="text-right flex flex-col items-end w-full lg:w-auto">
@@ -458,13 +462,91 @@ export function PivotTableClient({
       {(() => {
         // Fallback to legacy block if no metrics are defined at all
         if (metrics.length === 0) {
+          if (layoutMode === 'card') {
+            return (
+              <div className="flex flex-col gap-4 animate-in fade-in max-w-2xl mx-auto w-full">
+                <div className="p-3 bg-amber-50 text-amber-700 text-xs rounded-xl border border-amber-100 flex items-center gap-2">
+                  <Info className="w-5 h-5 flex-shrink-0" />
+                  <span>Program standar ini hanya mendukung pembacaan di sini. Data diurutkan dari tanggal terbaru.</span>
+                </div>
+                {[...daysArray].reverse().map(day => {
+                  const dateStr = buildDateString(day);
+                  const input = pastInputs?.find(i => i.program_id === activeProgram?.id && i.date === dateStr);
+                  const isToday = dateStr === todayStr;
+                  
+                  return (
+                    <div key={day} className={cn(
+                      "bg-white border rounded-2xl p-5 transition-all shadow-sm",
+                      isToday ? "border-indigo-300 ring-1 ring-indigo-100" : "border-slate-100"
+                    )}>
+                      <div className="flex justify-between items-start mb-4">
+                        <div className="flex flex-col">
+                           <span className={cn("text-[10px] font-black uppercase tracking-[0.2em] mb-0.5", isToday ? "text-indigo-600" : "text-slate-400 text-slate-500")}>
+                             {isToday ? 'Hari Ini' : dateStr > todayStr ? 'Mendatang' : 'Riwayat'}
+                           </span>
+                           <h4 className="font-bold text-slate-800 text-lg">
+                             {day} {new Date(activePeriod?.year || 2024, (activePeriod?.month || 1) - 1, 1).toLocaleString('id-ID', { month: 'long' })}
+                           </h4>
+                        </div>
+                        {isToday && <div className="h-2 w-2 rounded-full bg-indigo-500 animate-pulse mt-2" />}
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-3">
+                        {activeProgram?.target_type !== 'qualitative' ? (
+                          <>
+                            <div className="bg-slate-50 rounded-xl p-3 border border-slate-100/50">
+                               <div className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mb-1 leading-tight">Pencapaian (Rp)</div>
+                               <div className={cn(
+                                 "font-bold text-sm",
+                                 (input?.achievement_rp || 0) >= dailyTargetRp && dailyTargetRp > 0 ? "text-emerald-600" : "text-indigo-600"
+                               )}>
+                                 {formatRupiah(input?.achievement_rp || 0)}
+                               </div>
+                               <div className="text-[9px] text-slate-400 mt-1">Target: {formatRupiah(dailyTargetRp)}</div>
+                            </div>
+                            <div className="bg-slate-50 rounded-xl p-3 border border-slate-100/50">
+                               <div className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mb-1 leading-tight">Pencapaian (User)</div>
+                               <div className={cn(
+                                 "font-bold text-sm",
+                                 (input?.achievement_user || 0) >= dailyTargetUser && dailyTargetUser > 0 ? "text-emerald-600" : "text-indigo-600"
+                               )}>
+                                 {(input?.achievement_user || 0).toLocaleString()} user
+                               </div>
+                               <div className="text-[9px] text-slate-400 mt-1">Target: {dailyTargetUser}</div>
+                            </div>
+                          </>
+                        ) : (
+                          <div className="col-span-2 bg-slate-50 rounded-xl p-3 border border-slate-100/50">
+                             <div className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mb-1 leading-tight">Status Kualitatif</div>
+                             <div className="flex items-center gap-2">
+                                {input?.qualitative_status === 'completed' && <span className="bg-emerald-100 text-emerald-800 text-[10px] font-black px-2 py-0.5 rounded uppercase tracking-wider">Selesai</span>}
+                                {input?.qualitative_status === 'in_progress' && <span className="bg-amber-100 text-amber-800 text-[10px] font-black px-2 py-0.5 rounded uppercase tracking-wider">Dalam Proses</span>}
+                                {(!input || input?.qualitative_status === 'not_started') && <span className="text-slate-400 text-xs italic">Belum dimulai</span>}
+                             </div>
+                          </div>
+                        )}
+                      </div>
+
+                      {input?.notes && (
+                        <div className="mt-4 pt-4 border-t border-slate-50">
+                           <div className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mb-1.5 leading-tight">Catatan</div>
+                           <p className="text-xs text-slate-600 font-medium leading-relaxed italic">&quot;{input.notes}&quot;</p>
+                        </div>
+                      )}
+                    </div>
+                  )
+                })}
+              </div>
+            )
+          }
+
           return (
             <div className="relative overflow-x-auto rounded-xl border border-slate-200 shadow-sm bg-white">
               <table className="w-full text-sm text-left">
                 <thead className="bg-slate-800 text-slate-100 font-bold">
                   <tr>
                     <th className="px-4 py-3 sticky left-0 z-10 bg-slate-800 border-r border-slate-700 w-24">Tanggal</th>
-                    {activeProgram.target_type !== 'qualitative' ? (
+                    {activeProgram?.target_type !== 'qualitative' ? (
                       <>
                         <th className="px-4 py-3 text-right whitespace-nowrap border-l border-slate-700">
                           <div className="flex flex-col items-end">
@@ -488,7 +570,7 @@ export function PivotTableClient({
                 <tbody className="divide-y divide-slate-100">
                   {daysArray.map(day => {
                     const dateStr = buildDateString(day)
-                    const input = pastInputs?.find(i => i.program_id === activeProgram.id && i.date === dateStr)
+                    const input = pastInputs?.find(i => i.program_id === activeProgram?.id && i.date === dateStr)
                     const isToday = dateStr === todayStr
                     const isFuture = dateStr > todayStr
                     
@@ -504,7 +586,7 @@ export function PivotTableClient({
                         )}>
                           {day} {new Date(activePeriod?.year || 2024, (activePeriod?.month || 1) - 1, 1).toLocaleString('id-ID', { month: 'short' })}
                         </td>
-                        {activeProgram.target_type !== 'qualitative' ? (
+                        {activeProgram?.target_type !== 'qualitative' ? (
                           <>
                             <td className="px-4 py-2 text-right border-l border-slate-100">
                               <span className={cn(
@@ -541,15 +623,15 @@ export function PivotTableClient({
                     )
                   })}
                 </tbody>
-                {activeProgram.target_type !== 'qualitative' && (
+                {activeProgram?.target_type !== 'qualitative' && (
                   <tfoot className="bg-slate-50 border-t-2 border-slate-200 font-bold text-slate-800">
                     <tr>
                       <td className="px-4 py-3 sticky left-0 z-10 bg-slate-50 border-r border-slate-200">TOTAL</td>
                       <td className="px-4 py-3 text-right text-indigo-700 border-l border-slate-200">
-                        {formatRupiah(pastInputs?.filter(i => i.program_id === activeProgram.id).reduce((sum, i) => sum + Number(i.achievement_rp || 0), 0) || 0)}
+                        {formatRupiah(pastInputs?.filter(i => i.program_id === activeProgram?.id).reduce((sum, i) => sum + Number(i.achievement_rp || 0), 0) || 0)}
                       </td>
                       <td className="px-4 py-3 text-right text-indigo-700 border-l border-slate-200">
-                        {(pastInputs?.filter(i => i.program_id === activeProgram.id).reduce((sum, i) => sum + Number(i.achievement_user || 0), 0) || 0).toLocaleString()} user
+                        {(pastInputs?.filter(i => i.program_id === activeProgram?.id).reduce((sum, i) => sum + Number(i.achievement_user || 0), 0) || 0).toLocaleString()} user
                       </td>
                       <td className="px-4 py-3 border-l border-slate-200"></td>
                     </tr>
@@ -563,7 +645,159 @@ export function PivotTableClient({
           )
         }
 
-        return (
+        return layoutMode === 'card' ? (
+          <div className="flex flex-col gap-4 animate-in fade-in max-w-2xl mx-auto w-full">
+            <div className="p-3 bg-indigo-50 text-indigo-700 text-xs rounded-xl border border-indigo-100 flex items-center gap-2">
+              <Info className="w-5 h-5 flex-shrink-0" />
+              <span>Menampilkan mode kartu (dioptimalkan untuk mobile). Ketuk nilai untuk mengubah. Data diurutkan dari tanggal terbaru.</span>
+            </div>
+            {[...daysArray].reverse().map(day => {
+                const dateStr = buildDateString(day)
+                const isToday = dateStr === todayStr
+                const isFuture = dateStr > todayStr
+                const rowEvaluated = getEvaluatedRowValues(dateStr)
+                
+                const hasData = metrics.some(m => m.input_type === 'manual' && localValues[`${dateStr}_${m.id}`] !== null && localValues[`${dateStr}_${m.id}`] !== undefined)
+
+                if (isFuture && viewMode === 'actual' && !hasData) return null;
+
+                return (
+                  <div key={day} className={cn(
+                    "flex flex-col rounded-xl border overflow-hidden shadow-sm transition-all bg-white",
+                    isToday ? "border-indigo-400 ring-2 ring-indigo-50 shadow-md" : "border-slate-200",
+                    !hasData && !isToday && "opacity-80 bg-slate-50/50"
+                  )}>
+                    <div className={cn(
+                      "flex justify-between items-center px-4 py-3 border-b border-slate-100",
+                      isToday ? "bg-indigo-50 text-indigo-800" : "bg-slate-50 text-slate-700"
+                    )}>
+                      <div className="font-bold flex items-center gap-2">
+                        <span>{day} {new Date(activePeriod!.year, activePeriod!.month - 1, day).toLocaleString('id-ID', { month: 'short', year: 'numeric' })}</span>
+                      </div>
+                      {isToday && <span className="bg-indigo-600 text-white text-[10px] px-2 py-0.5 rounded-full font-bold uppercase tracking-wide shadow-sm">Hari Ini</span>}
+                    </div>
+                    
+                    <div className="p-4 flex flex-col gap-4">
+                      {metricGroups.map(([gid, gdata]) => {
+                        const isExpanded = expandedGroups[gid]
+                        const visibleMetrics = gdata.metrics.filter(m => !onlyShowEssential || m.is_primary)
+
+                        if (visibleMetrics.length === 0) return null
+
+                        return (
+                          <div key={gid} className={cn("flex flex-col gap-2", !isExpanded && "opacity-60")}>
+                            <div 
+                              className="flex items-center justify-between text-xs font-bold text-slate-500 uppercase tracking-widest border-b border-slate-100 pb-1 cursor-pointer"
+                              onClick={() => toggleGroup(gid)}
+                            >
+                              <span>{gdata.label}</span>
+                              <button className="p-1 -mr-1 hover:bg-slate-100 rounded text-slate-400 transition-colors">
+                                {isExpanded ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />}
+                              </button>
+                            </div>
+                            
+                            {isExpanded && (
+                              <div className="grid grid-cols-2 gap-3 mt-1">
+                                {visibleMetrics.map(m => {
+                                  const cellKey = `${dateStr}_${m.id}`
+                                  const val = rowEvaluated[m.id]
+                                  const isEditing = editingCell?.date === dateStr && editingCell?.metricId === m.id
+                                  const saving = isSaving === cellKey
+                                  const isCalc = m.input_type === 'calculated'
+
+                                  let colorClass = "text-slate-700"
+                                  if (m.is_target_metric && val !== null) {
+                                     let monthlyTarget = 0;
+                                     if (m.metric_key === 'revenue') monthlyTarget = activeProgram.monthly_target_rp || 0;
+                                     else if (m.metric_key === 'user_count') monthlyTarget = activeProgram.monthly_target_user || 0;
+                                     else monthlyTarget = m.monthly_target || 0;
+                                     
+                                     const dailyTarget = monthlyTarget / (activePeriod?.working_days || 30)
+                                     if (dailyTarget > 0) {
+                                        const pct = val / dailyTarget
+                                        if (pct >= 1) colorClass = "text-emerald-600 font-bold"
+                                        else if (pct >= 0.5) colorClass = "text-amber-600 font-bold"
+                                        else colorClass = "text-red-600 font-bold"
+                                     }
+                                  }
+
+                                  return (
+                                    <div 
+                                      key={m.id}
+                                      className={cn(
+                                        "flex flex-col p-2.5 rounded-lg border transition-colors relative",
+                                        isCalc ? 'bg-slate-50 text-slate-600 border-slate-100' : 'bg-white border-slate-200 cursor-text hover:border-indigo-300 shadow-sm',
+                                        viewMode === 'target' && !isCalc && 'bg-indigo-50/20 border-indigo-100',
+                                        saving ? 'opacity-50' : '',
+                                        isEditing && 'ring-2 ring-indigo-500 border-indigo-500 bg-white'
+                                      )}
+                                      onClick={() => !isEditing && handleCellClick(dateStr, m, val)}
+                                    >
+                                      <div className="flex items-center gap-1 text-[10px] text-slate-500 mb-1 font-medium leading-tight h-6">
+                                        {isCalc && <Calculator className="w-3 h-3 text-slate-400" />}
+                                        <span className="line-clamp-2">{m.label}</span>
+                                      </div>
+                                      
+                                      <div className="mt-auto flex justify-end">
+                                        {isEditing ? (
+                                          <input 
+                                            ref={inputRef}
+                                            type="number" 
+                                            value={editValue}
+                                            onChange={e => setEditValue(e.target.value)}
+                                            onBlur={handleSaveCell}
+                                            onKeyDown={handleKeyDown}
+                                            className="w-full text-right bg-white border border-indigo-200 rounded px-2 py-1.5 text-sm font-bold text-indigo-900 focus:outline-none focus:ring-0"
+                                            onClick={e => e.stopPropagation()}
+                                          />
+                                        ) : (
+                                          <div className="flex items-center justify-between gap-1 w-full mt-1">
+                                            {saving ? (
+                                              <Loader2 className="w-3 h-3 animate-spin text-indigo-500" />
+                                            ) : (
+                                              <span />
+                                            )}
+                                            <span className={cn(
+                                              "text-[13px] text-right truncate",
+                                              isCalc ? 'font-semibold' : colorClass, 
+                                              viewMode === 'target' && !isCalc && 'text-indigo-600 font-bold'
+                                            )}>
+                                              {val === null || val === undefined ? (
+                                                <span className={cn(viewMode === 'target' ? "text-indigo-400 font-black" : "text-slate-300")}>&mdash;</span>
+                                              ) : formatMetricValue(val, m.data_type, m.unit_label)}
+                                            </span>
+                                          </div>
+                                        )}
+                                      </div>
+                                      
+                                      {viewMode === 'target' && isAdmin && m.input_type === 'manual' && m.is_target_metric && (
+                                        <div className="mt-2 pt-2 border-t border-slate-100">
+                                          <button 
+                                              onClick={(e) => { e.stopPropagation(); handleAutoDistribute(m.id, m.label) }}
+                                              className={cn(
+                                                "w-full text-[9px] flex items-center justify-center gap-1 px-1.5 py-1 rounded transition-all",
+                                                isSaving === 'bulk' ? "bg-slate-100 text-slate-400 pointer-events-none" : "bg-emerald-50 text-emerald-600 hover:bg-emerald-100"
+                                              )}
+                                            >
+                                              <Sparkles className="w-2.5 h-2.5" />
+                                              Auto Distribusi
+                                            </button>
+                                        </div>
+                                      )}
+                                    </div>
+                                  )
+                                })}
+                              </div>
+                            )}
+                          </div>
+                        )
+                      })}
+                    </div>
+                  </div>
+                )
+            })}
+          </div>
+        ) : (
           <div className="relative overflow-x-auto rounded-xl border border-slate-200 shadow-sm bg-white">
             <table className="w-full text-sm text-left">
             <thead className="bg-slate-800 text-slate-100 font-bold">
