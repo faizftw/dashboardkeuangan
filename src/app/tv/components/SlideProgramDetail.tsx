@@ -12,9 +12,10 @@ import {
   ResponsiveContainer, 
   Bar, 
   ComposedChart, 
-  Line 
+  Line,
+  ReferenceLine
 } from 'recharts'
-import { CheckCircle2, ClipboardList, Target, TrendingUp, BarChart3, Users, Building2 } from 'lucide-react'
+import { CheckCircle2, ClipboardList, Target, TrendingUp, Users, Building2 } from 'lucide-react'
 import { Card } from '@/components/ui/card'
 
 interface SlideProgramDetailProps {
@@ -329,9 +330,11 @@ export function SlideProgramDetail({
                              isAnimationActive={false}
                              contentStyle={{ backgroundColor: '#0f172a', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '12px' }}
                              itemStyle={{ fontSize: '12px', fontWeight: 900 }}
-                             formatter={(v: any, name: any) => {
-                               if (name === 'Omzet') return [formatRupiah(Number(v)), 'Omzet']
-                               return [v, name]
+                             formatter={(v: string | number | readonly (string | number)[] | undefined, name: string | number | undefined): [string | number, string | number] => {
+                               const val = Array.isArray(v) ? v[0] : v
+                               const n = String(name || '')
+                               if (n === 'Omzet') return [formatRupiah(Number(val || 0)), 'Omzet']
+                               return [String(val ?? ''), n]
                              }}
                           />
                           <Bar 
@@ -359,7 +362,6 @@ export function SlideProgramDetail({
                                 y={dailyTargetRp} 
                                 stroke="rgba(16, 185, 129, 0.4)" 
                                 strokeDasharray="5 5"
-                                isAnimationActive={false}
                                 label={{ value: 'Target Harian', position: 'insideBottomRight', fill: 'rgba(16, 185, 129, 0.6)', fontSize: 9, fontWeight: 900, dy: -5 }}
                              />
                           )}
