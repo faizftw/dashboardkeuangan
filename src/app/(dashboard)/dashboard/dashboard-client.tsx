@@ -125,7 +125,14 @@ function KpiCard({ icon: Icon, label, value, sub, accentColor, comparison, toolt
           )}>
             {comp.status === 'ahead' ? 'On Track' : comp.status === 'behind' ? 'Behind' : 'Steady'}
           </span>
-          <span className="text-[12px] text-slate-400">{comp.label}</span>
+          <span className="text-[12px] text-slate-400" title={comp.percentage ? `Target progres ideal saat ini: ${comp.percentage.toFixed(1)}%` : undefined}>
+            {comp.label}
+            {comp.percentage !== undefined && comp.percentage !== null && (
+              <span className="ml-1 text-[11px] font-bold text-slate-600">
+                ({Math.round(comp.percentage)}%)
+              </span>
+            )}
+          </span>
         </div>
       )
     }
