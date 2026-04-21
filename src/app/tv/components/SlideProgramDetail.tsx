@@ -59,7 +59,7 @@ function RingProgress({
           fill="transparent"
           strokeWidth={stroke}
           strokeDasharray={circumference + ' ' + circumference}
-          style={{ strokeDashoffset, transition: 'stroke-dashoffset 1s ease-out' }}
+          style={{ strokeDashoffset, transition: 'stroke-dashoffset 0.3s ease-out' }}
           strokeLinecap="round"
           r={normalizedRadius}
           cx={size / 2}
@@ -78,7 +78,7 @@ function ProgressBar({ pct, color = '#00d4ff' }: { pct: number, color?: string }
   return (
     <div className="h-1.5 w-full bg-white/5 rounded-full overflow-hidden mt-auto">
       <div 
-        className="h-full rounded-full transition-all duration-1000 ease-out"
+        className="h-full rounded-full transition-all duration-300 ease-out"
         style={{ width: `${Math.min(pct, 100)}%`, background: color }}
       />
     </div>
@@ -130,9 +130,11 @@ export function SlideProgramDetail({
     })
   }, [inputs])
 
-  // Legacy fallback targets (absolute)
+  // Target calculations
   const targetRp = Number(program.monthly_target_rp || 0)
   const targetUser = Number(program.monthly_target_user || 0)
+  const dailyTargetRp = targetRp / (period?.working_days || 30)
+  
   const achievementRp = dailyPoints.length > 0 ? dailyPoints[dailyPoints.length - 1].cumRp : 0
   const achievementUser = dailyPoints.length > 0 ? dailyPoints[dailyPoints.length - 1].cumUser : 0
 
@@ -273,24 +275,28 @@ export function SlideProgramDetail({
 
               {/* Central Chart */}
               <Card className="flex-1 p-6 flex flex-col bg-slate-900 overflow-hidden">
-                 <div className="flex items-center justify-between mb-8">
                     <div className="flex items-center gap-4">
-                       <div className="p-2 rounded-lg bg-indigo-500/10 border border-indigo-500/20">
-                          <BarChart3 className="text-indigo-400 h-5 w-5" />
+                       <div className="p-2 rounded-lg bg-emerald-500/10 border border-emerald-500/20">
+                          <TrendingUp className="text-emerald-400 h-5 w-5" />
                        </div>
-                       <h3 className="text-sm font-black text-slate-100 uppercase tracking-widest">Akumulasi Progres Harian</h3>
+                       <h3 className="text-sm font-black text-slate-100 uppercase tracking-widest">Tren Performa Harian</h3>
                     </div>
                     <div className="flex items-center gap-6">
                        <div className="flex items-center gap-2">
-                          <div className="w-3 h-3 rounded-full bg-indigo-500" />
+                          <div className="w-3 h-3 rounded-full" style={{ backgroundColor: '#639922' }} />
                           <span className="text-[10px] font-bold text-slate-400 uppercase">Omzet</span>
                        </div>
                        <div className="flex items-center gap-2">
-                          <div className="w-3 h-3 rounded-full bg-emerald-500" />
-                          <span className="text-[10px] font-bold text-slate-400 uppercase">Target</span>
+                          <div className="w-3 h-3 rounded-full" style={{ backgroundColor: '#378ADD' }} />
+                          <span className="text-[10px] font-bold text-slate-400 uppercase">User</span>
                        </div>
+                       {dailyTargetRp > 0 && (
+                         <div className="flex items-center gap-2">
+                            <div className="w-3 h-1 rounded-full border-t border-dashed" style={{ borderColor: 'rgba(16, 185, 129, 0.6)' }} />
+                            <span className="text-[10px] font-bold text-slate-400 uppercase">Target</span>
+                         </div>
+                       )}
                     </div>
-                 </div>
 
                  <div className="flex-1 min-h-0">
                     <ResponsiveContainer width="100%" height="100%">
@@ -308,43 +314,55 @@ export function SlideProgramDetail({
                              axisLine={false} 
                              tickLine={false} 
                              tick={{ fill: '#64748b', fontSize: 10 }}
-                             tickFormatter={(val) => `Rp${(val/1000000).toFixed(0)}jt`}
+                             tickFormatter={(val) => val >= 1000000 ? `Rp${(val/1000000).toFixed(1)}jt` : `Rp${(val/1000).toFixed(0)}rb`}
+                             domain={[0, 'auto']}
                           />
                           <YAxis 
                              yAxisId="right"
                              orientation="right"
                              axisLine={false} 
                              tickLine={false} 
-                             tick={{ fill: '#64748b', fontSize: 10 }}
+                             tick={{ fill: '#378ADD', fontSize: 10, fontWeight: 700 }}
+                             domain={[0, 'auto']}
                           />
                           <Tooltip 
+                             isAnimationActive={false}
                              contentStyle={{ backgroundColor: '#0f172a', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '12px' }}
                              itemStyle={{ fontSize: '12px', fontWeight: 900 }}
+                             formatter={(v: any, name: any) => {
+                               if (name === 'Omzet') return [formatRupiah(Number(v)), 'Omzet']
+                               return [v, name]
+                             }}
                           />
-                          <Bar yAxisId="left" dataKey="rp" fill="rgba(99,102,241,0.2)" radius={[4, 4, 0, 0]} />
-                          <Line 
+                          <Bar 
                              yAxisId="left" 
-                             type="monotone" 
-                             dataKey="cumRp" 
-                             stroke="#6366f1" 
-                             strokeWidth={4} 
-                             dot={false}
-                             className="drop-shadow-[0_0_8px_rgba(99,102,241,0.5)]"
+                             dataKey="rp" 
+                             name="Omzet"
+                             fill="#639922" 
+                             radius={[4, 4, 0, 0]} 
+                             isAnimationActive={false}
                           />
-                          {/* Daily Target Projection line */}
                           <Line 
-                             yAxisId="left"
-                             type="monotone"
-                             data={(dailyPoints.length > 0 && targetRp > 0) ? [
-                               { displayDate: dailyPoints[0].displayDate, target: 0 },
-                               { displayDate: dailyPoints[dailyPoints.length-1].displayDate, target: targetRp }
-                             ] : []}
-                             dataKey="target"
-                             stroke="rgba(16, 185, 129, 0.4)"
-                             strokeWidth={2}
-                             strokeDasharray="5 5"
-                             dot={false}
+                             yAxisId="right" 
+                             type="monotone" 
+                             dataKey="user" 
+                             name="User"
+                             stroke="#378ADD" 
+                             strokeWidth={4} 
+                             dot={{ r: 4, fill: '#378ADD', strokeWidth: 2, stroke: '#020617' }}
+                             isAnimationActive={false}
+                             className="drop-shadow-[0_0_8px_rgba(55,138,221,0.4)]"
                           />
+                          {dailyTargetRp > 0 && (
+                             <ReferenceLine 
+                                yAxisId="left"
+                                y={dailyTargetRp} 
+                                stroke="rgba(16, 185, 129, 0.4)" 
+                                strokeDasharray="5 5"
+                                isAnimationActive={false}
+                                label={{ value: 'Target Harian', position: 'insideBottomRight', fill: 'rgba(16, 185, 129, 0.6)', fontSize: 9, fontWeight: 900, dy: -5 }}
+                             />
+                          )}
                        </ComposedChart>
                     </ResponsiveContainer>
                  </div>
