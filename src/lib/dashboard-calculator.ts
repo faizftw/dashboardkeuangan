@@ -67,7 +67,7 @@ export function calculateProgramHealth(
     const isAcquisition = m.metric_group === 'user_acquisition' || k === 'user_count' || k === 'closing'
 
     if (isRevenue || isAcquisition) {
-      // DATE-LEVEL MERGING LOGIC
+      // DATE-LEVEL MERGING LOGIC (Matches Pivot Table 0-fallback)
       const legacyField = isRevenue ? 'achievement_rp' : 'achievement_user'
       
       const allDates = new Set([
@@ -80,13 +80,19 @@ export function calculateProgramHealth(
       
       allDates.forEach(date => {
         const modern = vals.find(v => v.date === date)
-        if (modern) {
-          unifiedSum += Number(modern.value || 0)
+        const modernVal = Number(modern?.value || 0)
+
+        // FALLBACK LOGIC: Take legacy if modern value is missing OR exactly 0
+        if (modernVal > 0) {
+          unifiedSum += modernVal
           hasData = true
         } else {
           const legacy = legacyInputs.find(li => li.date === date)
           if (legacy) {
             unifiedSum += Number(legacy[legacyField] || 0)
+            hasData = true
+          } else if (modern) {
+            // Include explicit 0 if no legacy exists for that date
             hasData = true
           }
         }
@@ -324,7 +330,7 @@ export function aggregateByMetricGroup(
           modernValuesByDate.set(v.date, current + (Number(v.value) || 0))
         })
 
-        // Target calculation (stays similar to before)
+        // Target calculation
         const sumCustomTarget = vals.reduce((s, v) => s + (Number(v.target_value) || 0), 0)
         customTarget += sumCustomTarget
         
@@ -351,13 +357,19 @@ export function aggregateByMetricGroup(
       let unifiedSum = 0
       allDates.forEach(date => {
         const modernVal = modernValuesByDate.get(date)
-        if (modernVal !== undefined) {
+        
+        // 0-FALLBACK Logic: Use legacy if modern is missing OR exactly 0
+        if (modernVal !== undefined && modernVal > 0) {
           unifiedSum += modernVal
           foundData = true
         } else if (isAdsRelated) {
           const legacy = legacyInputs.find(li => li.date === date)
           if (legacy) {
             unifiedSum += Number(legacy[legacyField] || 0)
+            foundData = true
+          } else if (modernVal !== undefined) {
+            // Keep the 0 if it's there but no legacy fallback exists for that date
+            unifiedSum += modernVal
             foundData = true
           }
         }
@@ -509,9 +521,10 @@ export function aggregateAdsMetrics(
   programs.forEach(prog => {
     const defs = prog.program_metric_definitions || []
     const progMetricValues = metricValuesByProgram.get(prog.id) || []
+
     const legacyInputs = dailyInputsByProgram?.get(prog.id) || []
 
-    const getUnifiedSum = (group: string, keys: string[], legacyField?: 'achievement_rp' | 'achievement_user'): number => {
+    const getAdsUnifiedSum = (group: string, keys: string[], legacyField?: 'achievement_rp' | 'achievement_user'): number => {
       const relevantDefs = defs.filter(m => m.metric_group === group || keys.includes(m.metric_key?.toLowerCase()))
       const modernByDate = new Map<string, number>()
       
@@ -530,21 +543,27 @@ export function aggregateAdsMetrics(
 
       let unified = 0
       allDates.forEach(date => {
-        const modern = modernByDate.get(date)
-        if (modern !== undefined) {
-          unified += modern
+        const modernVal = modernByDate.get(date)
+        
+        // Match pivot table fallback logic (0-fallback)
+        if (modernVal !== undefined && modernVal > 0) {
+          unified += modernVal
         } else if (legacyField) {
           const legacy = legacyInputs.find(li => li.date === date)
-          if (legacy) unified += Number(legacy[legacyField] || 0)
+          if (legacy) {
+            unified += Number(legacy[legacyField] || 0)
+          } else if (modernVal !== undefined) {
+            unified += modernVal
+          }
         }
       })
       return unified
     }
 
-    totalAdsSpent += getUnifiedSum('ad_spend', ['ads_spent', 'ad_spend', 'budget_iklan', 'spent'])
-    totalRevenue += getUnifiedSum('revenue', ['revenue', 'omzet', 'pemasukan', 'revenue_from_paid_traffic'], 'achievement_rp')
-    totalGoals += getUnifiedSum('user_acquisition', ['user_count', 'closing', 'leads_converted', 'pembelian'], 'achievement_user')
-    totalLeads += getUnifiedSum('leads', ['leads', 'lead_masuk', 'prospek', 'leads_count'])
+    totalAdsSpent += getAdsUnifiedSum('ad_spend', ['ads_spent', 'ad_spend', 'budget_iklan', 'spent'])
+    totalRevenue += getAdsUnifiedSum('revenue', ['revenue', 'omzet', 'pemasukan', 'revenue_from_paid_traffic'], 'achievement_rp')
+    totalGoals += getAdsUnifiedSum('user_acquisition', ['user_count', 'closing', 'leads_converted', 'pembelian'], 'achievement_user')
+    totalLeads += getAdsUnifiedSum('leads', ['leads', 'lead_masuk', 'prospek', 'leads_count'])
   })
 
   return {
