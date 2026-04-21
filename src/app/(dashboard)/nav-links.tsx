@@ -12,42 +12,44 @@ import {
   Target,
   Layers,
   Handshake,
+  User,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 interface NavLinksProps {
   isCollapsed?: boolean
   onClick?: () => void
+  role?: 'admin' | 'pic' | null
 }
 
 const dashboardSubItems = [
   {
-    name: 'Ringkasan',
+    name: 'Overview Kinerja',
     href: '/dashboard?tab=overview',
     activeTab: 'overview',
     icon: HeartPulse,
   },
   {
-    name: 'Omzet',
+    name: 'Target & Omzet',
     href: '/dashboard?tab=target',
     activeTab: 'target',
     icon: Target,
   },
   {
-    name: 'Ads Performance',
+    name: 'Performa Iklan',
     href: '/dashboard?tab=ads',
     activeTab: 'ads',
     icon: Layers,
   },
   {
-    name: 'MoU Tracker',
+    name: 'Progres MoU',
     href: '/dashboard?tab=mou',
     activeTab: 'mou',
     icon: Handshake,
   },
 ]
 
-export function NavLinks({ isCollapsed, onClick }: NavLinksProps) {
+export function NavLinks({ isCollapsed, onClick, role }: NavLinksProps) {
   const pathname = usePathname()
   const searchParams = useSearchParams()
 
@@ -64,7 +66,35 @@ export function NavLinks({ isCollapsed, onClick }: NavLinksProps) {
   return (
     <nav className="flex flex-col gap-1 px-3">
       {!isCollapsed && (
-        <p className="px-3 mb-2 text-[10px] font-bold text-slate-400 uppercase tracking-[0.15em]">Main Menu</p>
+        <p className="px-3 mb-2 text-[10px] font-bold text-slate-400 uppercase tracking-[0.15em]">Menu Utama</p>
+      )}
+
+      {/* ── My Dashboard (PIC Only) ─────────────────────────────────── */}
+      {role === 'pic' && (
+        <div className="mb-1">
+          <Link
+            href="/my-dashboard"
+            onClick={onClick}
+            className={cn(
+              "w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-[14px] font-semibold transition-all duration-200 group relative",
+              pathname === '/my-dashboard'
+                ? "bg-[#EEEDFE] text-[#534AB7]"
+                : "text-slate-600 hover:bg-slate-100 hover:text-slate-900",
+              isCollapsed ? "justify-center" : ""
+            )}
+            title={isCollapsed ? "Personal KPI" : undefined}
+          >
+            <User className={cn(
+              "h-5 w-5 shrink-0",
+               pathname === '/my-dashboard' ? "text-[#534AB7]" : "text-slate-500 group-hover:text-[#534AB7]"
+            )} />
+            {!isCollapsed && (
+              <span className="flex-1 text-left truncate animate-in fade-in slide-in-from-left-2 duration-300">
+                Personal KPI
+              </span>
+            )}
+          </Link>
+        </div>
       )}
       
       {/* ── Dashboard group ───────────────────────────────── */}
@@ -152,13 +182,13 @@ export function NavLinks({ isCollapsed, onClick }: NavLinksProps) {
       </div>
 
       {!isCollapsed && (
-        <p className="px-3 mt-4 mb-2 text-[10px] font-bold text-slate-400 uppercase tracking-[0.15em]">Manajemen</p>
+        <p className="px-3 mt-4 mb-2 text-[10px] font-bold text-slate-400 uppercase tracking-[0.15em]">Kelola Data</p>
       )}
 
       {/* ── Other top-level links ─────────────────────────── */}
       {[
-        { name: 'Pencapaian Harian', href: '/input-harian', icon: FileInput },
-        { name: 'Master Data', href: '/master-data', icon: Database },
+        { name: 'Input Harian', href: '/input-harian', icon: FileInput },
+        { name: 'Pengaturan Sistem', href: '/master-data', icon: Database },
       ].map(link => {
         const active = pathname?.startsWith(link.href)
         return (

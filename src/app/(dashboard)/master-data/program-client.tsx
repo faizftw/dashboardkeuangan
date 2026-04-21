@@ -22,7 +22,8 @@ import {
   Settings2,
   ChevronRight,
   UserCheck,
-  BarChart2
+  BarChart2,
+  AlertTriangle,
 } from 'lucide-react'
 
 type ProgramMilestone = Database['public']['Tables']['program_milestones']['Row']
@@ -48,6 +49,7 @@ export function ProgramClient({
   const [error, setError] = useState<string | null>(null)
   const [selectedTargetType, setSelectedTargetType] = useState<TargetType>('quantitative')
   const [selectedDepartment, setSelectedDepartment] = useState('general')
+  const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null)
   
   // Teams Support
   const [selectedPicIds, setSelectedPicIds] = useState<string[]>([])
@@ -101,7 +103,6 @@ export function ProgramClient({
   }
 
   const handleDelete = async (id: string) => {
-    if (!confirm('Apakah Anda yakin ingin menghapus program ini secara permanen?')) return
     setIsLoading(true)
     try {
       const res = await deleteProgram(id)
@@ -114,6 +115,7 @@ export function ProgramClient({
       toast.error('Terjadi kesalahan saat menghapus program')
     } finally {
       setIsLoading(false)
+      setDeleteConfirmId(null)
     }
   }
 
@@ -272,8 +274,29 @@ export function ProgramClient({
           <tbody className="divide-y divide-slate-200">
             {programs.length === 0 ? (
               <tr>
-                <td colSpan={isAdmin ? 6 : 5} className="px-6 py-12 text-center text-slate-400 font-medium">
-                  Belum ada data program yang terdaftar.
+                <td colSpan={isAdmin ? 6 : 5} className="px-6 py-16 text-center">
+                  <div className="flex flex-col items-center gap-4 max-w-sm mx-auto">
+                    <div className="h-16 w-16 rounded-2xl bg-slate-100 flex items-center justify-center">
+                      <Target className="h-8 w-8 text-slate-300" />
+                    </div>
+                    <div>
+                      <p className="font-bold text-slate-700 text-base">Belum ada program terdaftar</p>
+                      <p className="text-sm text-slate-400 mt-1 leading-relaxed">
+                        {isAdmin 
+                          ? 'Mulai dengan membuat program pertama untuk mulai melacak kinerja tim.'
+                          : 'Belum ada program yang ditugaskan ke Anda. Hubungi Admin untuk informasi lebih lanjut.'
+                        }
+                      </p>
+                    </div>
+                    {isAdmin && (
+                      <button
+                        onClick={handleOpenCreate}
+                        className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-2.5 rounded-xl text-sm font-bold shadow-lg shadow-indigo-100 transition-all"
+                      >
+                        <Plus className="h-4 w-4" /> Buat Program Pertama
+                      </button>
+                    )}
+                  </div>
                 </td>
               </tr>
             ) : (
@@ -337,31 +360,31 @@ export function ProgramClient({
                     <div className="flex justify-end gap-1.5 opacity-40 group-hover:opacity-100 transition-opacity">
                         <button
                           onClick={() => router.push(`/master-data/programs/${prog.id}/metrics`)}
-                          className="p-2 text-slate-600 hover:bg-white hover:text-emerald-600 rounded-lg border border-transparent hover:border-slate-200 shadow-none hover:shadow-sm transition-all"
-                          title="Definisi KPI"
+                          className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-slate-600 hover:bg-emerald-50 hover:text-emerald-700 rounded-lg border border-transparent hover:border-emerald-200 transition-all"
+                          title="Definisi KPI & Metrik"
                         >
-                          <BarChart2 className="h-4 w-4" />
+                          <BarChart2 className="h-3.5 w-3.5" /> KPI
                         </button>
                         <button
                           onClick={() => handleOpenMilestones(prog)}
-                          className="p-2 text-slate-600 hover:bg-white hover:text-indigo-600 rounded-lg border border-transparent hover:border-slate-200 shadow-none hover:shadow-sm transition-all"
+                          className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-slate-600 hover:bg-indigo-50 hover:text-indigo-700 rounded-lg border border-transparent hover:border-indigo-200 transition-all"
                           title="Kelola Tugas/Milestones"
                         >
-                          <Settings2 className="h-4 w-4" />
+                          <Settings2 className="h-3.5 w-3.5" /> Milestone
                         </button>
                         <button
                           onClick={() => handleOpenEdit(prog)}
-                          className="p-2 text-slate-600 hover:bg-white hover:text-indigo-600 rounded-lg border border-transparent hover:border-slate-200 shadow-none hover:shadow-sm transition-all"
+                          className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-slate-600 hover:bg-blue-50 hover:text-blue-700 rounded-lg border border-transparent hover:border-blue-200 transition-all"
                           title="Edit Program"
                         >
-                          <PenLine className="h-4 w-4" />
+                          <PenLine className="h-3.5 w-3.5" /> Edit
                         </button>
                         <button
-                          onClick={() => handleDelete(prog.id)}
-                          className="p-2 text-rose-600 hover:bg-rose-50 rounded-lg transition-all"
-                          title="Hapus"
+                          onClick={() => setDeleteConfirmId(prog.id)}
+                          className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-rose-600 hover:bg-rose-50 rounded-lg border border-transparent hover:border-rose-200 transition-all"
+                          title="Hapus Program"
                         >
-                          <Trash2 className="h-4 w-4" />
+                          <Trash2 className="h-3.5 w-3.5" /> Hapus
                         </button>
                       </div>
                     </td>
@@ -660,6 +683,47 @@ export function ProgramClient({
           </div>
         </div>
       )}
+      {/* Delete Confirmation Modal */}
+      {deleteConfirmId && (() => {
+        const prog = programs.find(p => p.id === deleteConfirmId)
+        return (
+          <div className="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
+            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md animate-in zoom-in duration-200">
+              <div className="p-8">
+                <div className="flex items-start gap-4">
+                  <div className="h-12 w-12 bg-rose-100 rounded-2xl flex items-center justify-center shrink-0">
+                    <AlertTriangle className="h-6 w-6 text-rose-600" />
+                  </div>
+                  <div>
+                    <h3 className="font-bold text-slate-900 text-lg leading-tight">Hapus Program?</h3>
+                    <p className="text-sm text-slate-500 mt-1.5 leading-relaxed">
+                      Anda akan menghapus program <strong className="text-slate-800">&ldquo;{prog?.name}&rdquo;</strong>.
+                      Semua data capaian harian program ini akan ikut terhapus dan tidak dapat dikembalikan.
+                    </p>
+                  </div>
+                </div>
+                <div className="flex gap-3 mt-8 justify-end">
+                  <button
+                    onClick={() => setDeleteConfirmId(null)}
+                    disabled={isLoading}
+                    className="px-5 py-2.5 text-sm font-bold text-slate-600 hover:text-slate-800 hover:bg-slate-100 rounded-xl transition-all"
+                  >
+                    Batal
+                  </button>
+                  <button
+                    onClick={() => handleDelete(deleteConfirmId)}
+                    disabled={isLoading}
+                    className="flex items-center gap-2 px-5 py-2.5 text-sm font-bold text-white bg-rose-600 hover:bg-rose-700 rounded-xl shadow-lg shadow-rose-100 transition-all disabled:opacity-50"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                    {isLoading ? 'Menghapus...' : 'Ya, Hapus Permanen'}
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )
+      })()}
     </div>
   )
 }
