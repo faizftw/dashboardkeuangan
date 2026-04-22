@@ -732,12 +732,21 @@ export function OverviewClient({
     const daily_target_global = workingDays > 0 ? monthly_target / workingDays : 0;
 
     const totalCalendarDays = new Date(activePeriod.year, activePeriod.month, 0).getDate();
-    const calendarElapsed = today.getFullYear() === activePeriod.year && (today.getMonth() + 1) === activePeriod.month 
+    
+    // Check if there's any data for today across ALL programs to determine lenience
+    const hasTodayData = 
+        metricValues.some(mv => mv.date === todayStr && mv.value !== null) ||
+        dailyInputs.some(di => di.date === todayStr);
+
+    const calendarDaysRaw = today.getFullYear() === activePeriod.year && (today.getMonth() + 1) === activePeriod.month 
         ? today.getDate() 
         : (today.getFullYear() > activePeriod.year || (today.getFullYear() === activePeriod.year && (today.getMonth() + 1) > activePeriod.month))
           ? totalCalendarDays 
           : 0; 
-
+    
+    const calendarElapsed = (today.getFullYear() === activePeriod.year && (today.getMonth() + 1) === activePeriod.month)
+        ? (hasTodayData ? calendarDaysRaw : Math.max(0, calendarDaysRaw - 1))
+        : calendarDaysRaw;
     // Pace calculation based on working days elapsed
     const workingDaysElapsed = Math.min(workingDays, Math.round((calendarElapsed / totalCalendarDays) * workingDays));
     
@@ -758,7 +767,7 @@ export function OverviewClient({
       pace_harian,
       tertinggal_count
     }
-  }, [activePeriod, summary.targetTrend, summary.aggregates.revenue, programHealths]);
+  }, [activePeriod, summary.targetTrend, summary.aggregates.revenue, programHealths, dailyInputs, metricValues]);
 
   return (
     <div className="space-y-6 pb-24">
@@ -905,7 +914,16 @@ export function OverviewClient({
           </div>
 
           {/* Row 2: Secondary KPI Cards */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
+            <KpiCard 
+              icon={TrendingUp} 
+              label="Pace harian rata-rata" 
+              value={formatRupiah(overviewMetrics?.pace_harian || 0)} 
+              sub="realisasi harian bulan ini" 
+              accentColor="#8B5CF6"
+              tooltip="Rata-rata pendapatan harian yang benar-benar tercapai sejauh ini (total omzet / hari yang sudah berjalan)."
+              comparison={undefined}
+            />
             <KpiCard 
               icon={Layers} 
               label="Program aktif" 
