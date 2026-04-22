@@ -100,7 +100,6 @@ export async function getTVDashboardData(): Promise<TVDashboardData> {
     const definitions = prog.program_metric_definitions || []
     
     const isMoU = (prog.target_type as string) === 'mou'
-    const coreGroupKeys = ['revenue', 'user_acquisition', 'leads']
     const coreMetricKeys = ['revenue', 'user_count', 'omzet', 'closing', 'leads', 'prospek', 'agreement_leads', 'mou_signed']
     
     const primaryDefs = definitions.filter(m => 
