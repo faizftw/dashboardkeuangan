@@ -121,25 +121,37 @@ export function SlideProgramDetail({
 
   // Daily processing for chart
   const dailyPoints = useMemo(() => {
-    // ── MoU: use custom metric values (mou_signed / agreement_leads) ──
+    // ── MoU: merge custom metric values + legacy inputs ──
     if (isMoU) {
       const signedDef = metricDefinitions.find(d =>
-        d.metric_key === 'mou_signed' || d.metric_key === 'user_count' || d.metric_key === 'user_acquisition'
+        d.metric_key === 'mou_signed' || d.metric_key === 'user_count' || d.metric_key === 'user_acquisition' || d.metric_key === 'tanda_tangan_mou'
       )
       const leadsDef = metricDefinitions.find(d =>
-        d.metric_key === 'agreement_leads' || d.metric_key === 'leads'
+        d.metric_key === 'agreement_leads' || d.metric_key === 'leads' || d.metric_key === 'prospek' || d.metric_key === 'prospek_kerja_sama'
       )
 
       // Group by date
       const dateMap = new Map<string, { signed: number; leads: number }>()
+      
+      // 1. Add legacy inputs
+      inputs.forEach(input => {
+        const d = input.date
+        const existing = dateMap.get(d) || { signed: 0, leads: 0 }
+        existing.signed += Number(input.achievement_user || 0)
+        existing.leads += Number(input.achievement_rp || 0)
+        dateMap.set(d, existing)
+      })
+
+      // 2. Add custom metric values
       metricValues.forEach(mv => {
         const key = defIdToKeyMap.get(mv.metric_definition_id)
         if (!key) return
         const val = Number(mv.value || 0)
-        const existing = dateMap.get(mv.date) || { signed: 0, leads: 0 }
+        const d = mv.date
+        const existing = dateMap.get(d) || { signed: 0, leads: 0 }
         if (signedDef && mv.metric_definition_id === signedDef.id) existing.signed += val
         if (leadsDef && mv.metric_definition_id === leadsDef.id) existing.leads += val
-        dateMap.set(mv.date, existing)
+        dateMap.set(d, existing)
       })
 
       const sorted = Array.from(dateMap.entries()).sort(([a], [b]) => a.localeCompare(b))
@@ -151,8 +163,8 @@ export function SlideProgramDetail({
         return {
           date,
           displayDate: new Date(date).getDate().toString(),
-          rp: vals.leads,        // reuse 'rp' slot for leads (bar)
-          user: vals.signed,     // reuse 'user' slot for signed (line)
+          rp: vals.leads,        // bar
+          user: vals.signed,     // line
           cumRp: cumLeads,
           cumUser: cumSigned,
         }
@@ -164,18 +176,39 @@ export function SlideProgramDetail({
     let cumRp = 0
     let cumUser = 0
     return sortedInputs.map(input => {
-      cumRp += Number(input.achievement_rp || 0)
-      cumUser += Number(input.achievement_user || 0)
+      let dailyLeads = Number(input.achievement_rp || 0)
+      let dailySigns = Number(input.achievement_user || 0)
+
+      if (isMoU) {
+        // Add custom metric values for the same day
+        const dayMetrics = metricValues.filter(mv => mv.date === input.date)
+        const customLeads = dayMetrics.filter(mv => {
+          const def = metricDefinitions.find(d => d.id === mv.metric_definition_id)
+          return def && ['leads', 'agreement_leads', 'prospek', 'prospek_kerja_sama'].includes(def.metric_key)
+        }).reduce((s, m) => s + (Number(m.value) || 0), 0)
+
+        const customSigns = dayMetrics.filter(mv => {
+          const def = metricDefinitions.find(d => d.id === mv.metric_definition_id)
+          return def && ['user_count', 'mou_signed', 'tanda_tangan_mou', 'user_acquisition'].includes(def.metric_key)
+        }).reduce((s, m) => s + (Number(m.value) || 0), 0)
+
+        dailyLeads += customLeads
+        dailySigns += customSigns
+      }
+
+      cumRp += dailyLeads
+      cumUser += dailySigns
+
       return {
         date: input.date,
         displayDate: new Date(input.date || '').getDate().toString(),
-        rp: Number(input.achievement_rp || 0),
-        user: Number(input.achievement_user || 0),
+        rp: dailyLeads,
+        user: dailySigns,
         cumRp,
         cumUser,
       }
     })
-  }, [isMoU, inputs, metricValues, metricDefinitions, defIdToKeyMap])
+  }, [inputs, isMoU, metricValues, metricDefinitions, defIdToKeyMap])
 
   // Target calculations
   const targetRp = Number(program.monthly_target_rp || 0)
@@ -433,8 +466,9 @@ export function SlideProgramDetail({
                              formatter={(v: string | number | readonly (string | number)[] | undefined, name: string | number | undefined): [string | number, string | number] => {
                                const val = Array.isArray(v) ? v[0] : v
                                const n = String(name || '')
-                               if (isMoU) return [String(Math.round(Number(val || 0))), n]
-                                if (n === 'Omzet') return [formatRupiah(Number(val || 0)), 'Omzet']
+                               if (n === 'Omzet' || n === 'Prospek') {
+                                 return [isMoU ? Number(val || 0) : formatRupiah(Number(val || 0)), n]
+                               }
                                return [String(val ?? ''), n]
                              }}
                           />
@@ -450,7 +484,7 @@ export function SlideProgramDetail({
                              yAxisId="right" 
                              type="monotone" 
                              dataKey="user" 
-                             name={isMoU ? 'Tanda Tangan' : 'User'}
+                             name={isMoU ? 'MoU' : 'User'}
                              stroke="#378ADD" 
                              strokeWidth={4} 
                              dot={{ r: 4, fill: '#378ADD', strokeWidth: 2, stroke: '#020617' }}

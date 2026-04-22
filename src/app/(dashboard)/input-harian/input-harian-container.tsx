@@ -30,6 +30,7 @@ interface InputHarianContainerProps {
   milestoneCompletions: MilestoneCompletion[]
   existingMetricValues?: MetricValue[]
   allPeriodMetricValues?: MetricValue[]
+  historicalMoUStats?: Record<string, { leads: number; ttd: number; drop: number }>
 }
 
 export function InputHarianContainer(props: InputHarianContainerProps) {
@@ -123,7 +124,11 @@ export function InputHarianContainer(props: InputHarianContainerProps) {
         {/* Content Area */}
         <div className="p-4 sm:p-6">
           {viewMode === 'compact' ? (
-            <InputFormClient {...props} layoutMode={layoutMode} />
+            <InputFormClient 
+              {...props} 
+              layoutMode={layoutMode} 
+              historicalMoUStats={props.historicalMoUStats}
+            />
           ) : (
             <PivotTableClient
               programs={pivotPrograms}

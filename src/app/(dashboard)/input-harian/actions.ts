@@ -49,6 +49,7 @@ export async function submitDailyInput(data: {
   date: string
   achievement_rp?: number | null
   achievement_user?: number | null
+  prospek_drop?: number | null
   qualitative_status?: 'not_started' | 'in_progress' | 'completed' | null
   notes?: string | null
 }): Promise<ActionResponse> {
@@ -81,6 +82,36 @@ export async function submitDailyInput(data: {
     created_by: creatorId
   }
 
+  // ── EDGE CASE VALIDATION: MoU Prospek Aktif ───────────────────────────
+  const { data: program } = await supabase.from('programs').select('target_type').eq('id', data.program_id).single()
+  if (program?.target_type === 'mou') {
+    // Calculate current cumulative stats
+    const { data: inputs } = await supabase
+      .from('daily_inputs')
+      .select('achievement_user, prospek_drop')
+      .eq('program_id', data.program_id)
+    
+    const { data: metricValues } = await supabase
+      .from('daily_metric_values')
+      .select('value, program_metric_definitions(metric_key)')
+      .eq('program_id', data.program_id)
+
+    const totalLeads = (metricValues || [])
+      .filter(m => ['leads', 'agreement_leads', 'prospek', 'prospek_kerja_sama'].includes((m.program_metric_definitions as unknown as { metric_key: string })?.metric_key))
+      .reduce((s, m) => s + (Number(m.value) || 0), 0)
+    
+    const totalTTD = (inputs || []).reduce((s, i) => s + (Number(i.achievement_user) || 0), 0)
+    const totalDrop = (inputs || []).reduce((s, i) => s + (Number(i.prospek_drop) || 0), 0)
+    
+    const available = totalLeads - totalTTD - totalDrop
+    const requestedReduction = (data.achievement_user || 0) + (data.prospek_drop || 0)
+    
+    // Note: Since this is a NEW insert, we just subtract the new reduction from available
+    if (requestedReduction > available) {
+      return { error: `Gagal: Prospek aktif tidak mencukupi (Aktif: ${Math.max(0, available)}).` }
+    }
+  }
+
   const { error } = await supabase.from('daily_inputs').insert(payload)
 
   if (error) {
@@ -96,6 +127,7 @@ export async function updateDailyInput(id: string, data: {
   date: string
   achievement_rp?: number | null
   achievement_user?: number | null
+  prospek_drop?: number | null
   qualitative_status?: 'not_started' | 'in_progress' | 'completed' | null
   notes?: string | null
 }): Promise<ActionResponse> {
@@ -117,6 +149,30 @@ export async function updateDailyInput(id: string, data: {
 
   const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).single()
   const isAdmin = profile?.role === 'admin'
+
+  const { data: currentFull } = await supabase.from('daily_inputs').select('program_id, achievement_user, prospek_drop').eq('id', id).single()
+  const pid = currentFull?.program_id
+  const { data: program } = pid ? await supabase.from('programs').select('target_type').eq('id', pid).single() : { data: null }
+
+  if (program?.target_type === 'mou' && pid) {
+    const { data: inputs } = await supabase.from('daily_inputs').select('id, achievement_user, prospek_drop').eq('program_id', pid)
+    const { data: metricValues } = await supabase.from('daily_metric_values').select('value, program_metric_definitions(metric_key)').eq('program_id', pid)
+
+    const totalLeads = (metricValues || [])
+      .filter(m => ['leads', 'agreement_leads', 'prospek', 'prospek_kerja_sama'].includes((m.program_metric_definitions as unknown as { metric_key: string })?.metric_key))
+      .reduce((s, m) => s + (Number(m.value) || 0), 0)
+    
+    // Exclude current record from sums
+    const otherTTD = (inputs || []).filter(i => i.id !== id).reduce((s, i) => s + (Number(i.achievement_user) || 0), 0)
+    const otherDrop = (inputs || []).filter(i => i.id !== id).reduce((s, i) => s + (Number(i.prospek_drop) || 0), 0)
+    
+    const availableBase = totalLeads - otherTTD - otherDrop
+    const requestedReduction = (data.achievement_user ?? currentFull!.achievement_user ?? 0) + (data.prospek_drop ?? currentFull!.prospek_drop ?? 0)
+    
+    if (requestedReduction > availableBase) {
+      return { error: `Gagal: Pembaharuan data akan menyebabkan prospek aktif menjadi negatif (Maksimal: ${Math.max(0, availableBase)}).` }
+    }
+  }
 
   let query = supabase.from('daily_inputs').update(data).eq('id', id)
   

@@ -48,7 +48,8 @@ export function InputFormClient({
   milestoneCompletions,
   existingMetricValues = [],
   allPeriodMetricValues = [],
-  layoutMode = 'table'
+  layoutMode = 'table',
+  historicalMoUStats
 }: { 
   programs: Program[], 
   pastInputs: DailyInput[], 
@@ -58,6 +59,7 @@ export function InputFormClient({
   existingMetricValues?: MetricValue[]
   allPeriodMetricValues?: MetricValue[]
   layoutMode?: 'table' | 'card'
+  historicalMoUStats?: Record<string, { leads: number; ttd: number; drop: number }>
 }) {
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
@@ -98,10 +100,17 @@ export function InputFormClient({
   const metricKeyValues: Record<string, number | null> = {}
   activeMetrics.forEach(m => {
     if (m.input_type === 'manual') {
-      const v = metricValues[m.id]
-      metricKeyValues[m.metric_key] = v !== undefined && v !== '' ? Number(v) : null
+      metricKeyValues[m.metric_key] = Number(metricValues[m.id]) || 0
     }
   })
+
+  const hasCustomLeads = activeMetrics.some(m => 
+    m.input_type === 'manual' && ['leads', 'agreement_leads', 'prospek', 'prospek_kerja_sama'].includes(m.metric_key)
+  )
+  const hasCustomSigned = activeMetrics.some(m => 
+    m.input_type === 'manual' && ['mou_signed', 'user_count', 'user_acquisition', 'tanda_tangan_mou'].includes(m.metric_key)
+  )
+  // Logic to determine if we should hide standard RP/User fields (only for MoU with custom metrics replacements)
 
   // Handlers
   const handleSort = (key: SortColumn) => {
@@ -200,6 +209,7 @@ export function InputFormClient({
       const payload: Partial<DailyInput> = {
         date: formData.get('date') as string,
         notes: formData.get('notes') as string,
+        prospek_drop: formData.get('prospek_drop') ? Number(formData.get('prospek_drop')) : 0,
       }
 
       if (!editingId) {
@@ -216,11 +226,59 @@ export function InputFormClient({
         if (user !== null && user !== '') payload.achievement_user = Number(user)
       }
 
+      // ── EDGE CASE VALIDATION: MoU Prospek Aktif ───────────────────────────
+      if (targetType === 'mou' && historicalMoUStats) {
+        const pid = editingId ? pastInputs.find(i => i.id === editingId)?.program_id || selectedProgramId : selectedProgramId
+        const historical = historicalMoUStats[pid] || { leads: 0, ttd: 0, drop: 0 }
+        
+        // 1. Get old values if editing
+        const oldRow = editingId ? pastInputs.find(i => i.id === editingId) : null
+        const oldSigned = oldRow?.achievement_user || 0
+        const oldDrop = oldRow?.prospek_drop || 0
+        
+        // Leads for this row (can come from standard field OR custom metrics)
+        const newStandardLeads = payload.achievement_rp || 0
+        const newCustomLeads = activeMetrics
+          .filter(m => ['leads', 'agreement_leads', 'prospek', 'prospek_kerja_sama'].includes(m.metric_key))
+          .reduce((s, m) => s + (Number(metricValues[m.id]) || 0), 0)
+        const totalNewLeads = newStandardLeads + newCustomLeads
+
+        const oldLeadsInput = allPeriodMetricValues
+          .filter(mv => mv.program_id === pid && mv.date === (oldRow?.date || payload.date))
+          .filter(mv => {
+            const def = activeMetrics.find(am => am.id === mv.metric_definition_id)
+            return def && ['leads', 'agreement_leads', 'prospek', 'prospek_kerja_sama'].includes(def.metric_key)
+          })
+          .reduce((s, mv) => s + (Number(mv.value) || 0), 0)
+        
+        const oldTotalLeadsRow = (oldRow?.achievement_rp || 0) + oldLeadsInput
+
+        // 2. Base stats excluding THIS row
+        const baseLeads = historical.leads - oldTotalLeadsRow
+        const baseTTD = historical.ttd - oldSigned
+        const baseDrop = historical.drop - oldDrop
+        
+        // 3. Projected available with NEW values in this row
+        const newCustomSigned = activeMetrics
+          .filter(m => ['mou_signed', 'user_count', 'user_acquisition', 'tanda_tangan_mou'].includes(m.metric_key))
+          .reduce((s, m) => s + (Number(metricValues[m.id]) || 0), 0)
+        const newSigned = (payload.achievement_user || 0) + newCustomSigned
+        const newDrop = payload.prospek_drop || 0
+        
+        const availableToDrop = (baseLeads + totalNewLeads) - (baseTTD + newSigned) - baseDrop
+        
+        if (newDrop > availableToDrop) {
+          toast.error(`Gagal: Prospek aktif tidak mencukupi. Maksimal drop yang diizinkan: ${Math.max(0, availableToDrop)}`)
+          setIsLoading(false)
+          return
+        }
+      }
+
       let res;
       if (editingId) {
-        res = await updateDailyInput(editingId, payload as { date: string; achievement_rp?: number | null; achievement_user?: number | null; qualitative_status?: 'not_started' | 'in_progress' | 'completed' | null; notes?: string | null })
+        res = await updateDailyInput(editingId, payload as { date: string; achievement_rp?: number | null; achievement_user?: number | null; prospek_drop?: number | null; qualitative_status?: 'not_started' | 'in_progress' | 'completed' | null; notes?: string | null })
       } else {
-        res = await submitDailyInput(payload as { program_id: string; date: string; achievement_rp?: number | null; achievement_user?: number | null; qualitative_status?: 'not_started' | 'in_progress' | 'completed' | null; notes?: string | null })
+        res = await submitDailyInput(payload as { program_id: string; date: string; achievement_rp?: number | null; achievement_user?: number | null; prospek_drop?: number | null; qualitative_status?: 'not_started' | 'in_progress' | 'completed' | null; notes?: string | null })
       }
 
       if ('error' in res && res.error) {
@@ -661,29 +719,100 @@ export function InputFormClient({
                     )}
                   </div>
 
-                   {/* Legacy fields - Primary for quantitative programs */}
-                  {(activeProgram?.target_type === 'quantitative' || activeProgram?.target_type === 'hybrid') && (
+                   {/* Legacy fields - Primary for quantitative/mou programs */}
+                  {(activeProgram?.target_type === 'quantitative' || activeProgram?.target_type === 'hybrid' || activeProgram?.target_type === 'mou') && (
                     <div className="space-y-4 p-4 rounded-xl bg-slate-50/50 border border-slate-100">
                       <div className="flex items-center gap-2 text-[10px] font-black text-indigo-600 uppercase tracking-widest">
-                        <Target className="h-3 w-3" /> Capaian Utama (Legacy)
+                        <Target className="h-3 w-3" /> {activeProgram?.target_type === 'mou' ? 'Capaian MoU' : 'Capaian Utama (Legacy)'}
                       </div>
-                      <div className="grid grid-cols-2 gap-6">
-                        <div className="space-y-1.5">
-                          <label className="text-[10px] font-bold text-slate-500 uppercase">RP CAPAIAN</label>
-                          <input 
-                            name="achievement_rp" type="number" min="0" placeholder="Rp 0"
-                            defaultValue={editingId ? pastInputs.find(i=>i.id===editingId)?.achievement_rp?.toString() : ""}
-                            className="w-full text-sm font-bold rounded-xl border border-slate-200 px-4 py-3 focus:border-indigo-500 outline-none transition-all bg-white"
-                          />
-                        </div>
-                        <div className="space-y-1.5">
-                          <label className="text-[10px] font-bold text-slate-500 uppercase">USER/CLOSING</label>
-                          <input 
-                            name="achievement_user" type="number" min="0" placeholder="0"
-                            defaultValue={editingId ? pastInputs.find(i=>i.id===editingId)?.achievement_user?.toString() : ""}
-                            className="w-full text-sm font-bold rounded-xl border border-slate-200 px-4 py-3 focus:border-indigo-500 outline-none transition-all bg-white"
-                          />
-                        </div>
+                      <div className="grid grid-cols-1 gap-6">
+                        {(!hasCustomLeads || !hasCustomSigned) && (
+                          <div className="grid grid-cols-2 gap-6">
+                            {!hasCustomLeads && (
+                              <div className="space-y-1.5">
+                                <label className="text-[10px] font-bold text-slate-500 uppercase flex items-center gap-1.5">
+                                  {activeProgram?.target_type === 'mou' ? 'PROSPEK BARU' : 'RP CAPAIAN'}
+                                  {activeProgram?.target_type === 'mou' && (
+                                    <div className="group relative">
+                                      <Circle className="h-3 w-3 text-slate-400 cursor-help" />
+                                      <div className="absolute bottom-full left-0 mb-2 w-48 p-2 bg-slate-800 text-white text-[10px] rounded shadow-xl opacity-0 group-hover:opacity-100 transition-opacity z-50 pointer-events-none font-normal normal-case">
+                                        Prospek = institusi yang sudah dikontak dan menunjukkan ketertarikan awal (membalas, bersedia rapat, atau meminta info lebih lanjut)
+                                      </div>
+                                    </div>
+                                  )}
+                                </label>
+                                <input 
+                                  name="achievement_rp" type="number" min="0" placeholder={activeProgram?.target_type === 'mou' ? "0" : "Rp 0"}
+                                  defaultValue={editingId ? pastInputs.find(i=>i.id===editingId)?.achievement_rp?.toString() : ""}
+                                  className="w-full text-sm font-bold rounded-xl border border-slate-200 px-4 py-3 focus:border-indigo-500 outline-none transition-all bg-white"
+                                />
+                                {activeProgram?.target_type === 'mou' && (
+                                  <p className="text-[9px] text-slate-400 font-medium">Institusi baru yang menunjukkan ketertarikan</p>
+                                )}
+                              </div>
+                            )}
+
+                            {!hasCustomSigned && (
+                              <div className="space-y-1.5">
+                                <label className="text-[10px] font-bold text-slate-500 uppercase">
+                                  {activeProgram?.target_type === 'mou' ? 'TANDA TANGAN BARU' : 'USER/CLOSING'}
+                                </label>
+                                <input 
+                                  name="achievement_user" type="number" min="0" placeholder="0"
+                                  defaultValue={editingId ? pastInputs.find(i=>i.id===editingId)?.achievement_user?.toString() : ""}
+                                  className="w-full text-sm font-bold rounded-xl border border-slate-200 px-4 py-3 focus:border-indigo-500 outline-none transition-all bg-white"
+                                />
+                                {activeProgram?.target_type === 'mou' && (
+                                  <p className="text-[9px] text-slate-400 font-medium">MoU yang resmi ditandatangani hari ini</p>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        )}
+
+                        {activeProgram?.target_type === 'mou' && (
+                          <div className={cn(
+                            "space-y-1.5 pt-4",
+                            (!hasCustomLeads || !hasCustomSigned) && "border-t border-slate-200"
+                          )}>
+                            <div className="flex items-center justify-between">
+                              <label className="text-[10px] font-bold text-slate-500 uppercase flex items-center gap-1.5">
+                                PROSPEK TIDAK JADI (DROP)
+                              </label>
+                              {historicalMoUStats && (
+                                <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-amber-50 text-amber-600 border border-amber-100">
+                                  Inventory: {(() => {
+                                    const pid = editingId ? pastInputs.find(i => i.id === editingId)?.program_id || selectedProgramId : selectedProgramId
+                                    const h = historicalMoUStats[pid] || { leads: 0, ttd: 0, drop: 0 }
+                                    
+                                    // Live calculation for the UI
+                                    const oldRow = editingId ? pastInputs.find(i => i.id === editingId) : null
+                                    const oldLeads = allPeriodMetricValues
+                                      .filter(mv => mv.program_id === pid && mv.date === (oldRow?.date || ''))
+                                      .filter(mv => {
+                                        const def = activeMetrics.find(am => am.id === mv.metric_definition_id)
+                                        return def && ['leads', 'agreement_leads', 'prospek'].includes(def.metric_key)
+                                      })
+                                      .reduce((s, mv) => s + (Number(mv.value) || 0), 0)
+
+                                    const curLeads = activeMetrics
+                                      .filter(m => ['leads', 'agreement_leads', 'prospek'].includes(m.metric_key))
+                                      .reduce((s, m) => s + (Number(metricValues[m.id]) || 0), 0)
+
+                                    const baseAktif = (h.leads - oldLeads + curLeads) - (h.ttd - (oldRow?.achievement_user || 0)) - (h.drop - (oldRow?.prospek_drop || 0))
+                                    return Math.max(0, baseAktif)
+                                  })()}
+                                </span>
+                              )}
+                            </div>
+                            <input 
+                              name="prospek_drop" type="number" min="0" placeholder="0"
+                              defaultValue={editingId ? pastInputs.find(i=>i.id===editingId)?.prospek_drop?.toString() : "0"}
+                              className="w-full text-sm font-bold rounded-xl border border-slate-200 px-4 py-3 focus:border-indigo-500 outline-none transition-all bg-white"
+                            />
+                            <p className="text-[10px] text-slate-400 font-medium">Institusi yang dipastikan tidak akan melanjutkan kerjasama</p>
+                          </div>
+                        )}
                       </div>
                     </div>
                   )}

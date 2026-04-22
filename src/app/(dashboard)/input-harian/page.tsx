@@ -109,6 +109,38 @@ export default async function InputHarianPage() {
     pastInputs = data || []
   }
 
+  // 7. Fetch ALL historical data for MoU programs for cumulative validation
+  const mouProgramIds = programsTyped.filter(p => p.target_type === 'mou').map(p => p.id)
+  const historicalMoUStats: Record<string, { leads: number; ttd: number; drop: number }> = {}
+  
+  if (mouProgramIds.length > 0) {
+    const { data: historicalInputs } = await supabase
+      .from('daily_inputs')
+      .select('program_id, achievement_user, prospek_drop')
+      .in('program_id', mouProgramIds)
+      // We need ALL inputs to get true cumulative
+    
+    const { data: historicalMetricValues } = await supabase
+      .from('daily_metric_values')
+      .select('program_id, value, metric_definition_id, program_metric_definitions(metric_key)')
+      .in('program_id', mouProgramIds)
+
+    mouProgramIds.forEach(pid => {
+      const pInputs = historicalInputs?.filter(hi => hi.program_id === pid) || []
+      const pMetrics = historicalMetricValues?.filter(hm => hm.program_id === pid) || []
+      
+      const leads = pMetrics.filter(m => 
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        ['leads', 'agreement_leads', 'prospek'].includes((m.program_metric_definitions as any)?.metric_key)
+      ).reduce((s, m) => s + (Number(m.value) || 0), 0)
+      
+      const ttd = pInputs.reduce((s, hi) => s + (Number(hi.achievement_user) || 0), 0)
+      const drop = pInputs.reduce((s, hi) => s + (Number(hi.prospek_drop) || 0), 0)
+      
+      historicalMoUStats[pid] = { leads, ttd, drop }
+    })
+  }
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col gap-2">
@@ -149,6 +181,7 @@ export default async function InputHarianPage() {
               milestoneCompletions={milestoneCompletions || []}
               existingMetricValues={existingMetricValues}
               allPeriodMetricValues={allPeriodMetricValues}
+              historicalMoUStats={historicalMoUStats}
             />
           ) : (
             <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6 text-center py-8">
