@@ -146,14 +146,20 @@ export async function getTVDashboardData(): Promise<TVDashboardData> {
       const existing = unifiedMetricsMap.get(g)
       const achieved = ph.calculatedMetrics?.[m.metric_key] || 0
       const absoluteTarget = m.monthly_target || 0
-
       if (existing) {
         existing.achieved += achieved
         existing.target += (m.data_type === 'currency' ? absoluteTarget : Math.round(absoluteTarget))
       } else {
-        unifiedMetricsMap.set(g, {
-          key: g, // Use group as key for easier sum lookup in components
-          label: g === 'revenue' ? 'Total Omzet' : g === 'user_acquisition' ? 'Total Closing' : m.label,
+        let label = m.label
+        if (prog.target_type === 'mou') {
+          if (g === 'leads' || m.metric_key === 'leads' || m.metric_key === 'prospek' || m.metric_key === 'prospek_kerja_sama') label = 'Prospek Baru'
+          else if (g === 'user_acquisition' || m.metric_key === 'user_count' || m.metric_key === 'mou_signed' || m.metric_key === 'tanda_tangan_mou') label = 'Tanda Tangan MoU'
+          else if (g === 'conversion' || m.metric_key === 'conversion_rate') label = 'Konversi Kumulatif'
+        }
+
+        unifiedMetricsMap.set(g || m.metric_key, {
+          key: g || m.metric_key,
+          label,
           achieved,
           target: m.data_type === 'currency' ? absoluteTarget : Math.round(absoluteTarget),
           unit: m.unit_label || '',
@@ -161,6 +167,19 @@ export async function getTVDashboardData(): Promise<TVDashboardData> {
         })
       }
     })
+
+    // --- Special MoU Cumulative Conversion Metric ---
+    if (prog.target_type === 'mou' && !unifiedMetricsMap.has('conversion')) {
+      const convMetric = ph.calculatedMetrics?.['conversion_rate'] || 0
+      unifiedMetricsMap.set('conversion', {
+        key: 'conversion',
+        label: 'Konversi Kumulatif',
+        achieved: convMetric,
+        target: 0,
+        unit: '%',
+        dataType: 'float'
+      })
+    }
 
     // --- Enhanced legacy target merging ---
     // Merge Revenue

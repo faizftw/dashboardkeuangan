@@ -166,6 +166,17 @@ export function calculateProgramHealth(
 
         const isInteger = m.data_type === 'integer' || m.unit_label?.toLowerCase().includes('user') || m.unit_label?.toLowerCase().includes('lead')
         
+        // SPECIAL: For MoU programs, "Prospek" calculation is cumulative "Aktif"
+        // prospek_aktif = SUM(prospek_baru) - SUM(ttd) - SUM(drop)
+        if (program.target_type === 'mou' && (m.metric_key === 'leads' || m.metric_key === 'agreement_leads' || m.metric_key === 'prospek' || m.metric_key === 'prospek_kerja_sama')) {
+          const totalProspekBaru = manualValues[m.metric_key] || 0
+          const totalTTD = evaluatedMetrics['mou_signed'] || evaluatedMetrics['user_count'] || evaluatedMetrics['tanda_tangan_mou'] || 0
+          const legacyInputs = dailyInputsByProgram.get(program.id) || []
+          const totalDrop = legacyInputs.reduce((s, li) => s + (Number(li.prospek_drop) || 0), 0)
+          
+          evaluatedMetrics[m.metric_key] = Math.max(0, totalProspekBaru - totalTTD - totalDrop)
+        }
+
         // Effective target used for Health Score (prorated)
         const effectiveTarget = sumCustomTarget > 0 ? sumCustomTarget : 
                                 manualDaily > 0 ? (manualDaily * daysInSelection) : 

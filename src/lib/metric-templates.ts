@@ -1025,7 +1025,7 @@ export const METRIC_TEMPLATES: MetricTemplate[] = [
       },
       {
         metric_key: 'conversion_rate',
-        label: 'Lead to MoU Rate',
+        label: 'Konversi Kumulatif',
         data_type: 'percentage',
         input_type: 'calculated',
         is_primary: false,

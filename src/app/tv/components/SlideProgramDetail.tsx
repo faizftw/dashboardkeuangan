@@ -91,7 +91,8 @@ export function SlideProgramDetail({
   program, 
   period, 
   inputs, 
-  metricDefinitions
+  metricDefinitions,
+  metricValues
 }: SlideProgramDetailProps) {
   const [time, setTime]       = useState('')
 
@@ -118,18 +119,39 @@ export function SlideProgramDetail({
     let cumUser = 0
     
     return sortedInputs.map(input => {
-      cumRp += Number(input.achievement_rp || 0)
-      cumUser += Number(input.achievement_user || 0)
+      let dailyLeads = Number(input.achievement_rp || 0)
+      let dailySigns = Number(input.achievement_user || 0)
+
+      if (isMoU) {
+        // Add custom metric values for the same day
+        const dayMetrics = metricValues.filter(mv => mv.date === input.date)
+        const customLeads = dayMetrics.filter(mv => {
+          const def = metricDefinitions.find(d => d.id === mv.metric_definition_id)
+          return def && ['leads', 'agreement_leads', 'prospek', 'prospek_kerja_sama'].includes(def.metric_key)
+        }).reduce((s, m) => s + (Number(m.value) || 0), 0)
+
+        const customSigns = dayMetrics.filter(mv => {
+          const def = metricDefinitions.find(d => d.id === mv.metric_definition_id)
+          return def && ['user_count', 'mou_signed', 'tanda_tangan_mou', 'user_acquisition'].includes(def.metric_key)
+        }).reduce((s, m) => s + (Number(m.value) || 0), 0)
+
+        dailyLeads += customLeads
+        dailySigns += customSigns
+      }
+
+      cumRp += dailyLeads
+      cumUser += dailySigns
+
       return {
         date: input.date,
         displayDate: new Date(input.date || '').getDate().toString(),
-        rp: Number(input.achievement_rp || 0),
-        user: Number(input.achievement_user || 0),
+        rp: dailyLeads,
+        user: dailySigns,
         cumRp,
         cumUser
       }
     })
-  }, [inputs])
+  }, [inputs, isMoU, metricValues, metricDefinitions])
 
   // Target calculations
   const targetRp = Number(program.monthly_target_rp || 0)
@@ -333,14 +355,16 @@ export function SlideProgramDetail({
                              formatter={(v: string | number | readonly (string | number)[] | undefined, name: string | number | undefined): [string | number, string | number] => {
                                const val = Array.isArray(v) ? v[0] : v
                                const n = String(name || '')
-                               if (n === 'Omzet') return [formatRupiah(Number(val || 0)), 'Omzet']
+                               if (n === 'Omzet' || n === 'Prospek') {
+                                 return [isMoU ? Number(val || 0) : formatRupiah(Number(val || 0)), n]
+                               }
                                return [String(val ?? ''), n]
                              }}
                           />
                           <Bar 
                              yAxisId="left" 
                              dataKey="rp" 
-                             name="Omzet"
+                             name={isMoU ? 'Prospek' : 'Omzet'}
                              fill="#639922" 
                              radius={[4, 4, 0, 0]} 
                              isAnimationActive={false}
@@ -349,7 +373,7 @@ export function SlideProgramDetail({
                              yAxisId="right" 
                              type="monotone" 
                              dataKey="user" 
-                             name="User"
+                             name={isMoU ? 'MoU' : 'User'}
                              stroke="#378ADD" 
                              strokeWidth={4} 
                              dot={{ r: 4, fill: '#378ADD', strokeWidth: 2, stroke: '#020617' }}

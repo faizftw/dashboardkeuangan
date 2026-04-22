@@ -1436,14 +1436,15 @@ export function OverviewClient({
             />
             <KpiCard 
               icon={TrendingUp} 
-              label="Lead to MoU Rate" 
+              label="Konversi Kumulatif" 
               value={(() => {
                 const totalLeads = mouProgramHealths.reduce((s, ph) => s + (ph.calculatedMetrics?.leads || ph.calculatedMetrics?.agreement_leads || 0), 0)
                 const totalSigned = mouProgramHealths.reduce((s, ph) => s + (ph.calculatedMetrics?.user_count || ph.calculatedMetrics?.user_acquisition || ph.calculatedMetrics?.mou_signed || 0), 0)
                 const rate = totalLeads > 0 ? (totalSigned / totalLeads) * 100 : 0
                 return rate.toFixed(1) + "%"
               })()}
-              sub="Rasio prospek jadi MoU"
+              sub="Tanda tangan ÷ total prospek masuk (kumulatif)"
+              tooltip="Dihitung dari total akumulasi, bukan per periode. Akurasi meningkat seiring waktu setelah data terkumpul."
               accentColor="#8B5CF6"
             />
           </div>
@@ -1501,7 +1502,7 @@ export function OverviewClient({
                   <tr className="border-b border-[#E5E7EB] text-[10px] font-bold text-[#6B7280] uppercase tracking-wider">
                     <th className="px-6 py-4">Program</th>
                     <th className="px-6 py-4">PIC / Team</th>
-                    <th className="px-6 py-4 text-center">Prospek</th>
+                    <th className="px-6 py-4 text-center">Prospek Aktif</th>
                     <th className="px-6 py-4 text-center">Tanda Tangan / Agreement</th>
                     <th className="px-6 py-4 text-center">Konversi (%)</th>
                     <th className="px-6 py-4 text-center">Health</th>

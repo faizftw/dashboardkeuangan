@@ -25,6 +25,7 @@ export type Database = {
           notes: string | null
           period_id: string
           program_id: string
+          prospek_drop: number
           qualitative_status:
             | Database["public"]["Enums"]["qualitative_status"]
             | null
@@ -40,6 +41,7 @@ export type Database = {
           notes?: string | null
           period_id: string
           program_id: string
+          prospek_drop?: number
           qualitative_status?:
             | Database["public"]["Enums"]["qualitative_status"]
             | null
@@ -55,6 +57,7 @@ export type Database = {
           notes?: string | null
           period_id?: string
           program_id?: string
+          prospek_drop?: number
           qualitative_status?:
             | Database["public"]["Enums"]["qualitative_status"]
             | null
