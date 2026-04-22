@@ -709,21 +709,27 @@ export function OverviewClient({
     const today = new Date();
     const todayStr = `${today.getFullYear()}-${pad(today.getMonth() + 1)}-${pad(today.getDate())}`
 
-    // 1. Omzet Hari Ini 
+    // 1. Omzet Hari Ini & Kemarin 
     const trend = summary.targetTrend || [];
     const todayIndex = trend.findIndex(t => t.date === todayStr);
     
     let today_revenue = 0;
-    if (todayIndex >= 0) {
-      const todayCum = trend[todayIndex].actualRevenue;
-      const yesterdayCum = todayIndex > 0 ? trend[todayIndex - 1].actualRevenue : 0;
-      today_revenue = Math.max(0, todayCum - yesterdayCum);
-    } else {
-       const hasPastTrend = trend.length > 0 && new Date(trend[trend.length-1].date) < today;
-       if (hasPastTrend) {
-          today_revenue = 0;
-       }
+    let yesterday_revenue = 0;
+
+    if (trend.length > 0) {
+      if (todayIndex >= 0) {
+        today_revenue = trend[todayIndex].actualRevenue;
+        yesterday_revenue = todayIndex > 0 ? trend[todayIndex - 1].actualRevenue : 0;
+      } else {
+        // Jika hari ini belum ada di trend (pagi hari), ambil titik terakhir sebagai kemarin
+        yesterday_revenue = trend[trend.length - 1].actualRevenue;
+        today_revenue = 0;
+      }
     }
+
+    const growth_vs_kemarin = yesterday_revenue > 0 
+      ? ((today_revenue - yesterday_revenue) / yesterday_revenue) * 100 
+      : (today_revenue > 0 ? 100 : 0);
 
     // 2. Target Harian & Pace
     const monthly_revenue = summary.aggregates.revenue.actual || 0;
@@ -732,12 +738,21 @@ export function OverviewClient({
     const daily_target_global = workingDays > 0 ? monthly_target / workingDays : 0;
 
     const totalCalendarDays = new Date(activePeriod.year, activePeriod.month, 0).getDate();
-    const calendarElapsed = today.getFullYear() === activePeriod.year && (today.getMonth() + 1) === activePeriod.month 
+    
+    // Check if there's any data for today across ALL programs to determine lenience
+    const hasTodayData = 
+        metricValues.some(mv => mv.date === todayStr && mv.value !== null) ||
+        dailyInputs.some(di => di.date === todayStr);
+
+    const calendarDaysRaw = today.getFullYear() === activePeriod.year && (today.getMonth() + 1) === activePeriod.month 
         ? today.getDate() 
         : (today.getFullYear() > activePeriod.year || (today.getFullYear() === activePeriod.year && (today.getMonth() + 1) > activePeriod.month))
           ? totalCalendarDays 
           : 0; 
-
+    
+    const calendarElapsed = (today.getFullYear() === activePeriod.year && (today.getMonth() + 1) === activePeriod.month)
+        ? (hasTodayData ? calendarDaysRaw : Math.max(0, calendarDaysRaw - 1))
+        : calendarDaysRaw;
     // Pace calculation based on working days elapsed
     const workingDaysElapsed = Math.min(workingDays, Math.round((calendarElapsed / totalCalendarDays) * workingDays));
     
@@ -756,9 +771,11 @@ export function OverviewClient({
       proyeksi_akhir_bulan,
       monthly_target,
       pace_harian,
-      tertinggal_count
+      tertinggal_count,
+      yesterday_revenue,
+      growth_vs_kemarin
     }
-  }, [activePeriod, summary.targetTrend, summary.aggregates.revenue, programHealths]);
+  }, [activePeriod, summary.targetTrend, summary.aggregates.revenue, programHealths, dailyInputs, metricValues]);
 
   return (
     <div className="space-y-6 pb-24">
@@ -855,14 +872,15 @@ export function OverviewClient({
               icon={CircleDollarSign} 
               label="Omzet hari ini" 
               value={formatRupiah(overviewMetrics?.today_revenue || 0)} 
-              sub={`dari target ${(overviewMetrics?.daily_target_global || 0) >= 1000000 ? ((overviewMetrics?.daily_target_global || 0)/1000000).toFixed(1) + 'jt' : formatRupiah(overviewMetrics?.daily_target_global || 0)}/hari`} 
+              sub={`dari target ${formatRupiah(overviewMetrics?.daily_target_global || 0)} (${((overviewMetrics?.today_revenue || 0) / (overviewMetrics?.daily_target_global || 1) * 100).toFixed(0)}%)`} 
               accentColor={(overviewMetrics?.today_revenue || 0) >= (overviewMetrics?.daily_target_global || 0) ? "#639922" : "#EAB308"}
               tooltip="Total pendapatan seluruh program yang tercatat khusus pada hari ini."
               comparison={{
                 value: overviewMetrics?.today_revenue || 0,
+                percentage: overviewMetrics?.growth_vs_kemarin || 0,
                 type: 'flow',
-                label: ((overviewMetrics?.today_revenue || 0) >= (overviewMetrics?.daily_target_global || 0)) ? 'Aman' : 'Perlu Push',
-                status: ((overviewMetrics?.today_revenue || 0) >= (overviewMetrics?.daily_target_global || 0)) ? 'ahead' : 'behind'
+                label: 'vs kemarin',
+                status: (overviewMetrics?.growth_vs_kemarin || 0) >= 0 ? 'improving' : 'declining'
               }} 
             />
             <KpiCard 
@@ -905,7 +923,16 @@ export function OverviewClient({
           </div>
 
           {/* Row 2: Secondary KPI Cards */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
+            <KpiCard 
+              icon={TrendingUp} 
+              label="Pace harian rata-rata" 
+              value={formatRupiah(overviewMetrics?.pace_harian || 0)} 
+              sub="realisasi harian bulan ini" 
+              accentColor="#8B5CF6"
+              tooltip="Rata-rata pendapatan harian yang benar-benar tercapai sejauh ini (total omzet / hari yang sudah berjalan)."
+              comparison={undefined}
+            />
             <KpiCard 
               icon={Layers} 
               label="Program aktif" 
