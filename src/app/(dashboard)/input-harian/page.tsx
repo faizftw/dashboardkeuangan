@@ -111,7 +111,7 @@ export default async function InputHarianPage() {
 
   // 7. Fetch ALL historical data for MoU programs for cumulative validation
   const mouProgramIds = programsTyped.filter(p => p.target_type === 'mou').map(p => p.id)
-  let historicalMoUStats: Record<string, { leads: number; ttd: number; drop: number }> = {}
+  const historicalMoUStats: Record<string, { leads: number; ttd: number; drop: number }> = {}
   
   if (mouProgramIds.length > 0) {
     const { data: historicalInputs } = await supabase

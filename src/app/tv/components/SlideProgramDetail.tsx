@@ -208,7 +208,7 @@ export function SlideProgramDetail({
         cumUser,
       }
     })
-  }, [inputs, isMoU, metricValues, metricDefinitions])
+  }, [inputs, isMoU, metricValues, metricDefinitions, defIdToKeyMap])
 
   // Target calculations
   const targetRp = Number(program.monthly_target_rp || 0)

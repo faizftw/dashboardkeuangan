@@ -97,7 +97,7 @@ export async function submitDailyInput(data: {
       .eq('program_id', data.program_id)
 
     const totalLeads = (metricValues || [])
-      .filter(m => ['leads', 'agreement_leads', 'prospek', 'prospek_kerja_sama'].includes((m.program_metric_definitions as any)?.metric_key))
+      .filter(m => ['leads', 'agreement_leads', 'prospek', 'prospek_kerja_sama'].includes((m.program_metric_definitions as unknown as { metric_key: string })?.metric_key))
       .reduce((s, m) => s + (Number(m.value) || 0), 0)
     
     const totalTTD = (inputs || []).reduce((s, i) => s + (Number(i.achievement_user) || 0), 0)
@@ -159,7 +159,7 @@ export async function updateDailyInput(id: string, data: {
     const { data: metricValues } = await supabase.from('daily_metric_values').select('value, program_metric_definitions(metric_key)').eq('program_id', pid)
 
     const totalLeads = (metricValues || [])
-      .filter(m => ['leads', 'agreement_leads', 'prospek', 'prospek_kerja_sama'].includes((m.program_metric_definitions as any)?.metric_key))
+      .filter(m => ['leads', 'agreement_leads', 'prospek', 'prospek_kerja_sama'].includes((m.program_metric_definitions as unknown as { metric_key: string })?.metric_key))
       .reduce((s, m) => s + (Number(m.value) || 0), 0)
     
     // Exclude current record from sums

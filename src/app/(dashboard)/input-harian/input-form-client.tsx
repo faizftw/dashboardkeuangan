@@ -110,7 +110,7 @@ export function InputFormClient({
   const hasCustomSigned = activeMetrics.some(m => 
     m.input_type === 'manual' && ['mou_signed', 'user_count', 'user_acquisition', 'tanda_tangan_mou'].includes(m.metric_key)
   )
-  const hideStandardSection = activeProgram?.target_type === 'mou' && hasCustomLeads && hasCustomSigned
+  // Logic to determine if we should hide standard RP/User fields (only for MoU with custom metrics replacements)
 
   // Handlers
   const handleSort = (key: SortColumn) => {
