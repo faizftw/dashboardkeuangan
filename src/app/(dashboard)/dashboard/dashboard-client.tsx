@@ -24,7 +24,7 @@ import {
 import {
   HeartPulse, Layers, Target, CheckSquare,
   Search, ArrowUpRight, ArrowDownRight, TrendingUp, Handshake, FileDown,
-  Users, Info
+  Users, Info, CircleDollarSign, AlertTriangle
 } from 'lucide-react'
 
 import { DashboardSummary } from '@/lib/dashboard-service'
@@ -573,21 +573,38 @@ export function OverviewClient({
   )
 
   // ── Charts Data ────────────────────────────────────────────────────────────
-  const trendData = useMemo(() => 
-    summary.healthTrend.map(tp => ({
-      day: tp.displayDate,
-      health: tp.health
-    })),
-    [summary.healthTrend]
-  )
+  const cumulativeTrendData = useMemo(() => {
+    let cumActual = 0;
+    let cumTarget = 0;
+    const todayStr = new Date().toISOString().split('T')[0];
+    
+    return (summary.targetTrend || []).map(t => {
+      cumTarget += t.targetRevenue;
+      if (t.date <= todayStr) cumActual += t.actualRevenue;
 
-  const barData = useMemo(() =>
-    [...programHealths].sort((a, b) => b.healthScore - a.healthScore).slice(0, 10).map(ph => ({
-      name: ph.program.name,
-      healthScore: Math.min(Math.round(ph.healthScore), 150),
-    })),
-    [programHealths]
-  )
+      return {
+        displayDate: t.displayDate,
+        targetRevenue: cumTarget,
+        actualRevenue: t.date <= todayStr ? cumActual : null,
+      }
+    })
+  }, [summary.targetTrend])
+
+  const capaianProgramData = useMemo(() => {
+    return [...programHealths]
+      .filter(ph => (ph.absoluteTargets?.revenue || 0) > 0)
+      .map(ph => {
+        const actual = ph.calculatedMetrics?.revenue || 0;
+        const target = ph.absoluteTargets?.revenue || 1;
+        const pct = (actual / target) * 100;
+        return {
+          name: ph.program.name,
+          achievementPct: pct,
+          color: pct >= 70 ? '#639922' : pct >= 50 ? '#EAB308' : '#E24B4A'
+        }
+      })
+      .sort((a, b) => a.achievementPct - b.achievementPct)
+  }, [programHealths])
 
   const currentHealth = (activeTab === 'target' && selectedOmzetProgramId !== 'all') 
     ? (omzetSummary.health)
@@ -621,6 +638,65 @@ export function OverviewClient({
     }
     return missing;
   }, [programs, metricValues, dailyInputs, activePeriod]);
+
+  // ── 5-Second Rule Overview Metrics ───────────────────────────────────────
+  const overviewMetrics = useMemo(() => {
+    if (!activePeriod) return null;
+
+    const pad = (n: number) => n.toString().padStart(2, '0')
+    const today = new Date();
+    const todayStr = `${today.getFullYear()}-${pad(today.getMonth() + 1)}-${pad(today.getDate())}`
+
+    // 1. Omzet Hari Ini 
+    const trend = summary.targetTrend || [];
+    const todayIndex = trend.findIndex(t => t.date === todayStr);
+    
+    let today_revenue = 0;
+    if (todayIndex >= 0) {
+      const todayCum = trend[todayIndex].actualRevenue;
+      const yesterdayCum = todayIndex > 0 ? trend[todayIndex - 1].actualRevenue : 0;
+      today_revenue = Math.max(0, todayCum - yesterdayCum);
+    } else {
+       const hasPastTrend = trend.length > 0 && new Date(trend[trend.length-1].date) < today;
+       if (hasPastTrend) {
+          today_revenue = 0;
+       }
+    }
+
+    // 2. Target Harian & Pace
+    const monthly_revenue = summary.aggregates.revenue.actual || 0;
+    const monthly_target = summary.aggregates.revenue.totalTarget || 0;
+    const workingDays = activePeriod.working_days || 30;
+    const daily_target_global = workingDays > 0 ? monthly_target / workingDays : 0;
+
+    const totalCalendarDays = new Date(activePeriod.year, activePeriod.month, 0).getDate();
+    const calendarElapsed = today.getFullYear() === activePeriod.year && (today.getMonth() + 1) === activePeriod.month 
+        ? today.getDate() 
+        : (today.getFullYear() > activePeriod.year || (today.getFullYear() === activePeriod.year && (today.getMonth() + 1) > activePeriod.month))
+          ? totalCalendarDays 
+          : 0; 
+
+    // Pace calculation based on working days elapsed
+    const workingDaysElapsed = Math.min(workingDays, Math.round((calendarElapsed / totalCalendarDays) * workingDays));
+    
+    // According to the AI Agent logic: pace harian = monthly_revenue / days_elapsed
+    // Where days_elapsed would be the equivalent working days elapsed so far.
+    // If days elapsed is 0, we assume pace is just the first day's partial or 0.
+    const pace_harian = workingDaysElapsed > 0 ? monthly_revenue / workingDaysElapsed : monthly_revenue;
+    const proyeksi_akhir_bulan = pace_harian * workingDays;
+
+    // 3. Program Tertinggal (Status Kritis / Health < 50)
+    const tertinggal_count = programHealths.filter(ph => ph.healthScore < 50).length;
+
+    return {
+      today_revenue,
+      daily_target_global,
+      proyeksi_akhir_bulan,
+      monthly_target,
+      pace_harian,
+      tertinggal_count
+    }
+  }, [activePeriod, summary.targetTrend, summary.aggregates.revenue, programHealths]);
 
   return (
     <div className="space-y-6 pb-24">
@@ -711,17 +787,63 @@ export function OverviewClient({
 
       {activeTab === 'overview' && (
         <div className="space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-500">
-          {/* Row 1: KPI Cards */}
+          {/* Row 1: KPI Cards Utama (5-Second Rule) */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             <KpiCard 
+              icon={CircleDollarSign} 
+              label="Omzet hari ini" 
+              value={formatRupiah(overviewMetrics?.today_revenue || 0)} 
+              sub={`dari target ${(overviewMetrics?.daily_target_global || 0) >= 1000000 ? ((overviewMetrics?.daily_target_global || 0)/1000000).toFixed(1) + 'jt' : formatRupiah(overviewMetrics?.daily_target_global || 0)}/hari`} 
+              accentColor={(overviewMetrics?.today_revenue || 0) >= (overviewMetrics?.daily_target_global || 0) ? "#639922" : "#EAB308"}
+              tooltip="Total pendapatan seluruh program yang tercatat khusus pada hari ini."
+              comparison={{
+                value: overviewMetrics?.today_revenue || 0,
+                type: 'flow',
+                label: ((overviewMetrics?.today_revenue || 0) >= (overviewMetrics?.daily_target_global || 0)) ? 'Aman' : 'Perlu Push',
+                status: ((overviewMetrics?.today_revenue || 0) >= (overviewMetrics?.daily_target_global || 0)) ? 'ahead' : 'behind'
+              }} 
+            />
+            <KpiCard 
+              icon={TrendingUp} 
+              label="Proyeksi akhir bulan" 
+              value={formatRupiah(overviewMetrics?.proyeksi_akhir_bulan || 0)} 
+              sub={`vs target Rp ${(overviewMetrics?.monthly_target || 0) >= 1000000 ? ((overviewMetrics?.monthly_target || 0)/1000000).toFixed(1) + 'jt' : formatRupiah(overviewMetrics?.monthly_target || 0)}`} 
+              accentColor={(overviewMetrics?.proyeksi_akhir_bulan || 0) >= (overviewMetrics?.monthly_target || 0) ? "#639922" : "#E24B4A"}
+              tooltip="Perkiraan total omzet di akhir bulan jika rata-rata pendapatan harian saat ini dipertahankan."
+              comparison={{
+                 value: overviewMetrics?.proyeksi_akhir_bulan || 0,
+                 type: 'target',
+                 label: 'vs target bulanan',
+                 status: (overviewMetrics?.proyeksi_akhir_bulan || 0) >= (overviewMetrics?.monthly_target || 0) ? 'ahead' : 'behind'
+              }}
+            />
+            <KpiCard 
               icon={HeartPulse} 
-              label="Health Score" 
+              label="Health Score Global" 
               value={`${Math.round(globalKPIs.avgHealth)}%`} 
               sub={globalKPIs.healthStatus} 
               accentColor={getStatusLabelAndColor(globalKPIs.avgHealth).accent}
-              tooltip="Health Score adalah rata-rata pencapaian target dari metrik utama (Omzet & User) di seluruh program aktif."
+              tooltip="Skor kesehatan rata-rata seluruh program yang sedang berjalan."
               comparison={globalKPIs.comparison} 
             />
+            <KpiCard 
+              icon={AlertTriangle} 
+              label="Program Berisiko" 
+              value={`${overviewMetrics?.tertinggal_count || 0}`} 
+              sub="status kritis (<50%)" 
+              accentColor={(overviewMetrics?.tertinggal_count || 0) > 0 ? "#E24B4A" : "#639922"}
+              comparison={{
+                value: overviewMetrics?.tertinggal_count || 0,
+                type: 'status',
+                label: (overviewMetrics?.tertinggal_count || 0) > 0 ? 'Segera Evaluasi' : 'Semua Aman',
+                status: (overviewMetrics?.tertinggal_count || 0) > 0 ? 'behind' : 'ahead'
+              }}
+              tooltip="Jumlah program yang pencapaiannya sangat minim dan membutuhkan intervensi segera."
+            />
+          </div>
+
+          {/* Row 2: Secondary KPI Cards */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <KpiCard 
               icon={Layers} 
               label="Program aktif" 
@@ -756,50 +878,61 @@ export function OverviewClient({
              <div className="lg:col-span-8 bg-white p-6 rounded-xl border border-[#E5E7EB] relative overflow-hidden group">
                 <h3 className="font-semibold text-[#111827] mb-6 text-sm flex items-center gap-3">
                   <div className="p-2 bg-[#EEEDFE] rounded-lg">
-                    <HeartPulse className="h-4 w-4 text-[#534AB7]" />
+                    <TrendingUp className="h-4 w-4 text-[#534AB7]" />
                   </div>
-                  Tren kesehatan bisnis global
+                  Omzet Kumulatif vs Target Linear
                 </h3>
                 <div className="h-72">
                    <ResponsiveContainer width="100%" height="100%">
-                      <AreaChart data={trendData}>
+                      <ComposedChart data={cumulativeTrendData}>
                         <defs>
-                          <linearGradient id="colorHealth" x1="0" y1="0" x2="0" y2="1">
-                            <stop offset="5%" stopColor="#534AB7" stopOpacity={0.1}/>
-                            <stop offset="95%" stopColor="#534AB7" stopOpacity={0}/>
+                          <linearGradient id="colorOmezet" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="5%" stopColor="#E24B4A" stopOpacity={0.1}/>
+                            <stop offset="95%" stopColor="#E24B4A" stopOpacity={0}/>
                           </linearGradient>
                         </defs>
                         <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
-                        <XAxis dataKey="day" axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: '#94a3b8', fontWeight: 500 }} />
-                        <YAxis hide domain={[0, 120]} />
+                        <XAxis dataKey="displayDate" axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: '#94a3b8', fontWeight: 500 }} />
+                        <YAxis 
+                          axisLine={false} 
+                          tickLine={false} 
+                          tick={{ fontSize: 10, fill: '#94a3b8' }} 
+                          tickFormatter={(v) => v >= 1000000 ? `Rp${(v/1000000).toFixed(0)}jt` : `Rp${(v/1000).toFixed(0)}rb`} 
+                        />
                         <Tooltip 
                           contentStyle={{ borderRadius: 12, border: '1px solid #E5E7EB', boxShadow: 'none' }} 
                           itemStyle={{ fontWeight: 600, fontSize: 12 }}
+                          formatter={(v: any, name: any) => [formatRupiah(Number(v)), name === 'actualRevenue' ? 'Kumulatif Aktual' : 'Target Linear']}
                         />
-                        <Area type="monotone" dataKey="health" stroke="#534AB7" strokeWidth={3} fillOpacity={1} fill="url(#colorHealth)" />
-                      </AreaChart>
+                        <Legend verticalAlign="top" height={36} iconType="circle" />
+                        <Line type="monotone" dataKey="targetRevenue" name="Target Linear" stroke="#94a3b8" strokeWidth={2} strokeDasharray="5 5" dot={false} />
+                        <Area type="monotone" dataKey="actualRevenue" name="Kumulatif Aktual" stroke="#E24B4A" strokeWidth={3} fillOpacity={1} fill="url(#colorOmezet)" connectNulls />
+                      </ComposedChart>
                    </ResponsiveContainer>
                 </div>
              </div>
              
              <div className="lg:col-span-4 bg-white p-6 rounded-xl border border-[#E5E7EB]">
                 <h3 className="font-semibold text-[#111827] mb-6 text-sm flex items-center gap-3">
-                  <div className="p-2 bg-emerald-50 rounded-lg">
-                    <Target className="h-4 w-4 text-emerald-600" />
+                  <div className="p-2 bg-rose-50 rounded-lg">
+                    <Target className="h-4 w-4 text-rose-600" />
                   </div>
-                  Top performers
+                  Capaian Target per Program
                 </h3>
                 <div className="h-72">
                    <ResponsiveContainer width="100%" height="100%">
-                      <BarChart data={barData} layout="vertical" margin={{ left: -20 }}>
-                        <XAxis type="number" hide />
-                        <YAxis type="category" dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: '#64748b', fontWeight: 500 }} width={100} tickFormatter={(v: string) => v.length > 12 ? v.slice(0, 10) + '...' : v} />
-                        <Tooltip cursor={{ fill: '#f8fafc' }} contentStyle={{ borderRadius: 12, border: '1px solid #E5E7EB' }} />
-                        <Bar dataKey="healthScore" radius={[0, 4, 4, 0]} maxBarSize={20}>
-                          {barData.map((_e: unknown, i: number) => {
-                            const opacities = [1, 0.9, 0.8, 0.7, 0.6, 0.5, 0.4, 0.3, 0.2, 0.1];
-                            return <Cell key={i} fill={`rgba(83, 74, 183, ${opacities[i] || 0.1})`} />
-                          })}
+                      <BarChart data={capaianProgramData} layout="vertical" margin={{ left: -20, right: 30 }}>
+                        <XAxis type="number" hide domain={[0, (dataMax: number) => dataMax + 10]} />
+                        <YAxis type="category" dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: '#64748b', fontWeight: 500 }} width={110} tickFormatter={(v: string) => v.length > 15 ? v.slice(0, 13) + '...' : v} />
+                        <Tooltip 
+                            cursor={{ fill: '#f8fafc' }} 
+                            contentStyle={{ borderRadius: 12, border: '1px solid #E5E7EB', boxShadow: 'none' }} 
+                            formatter={(val: number) => [`${val.toFixed(1)}%`, 'Capaian Omzet']}
+                        />
+                        <Bar dataKey="achievementPct" radius={[0, 4, 4, 0]} maxBarSize={20} label={{ position: 'right', formatter: (val: number) => Math.round(val) + '%' }}>
+                          {capaianProgramData.map((entry, index) => (
+                            <Cell key={`cell-${index}`} fill={entry.color} />
+                          ))}
                         </Bar>
                       </BarChart>
                    </ResponsiveContainer>
