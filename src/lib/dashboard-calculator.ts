@@ -363,6 +363,15 @@ export function aggregateByMetricGroup(
         customAbsolute += absTarget
       })
 
+      // NEW: Fallback for programs without custom metrics in this group
+      if (relevantDefs.length === 0) {
+        if (group === 'revenue' || keys.includes('revenue')) {
+          customAbsolute = prog.monthly_target_rp || 0
+        } else if (group === 'user_acquisition' || keys.includes('user_count')) {
+          customAbsolute = prog.monthly_target_user || 0
+        }
+      }
+
       // Collect dates from both sources
       const allDates = new Set([
         ...Array.from(modernValuesByDate.keys()),
@@ -400,7 +409,8 @@ export function aggregateByMetricGroup(
 
     // Update global aggregates
     const processGroup = (g: string, data: { actual: number, target: number, absolute: number, found: boolean }) => {
-      if (data.found) {
+      // Include in totals if either data was found OR a target exists
+      if (data.found || data.absolute > 0) {
         existingGroups.add(g)
         groupRawTotals[g].actual += data.actual
         
@@ -692,7 +702,9 @@ export function aggregateGlobalKPIs(
   const totalPrograms = programs.length
   const activeProgramsCount = programs.filter(p => 
     (p.program_metric_definitions?.length || 0) > 0 || 
-    (p.program_milestones?.length || 0) > 0
+    (p.program_milestones?.length || 0) > 0 ||
+    (p.monthly_target_rp || 0) > 0 ||
+    (p.monthly_target_user || 0) > 0
   ).length
   
   const avgHealth = programResults.length > 0 
@@ -868,8 +880,8 @@ export function buildTargetTrendSeries(
       const revMetric = metrics.find(m => m.metric_key === 'revenue')
       const userMetric = metrics.find(m => m.metric_key === 'user_count')
 
-      totalMonthlyTargetRevenue += (Number(revMetric?.monthly_target) || 0)
-      totalMonthlyTargetUser += (Number(userMetric?.monthly_target) || 0)
+      totalMonthlyTargetRevenue += (Number(revMetric?.monthly_target) || p.monthly_target_rp || 0)
+      totalMonthlyTargetUser += (Number(userMetric?.monthly_target) || p.monthly_target_user || 0)
     })
   }
 
