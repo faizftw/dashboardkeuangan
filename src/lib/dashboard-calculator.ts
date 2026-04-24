@@ -363,6 +363,15 @@ export function aggregateByMetricGroup(
         customAbsolute += absTarget
       })
 
+      // NEW: Fallback for programs without custom metrics in this group
+      if (relevantDefs.length === 0) {
+        if (group === 'revenue' || keys.includes('revenue')) {
+          customAbsolute = prog.monthly_target_rp || 0
+        } else if (group === 'user_acquisition' || keys.includes('user_count')) {
+          customAbsolute = prog.monthly_target_user || 0
+        }
+      }
+
       // Collect dates from both sources
       const allDates = new Set([
         ...Array.from(modernValuesByDate.keys()),
@@ -868,8 +877,8 @@ export function buildTargetTrendSeries(
       const revMetric = metrics.find(m => m.metric_key === 'revenue')
       const userMetric = metrics.find(m => m.metric_key === 'user_count')
 
-      totalMonthlyTargetRevenue += (Number(revMetric?.monthly_target) || 0)
-      totalMonthlyTargetUser += (Number(userMetric?.monthly_target) || 0)
+      totalMonthlyTargetRevenue += (Number(revMetric?.monthly_target) || p.monthly_target_rp || 0)
+      totalMonthlyTargetUser += (Number(userMetric?.monthly_target) || p.monthly_target_user || 0)
     })
   }
 
