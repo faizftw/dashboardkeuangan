@@ -114,10 +114,10 @@ export function InputFormClient({
     }
   })
 
-  const hasCustomLeads = activeMetrics.some(m => 
+  const hasCustomLeads = activeProgram?.target_type === 'mou' && activeMetrics.some(m => 
     m.input_type === 'manual' && ['leads', 'agreement_leads', 'prospek', 'prospek_kerja_sama'].includes(m.metric_key)
   )
-  const hasCustomSigned = activeMetrics.some(m => 
+  const hasCustomSigned = activeProgram?.target_type === 'mou' && activeMetrics.some(m => 
     m.input_type === 'manual' && ['mou_signed', 'user_count', 'user_acquisition', 'tanda_tangan_mou'].includes(m.metric_key)
   )
   // Logic to determine if we should hide standard RP/User fields (only for MoU with custom metrics replacements)
