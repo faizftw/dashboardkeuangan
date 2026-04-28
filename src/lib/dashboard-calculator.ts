@@ -154,6 +154,17 @@ export function calculateProgramHealth(
         absoluteTargets[m.metric_key] = isInt ? Math.round(absTarget) : absTarget
       })
 
+      // Fallback for missing legacy target groups (if custom metrics only cover one side)
+      const hasRevMetric = metrics.some(m => m.metric_key === 'revenue' || m.metric_group === 'revenue')
+      const hasUserMetric = metrics.some(m => m.metric_key === 'user_count' || m.metric_group === 'user_acquisition' || m.metric_key === 'closing')
+      
+      if (!hasRevMetric && program.monthly_target_rp) {
+        absoluteTargets['revenue'] = program.monthly_target_rp
+      }
+      if (!hasUserMetric && program.monthly_target_user) {
+        absoluteTargets['user_acquisition'] = program.monthly_target_user
+      }
+
       // Second, calculate health and effective targets for PRIMARY metrics
       primaryMetrics.forEach(m => {
         const sumActual = evaluatedMetrics[m.metric_key] || 0
@@ -197,6 +208,33 @@ export function calculateProgramHealth(
           validMetrics++
         }
       })
+
+      // Include missing legacy metrics in the health score calculation
+      if (!hasRevMetric && program.monthly_target_rp) {
+        const legacyInputs = dailyInputsByProgram.get(program.id) || []
+        const actualRp = legacyInputs.reduce((sum, i) => sum + Number(i.achievement_rp || 0), 0)
+        const targetRp = program.monthly_target_rp * prorationFactor
+        effectiveTargets['revenue'] = targetRp
+        evaluatedMetrics['revenue'] = actualRp
+        
+        if (targetRp > 0) {
+          sumPercentage += (actualRp / targetRp) * 100
+          validMetrics++
+        }
+      }
+
+      if (!hasUserMetric && program.monthly_target_user) {
+        const legacyInputs = dailyInputsByProgram.get(program.id) || []
+        const actualUser = legacyInputs.reduce((sum, i) => sum + Number(i.achievement_user || 0), 0)
+        const targetUser = program.monthly_target_user * prorationFactor
+        effectiveTargets['user_acquisition'] = targetUser
+        evaluatedMetrics['user_acquisition'] = actualUser
+
+        if (targetUser > 0) {
+          sumPercentage += (actualUser / targetUser) * 100
+          validMetrics++
+        }
+      }
 
       // Fallback: If no primary metrics have non-zero targets, use Milestone progress
       let healthScore = validMetrics > 0 ? sumPercentage / validMetrics : 0
@@ -246,13 +284,56 @@ export function calculateProgramHealth(
     }
   }
 
+  // ── Case 3: Legacy Quantitative fallback ────────────────────────────────────
+  let totalAchievedRp = 0
+  let totalAchievedUser = 0
+  
+  legacyInputs.forEach(i => {
+    totalAchievedRp += Number(i.achievement_rp || 0)
+    totalAchievedUser += Number(i.achievement_user || 0)
+  })
+
+  // Also include evaluatedMetrics (if a user added a metric manually but it wasn't a primary target)
+  totalAchievedRp = evaluatedMetrics['revenue'] || evaluatedMetrics['omzet'] || totalAchievedRp
+  totalAchievedUser = evaluatedMetrics['user_count'] || evaluatedMetrics['closing'] || totalAchievedUser
+
+  const targetRp = (program.monthly_target_rp || 0) * prorationFactor
+  const targetUser = (program.monthly_target_user || 0) * prorationFactor
+
+  let rpPct = 0
+  let userPct = 0
+  let validTargets = 0
+
+  if (targetRp > 0) {
+    rpPct = (totalAchievedRp / targetRp) * 100
+    validTargets++
+  }
+  if (targetUser > 0) {
+    userPct = (totalAchievedUser / targetUser) * 100
+    validTargets++
+  }
+
+  const healthScore = validTargets > 0 ? (rpPct + userPct) / validTargets : 0
+
   return {
     programId: program.id,
-    healthScore: 0,
-    status: 'KRITIS',
-    totalTargetMetrics: 0,
-    isQualitativeOnly: true,
-    calculatedMetrics: evaluatedMetrics
+    healthScore,
+    status: getHealthStatus(healthScore),
+    totalTargetMetrics: validTargets,
+    isQualitativeOnly: false,
+    calculatedMetrics: {
+      ...evaluatedMetrics,
+      revenue: totalAchievedRp,
+      user_acquisition: totalAchievedUser
+    },
+    effectiveTargets: {
+      revenue: targetRp,
+      user_acquisition: targetUser
+    },
+    absoluteTargets: {
+      revenue: program.monthly_target_rp || 0,
+      user_acquisition: program.monthly_target_user || 0
+    }
   }
 }
 
