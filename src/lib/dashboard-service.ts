@@ -119,7 +119,27 @@ export async function getUnifiedDashboardData(options: {
   const dateRangePeriod = dateRangePeriodResult?.data ?? null
   // This is the period whose working_days and metadata we use for calculations
   const calculationPeriod = (options.startDate && dateRangePeriod) ? dateRangePeriod : activePeriod
-  const programs = (programsResult.data || []) as ProgramWithRelations[]
+  
+  // Filter out programs that were created AFTER the selected period or date range
+  let validPrograms = (programsResult.data || []) as ProgramWithRelations[]
+  
+  if (options.endDate) {
+    const endFilterDate = new Date(options.endDate)
+    endFilterDate.setUTCHours(23, 59, 59, 999)
+    validPrograms = validPrograms.filter(p => {
+      if (!p.created_at) return true
+      return new Date(p.created_at) <= endFilterDate
+    })
+  } else if (calculationPeriod) {
+    // End of the month for the calculation period
+    const endOfCalcPeriod = new Date(Date.UTC(calculationPeriod.year, calculationPeriod.month, 0, 23, 59, 59, 999))
+    validPrograms = validPrograms.filter(p => {
+      if (!p.created_at) return true
+      return new Date(p.created_at) <= endOfCalcPeriod
+    })
+  }
+
+  const programs = validPrograms
   const programIds = programs.map(p => p.id)
 
   if (!activePeriod || programs.length === 0) {
