@@ -62,6 +62,10 @@ export function ProgramClient({
   const [monthlyRp, setMonthlyRp] = useState<string>('')
   const [monthlyUser, setMonthlyUser] = useState<string>('')
   
+  // MoU Specific States
+  const [mouTargetSigned, setMouTargetSigned] = useState<string>('')
+  const [mouTargetLeads, setMouTargetLeads] = useState<string>('')
+  
   // Daily Target Manual Override
   const [isDailyTargetManual, setIsDailyTargetManual] = useState(false)
   const [dailyRp, setDailyRp] = useState<string>('')
@@ -74,6 +78,8 @@ export function ProgramClient({
     setSelectedDepartment('general')
     setMonthlyRp('')
     setMonthlyUser('')
+    setMouTargetSigned('')
+    setMouTargetLeads('')
     setIsDailyTargetManual(false)
     setDailyRp('')
     setDailyUser('')
@@ -87,6 +93,10 @@ export function ProgramClient({
     setSelectedDepartment(program.department || 'general')
     setMonthlyRp(program.monthly_target_rp ? program.monthly_target_rp.toString() : '')
     setMonthlyUser(program.monthly_target_user ? program.monthly_target_user.toString() : '')
+    
+    // We assume mou_signed legacy mapping uses monthly_target_user. Leads doesn't have legacy storage.
+    setMouTargetSigned(program.monthly_target_user ? program.monthly_target_user.toString() : '')
+    setMouTargetLeads('')
     
     const isManual = !!(program.daily_target_rp || program.daily_target_user)
     setIsDailyTargetManual(isManual)
@@ -150,6 +160,8 @@ export function ProgramClient({
       daily_target_rp: (isDailyTargetManual && (selectedTargetType === 'quantitative' || selectedTargetType === 'hybrid')) ? Number(dailyRp) : null,
       daily_target_user: (isDailyTargetManual && (selectedTargetType === 'quantitative' || selectedTargetType === 'hybrid')) ? Number(dailyUser) : null,
       qualitative_description: (selectedTargetType === 'qualitative' || selectedTargetType === 'hybrid') ? formData.get('qualitative_description') as string : null,
+      mou_target_signed: selectedTargetType === 'mou' ? Number(mouTargetSigned) : null,
+      mou_target_leads: selectedTargetType === 'mou' ? Number(mouTargetLeads) : null,
     }
 
     let res
@@ -568,6 +580,35 @@ export function ProgramClient({
                             </div>
                           </div>
                         )}
+                    </div>
+                  )}
+
+                  {selectedTargetType === 'mou' && (
+                    <div className="space-y-5">
+                      <h4 className="text-xs font-extrabold text-indigo-600 uppercase tracking-widest flex items-center gap-2">
+                         <Target className="h-4 w-4" /> Kemitraan & MoU Detail
+                      </h4>
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                          <label className="text-[10px] font-bold text-slate-500 uppercase">Tanda Tangan MoU</label>
+                          <input 
+                            name="mou_target_signed" type="number" min="0" value={mouTargetSigned} onChange={(e) => setMouTargetSigned(e.target.value)}
+                            placeholder="Target Closing"
+                            className="w-full text-sm font-bold rounded-xl border border-slate-200 px-4 py-3 outline-none focus:border-indigo-500 bg-white"
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <label className="text-[10px] font-bold text-slate-500 uppercase">Prospek Kerja Sama</label>
+                          <input 
+                            name="mou_target_leads" type="number" min="0" value={mouTargetLeads} onChange={(e) => setMouTargetLeads(e.target.value)}
+                            placeholder="Target Leads"
+                            className="w-full text-sm font-bold rounded-xl border border-slate-200 px-4 py-3 outline-none focus:border-indigo-500 bg-white"
+                          />
+                        </div>
+                      </div>
+                      <p className="text-[10px] text-slate-500 leading-relaxed bg-indigo-50/50 p-3 rounded-lg border border-indigo-100">
+                        Sistem akan otomatis mengatur template <strong>Metrik Kemitraan & MoU</strong> setelah program dibuat.
+                      </p>
                     </div>
                   )}
 

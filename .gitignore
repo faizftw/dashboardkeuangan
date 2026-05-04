@@ -43,3 +43,4 @@ AGENTS.md
 /scratch/
 schema.sql
 schema_clean.sql
+docs/migrations/test_data_filter_periode.sql
