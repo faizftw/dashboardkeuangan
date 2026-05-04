@@ -67,8 +67,9 @@ export async function getUnifiedDashboardData(options: {
 }): Promise<UnifiedDashboardData> {
   const supabase = createClient()
   
-  // 1 & 2. Fetch Active Period and Programs in parallel
-  const [periodResult, programsResult] = await Promise.all([
+  // 1 & 2. Fetch Active Period, matching date-range period, and Programs in parallel
+  const [periodResult, dateRangePeriodResult, programsResult] = await Promise.all([
+    // Always fetch the currently active period for context
     (async () => {
       let q = supabase.from('periods').select('*')
       if (options.periodId) {
@@ -77,6 +78,22 @@ export async function getUnifiedDashboardData(options: {
         q = q.eq('is_active', true)
       }
       return q.single()
+    })(),
+    // When a custom date range is applied, also fetch the period that matches
+    // startDate's month/year so we use that period's working_days & targets
+    (async () => {
+      if (options.startDate && !options.periodId) {
+        const d = new Date(options.startDate)
+        const month = d.getUTCMonth() + 1
+        const year = d.getUTCFullYear()
+        return supabase
+          .from('periods')
+          .select('*')
+          .eq('month', month)
+          .eq('year', year)
+          .maybeSingle()
+      }
+      return { data: null }
     })(),
     (async () => {
       let q = supabase
@@ -97,6 +114,11 @@ export async function getUnifiedDashboardData(options: {
   ])
 
   const activePeriod = periodResult.data
+  // Use the date-range period (e.g. April) when a date filter is applied,
+  // falling back to the active period (e.g. May) if no matching period found
+  const dateRangePeriod = dateRangePeriodResult?.data ?? null
+  // This is the period whose working_days and metadata we use for calculations
+  const calculationPeriod = (options.startDate && dateRangePeriod) ? dateRangePeriod : activePeriod
   const programs = (programsResult.data || []) as ProgramWithRelations[]
   const programIds = programs.map(p => p.id)
 
@@ -179,17 +201,61 @@ export async function getUnifiedDashboardData(options: {
   const metricValues = metricsResult.data || []
   const milestoneCompletions = milestoneResult.data || []
 
-  // 6b. Check for carry-over settings and merge historical data
+  // 6b. Check for carry-over settings and per-period target snapshots
   let allDailyInputs = dailyInputs
   let allMetricValues = metricValues
 
+  // periodToQuery: when date range filter is active, look up settings for the
+  // matching period (e.g. April), not the currently active period (May).
+  const periodToQuery = calculationPeriod ?? activePeriod
+
   if (programIds.length > 0) {
-    const { data: carrySettings } = await supabase
+    const { data: periodSettings } = await supabase
       .from('program_period_settings')
-      .select('program_id, carry_over_from_period_id')
-      .eq('period_id', activePeriod.id)
+      .select('program_id, carry_over_from_period_id, monthly_target_rp, monthly_target_user, daily_target_rp, daily_target_user')
+      .eq('period_id', periodToQuery.id)
       .in('program_id', programIds)
-      .not('carry_over_from_period_id', 'is', null)
+
+    // Build a map of per-period target overrides (only if the columns exist)
+    // This allows historical targets to be used when filtering past date ranges.
+    const periodTargetOverrides = new Map<string, {
+      monthly_target_rp: number | null
+      monthly_target_user: number | null
+      daily_target_rp: number | null
+      daily_target_user: number | null
+    }>()
+
+    periodSettings?.forEach(s => {
+      // Only override if at least one target column has a value
+      const hasTargetData = s.monthly_target_rp != null || s.monthly_target_user != null
+      if (hasTargetData) {
+        periodTargetOverrides.set(s.program_id, {
+          monthly_target_rp: s.monthly_target_rp,
+          monthly_target_user: s.monthly_target_user,
+          daily_target_rp: s.daily_target_rp,
+          daily_target_user: s.daily_target_user,
+        })
+      }
+    })
+
+    // Apply period-specific target overrides to program objects
+    // (creates shallow copies to avoid mutating original data)
+    if (periodTargetOverrides.size > 0) {
+      programs.forEach((p, idx) => {
+        const override = periodTargetOverrides.get(p.id)
+        if (override) {
+          programs[idx] = {
+            ...p,
+            monthly_target_rp: override.monthly_target_rp ?? p.monthly_target_rp,
+            monthly_target_user: override.monthly_target_user ?? p.monthly_target_user,
+            daily_target_rp: override.daily_target_rp ?? p.daily_target_rp,
+            daily_target_user: override.daily_target_user ?? p.daily_target_user,
+          }
+        }
+      })
+    }
+
+    const carrySettings = periodSettings?.filter(s => s.carry_over_from_period_id != null) || []
 
     if (carrySettings && carrySettings.length > 0) {
       // Group by from_period_id to batch-fetch efficiently
@@ -236,14 +302,14 @@ export async function getUnifiedDashboardData(options: {
       const extraMetrics = historicalResults.flatMap(r => r.metrics)
       const extraMilestones = historicalResults.flatMap(r => r.milestones)
 
-      // Merge — remap period_id to current period for calculator consistency
-      const mergedInputs = extraInputs.map(i => ({ ...i, period_id: activePeriod.id }))
-      const mergedMetrics = extraMetrics.map(m => ({ ...m, period_id: activePeriod.id }))
+      // Merge — remap period_id to the calculation period for calculator consistency
+      const mergedInputs = extraInputs.map(i => ({ ...i, period_id: periodToQuery.id }))
+      const mergedMetrics = extraMetrics.map(m => ({ ...m, period_id: periodToQuery.id }))
       // For milestones: only include completions not already present in the current period
       const currentMilestoneIds = new Set(milestoneCompletions.map(mc => mc.milestone_id))
       const mergedMilestones = extraMilestones
         .filter(mc => mc.is_completed && !currentMilestoneIds.has(mc.milestone_id))
-        .map(mc => ({ ...mc, period_id: activePeriod.id }))
+        .map(mc => ({ ...mc, period_id: periodToQuery.id }))
 
       allDailyInputs = [...dailyInputs, ...mergedInputs as typeof dailyInputs]
       allMetricValues = [...metricValues, ...mergedMetrics as typeof metricValues]
@@ -273,7 +339,9 @@ export async function getUnifiedDashboardData(options: {
   })
 
   // 7. Proration Factor & Summary
-  const workingDays = activePeriod.working_days || 30
+  // IMPORTANT: Use the period that matches the filtered date range (e.g. April)
+  // to get correct working_days. Falls back to active period if no match found.
+  const workingDays = (calculationPeriod?.working_days) || 30
   const today = new Date().getDate()
   const todayIso = new Date().toISOString().split('T')[0]
   
@@ -289,6 +357,7 @@ export async function getUnifiedDashboardData(options: {
     const end = new Date(options.endDate)
     const diffTime = Math.abs(end.getTime() - start.getTime())
     const daysInSelection = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1
+    // Use workingDays from the FILTERED period (e.g. April = 30), not active (May = 31)
     prorationFactor = daysInSelection / workingDays
   } else {
     // If today is not input yet, we only expect progress up to yesterday

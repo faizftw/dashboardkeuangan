@@ -2,6 +2,7 @@
 
 import { createClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
+import { METRIC_TEMPLATES } from '@/lib/metric-templates'
 
 // Define the type for the server actions response
 export type ActionResponse = { error: string } | { success: boolean; data?: unknown }
@@ -20,6 +21,8 @@ export async function createProgram(data: {
   daily_target_rp?: number | null
   daily_target_user?: number | null
   qualitative_description?: string | null
+  mou_target_signed?: number | null
+  mou_target_leads?: number | null
 }): Promise<ActionResponse> {
   const supabase = createClient()
   
@@ -58,49 +61,50 @@ export async function createProgram(data: {
     if (teamError) console.error('Team Insert Warning:', teamError)
   }
 
-  // Phase 3: Unification - Automatically create metric definitions for legacy targets
-  const metricsToInsert = []
+  // Phase 3: Unification - Automatically create metric definitions based on templates
+  let templateKey = null
   if (data.target_type === 'quantitative' || data.target_type === 'hybrid') {
-    if (data.monthly_target_rp && data.monthly_target_rp > 0) {
-      metricsToInsert.push({
-        program_id: program.id,
-        metric_key: 'revenue',
-        label: 'Revenue',
-        data_type: 'currency',
-        input_type: 'manual',
-        is_target_metric: true,
-        is_primary: true,
-        monthly_target: data.monthly_target_rp,
-        target_direction: 'higher_is_better',
-        unit_label: 'Rp',
-        display_order: 1,
-        metric_group: 'revenue'
-      })
-    }
+    templateKey = 'sales_basic'
+  } else if (data.target_type === 'mou') {
+    templateKey = 'mou_partnership'
   }
 
-  if (data.target_type === 'quantitative' || data.target_type === 'hybrid' || data.target_type === 'mou') {
-    if (data.monthly_target_user && data.monthly_target_user > 0) {
-      metricsToInsert.push({
-        program_id: program.id,
-        metric_key: 'user_count',
-        label: 'Closing/User',
-        data_type: 'integer',
-        input_type: 'manual',
-        is_target_metric: true,
-        is_primary: true,
-        monthly_target: data.monthly_target_user,
-        target_direction: 'higher_is_better',
-        unit_label: 'user',
-        display_order: 2,
-        metric_group: 'user_acquisition'
+  if (templateKey) {
+    const template = METRIC_TEMPLATES.find(t => t.key === templateKey)
+    if (template && template.metrics.length > 0) {
+      const metricsToInsert = template.metrics.map(m => {
+        let mTarget = m.monthly_target
+        // Override target with form input
+        if (templateKey === 'sales_basic') {
+          if (m.metric_key === 'revenue') mTarget = data.monthly_target_rp || null
+          if (m.metric_key === 'user_count') mTarget = data.monthly_target_user || null
+        } else if (templateKey === 'mou_partnership') {
+          if (m.metric_key === 'mou_signed') mTarget = data.mou_target_signed || data.monthly_target_user || null
+          if (m.metric_key === 'agreement_leads') mTarget = data.mou_target_leads || null
+        }
+        
+        return {
+          program_id: program.id,
+          metric_key: m.metric_key,
+          label: m.label,
+          data_type: m.data_type,
+          input_type: m.input_type,
+          is_target_metric: m.is_target_metric,
+          is_primary: m.is_primary,
+          monthly_target: mTarget,
+          target_direction: m.target_direction,
+          unit_label: m.unit_label,
+          display_order: m.display_order,
+          metric_group: m.metric_group,
+          formula: m.formula,
+          show_on_dashboard: m.show_on_dashboard ?? true,
+          show_on_tv: m.show_on_tv ?? true,
+        }
       })
-    }
-  }
 
-  if (metricsToInsert.length > 0) {
-    const { error: metricError } = await supabase.from('program_metric_definitions').insert(metricsToInsert)
-    if (metricError) console.error('Metric Unification Warning:', metricError)
+      const { error: metricError } = await supabase.from('program_metric_definitions').insert(metricsToInsert)
+      if (metricError) console.error('Metric Unification Warning:', metricError)
+    }
   }
 
   revalidatePath('/master-data')
@@ -137,6 +141,8 @@ export async function updateProgram(id: string, data: {
   daily_target_rp?: number | null
   daily_target_user?: number | null
   qualitative_description?: string | null
+  mou_target_signed?: number | null
+  mou_target_leads?: number | null
 }): Promise<ActionResponse> {
   const supabase = createClient()
   
@@ -173,42 +179,48 @@ export async function updateProgram(id: string, data: {
     if (teamError) console.error('Team Update Warning:', teamError)
   }
 
-  // Phase 3: Unification - Automatically upsert metric definitions for legacy targets
+  // Phase 3: Unification - Automatically upsert metric definitions based on templates
+  let templateKey = null
   if (data.target_type === 'quantitative' || data.target_type === 'hybrid') {
-    if (data.monthly_target_rp && data.monthly_target_rp > 0) {
-      await supabase.from('program_metric_definitions').upsert({
-        program_id: id,
-        metric_key: 'revenue',
-        label: 'Revenue',
-        data_type: 'currency',
-        input_type: 'manual',
-        is_target_metric: true,
-        is_primary: true,
-        monthly_target: data.monthly_target_rp,
-        target_direction: 'higher_is_better',
-        unit_label: 'Rp',
-        display_order: 1,
-        metric_group: 'revenue'
-      }, { onConflict: 'program_id,metric_key' })
-    }
+    templateKey = 'sales_basic'
+  } else if (data.target_type === 'mou') {
+    templateKey = 'mou_partnership'
   }
 
-  if (data.target_type === 'quantitative' || data.target_type === 'hybrid' || data.target_type === 'mou') {
-    if (data.monthly_target_user && data.monthly_target_user > 0) {
-      await supabase.from('program_metric_definitions').upsert({
-        program_id: id,
-        metric_key: 'user_count',
-        label: 'Closing/User',
-        data_type: 'integer',
-        input_type: 'manual',
-        is_target_metric: true,
-        is_primary: true,
-        monthly_target: data.monthly_target_user,
-        target_direction: 'higher_is_better',
-        unit_label: 'user',
-        display_order: 2,
-        metric_group: 'user_acquisition'
-      }, { onConflict: 'program_id,metric_key' })
+  if (templateKey) {
+    const template = METRIC_TEMPLATES.find(t => t.key === templateKey)
+    if (template && template.metrics.length > 0) {
+      for (const m of template.metrics) {
+        let mTarget = m.monthly_target
+        // Override target with form input
+        if (templateKey === 'sales_basic') {
+          if (m.metric_key === 'revenue') mTarget = data.monthly_target_rp || null
+          if (m.metric_key === 'user_count') mTarget = data.monthly_target_user || null
+        } else if (templateKey === 'mou_partnership') {
+          if (m.metric_key === 'mou_signed') mTarget = data.mou_target_signed || data.monthly_target_user || null
+          if (m.metric_key === 'agreement_leads') mTarget = data.mou_target_leads || null
+        }
+
+        // Only upsert if it's a target metric and we have a valid target, OR if we are initializing it.
+        // For update, we want to make sure the metric exists and target is updated
+        await supabase.from('program_metric_definitions').upsert({
+          program_id: id,
+          metric_key: m.metric_key,
+          label: m.label,
+          data_type: m.data_type,
+          input_type: m.input_type,
+          is_target_metric: m.is_target_metric,
+          is_primary: m.is_primary,
+          monthly_target: mTarget,
+          target_direction: m.target_direction,
+          unit_label: m.unit_label,
+          display_order: m.display_order,
+          metric_group: m.metric_group,
+          formula: m.formula,
+          show_on_dashboard: m.show_on_dashboard ?? true,
+          show_on_tv: m.show_on_tv ?? true,
+        }, { onConflict: 'program_id,metric_key' })
+      }
     }
   }
 
@@ -366,6 +378,31 @@ export async function activatePeriodWithDecisions(
   if (!user) return { error: 'Unauthorized' }
   const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).single()
   if (profile?.role !== 'admin') return { error: 'Hanya admin yang bisa mengatur periode aktif.' }
+
+  // 0. Snapshot current program targets into the OLD period's program_period_settings
+  //    This preserves historical target values so date-range filters show correct targets.
+  if (fromPeriodId) {
+    const { data: activePrograms } = await supabase
+      .from('programs')
+      .select('id, monthly_target_rp, monthly_target_user, daily_target_rp, daily_target_user')
+      .eq('is_active', true)
+
+    if (activePrograms && activePrograms.length > 0) {
+      const snapshotRows = activePrograms.map(p => ({
+        program_id: p.id,
+        period_id: fromPeriodId,
+        monthly_target_rp: p.monthly_target_rp,
+        monthly_target_user: p.monthly_target_user,
+        daily_target_rp: p.daily_target_rp,
+        daily_target_user: p.daily_target_user,
+      }))
+
+      // Upsert so re-running the wizard doesn't create duplicates
+      await supabase
+        .from('program_period_settings')
+        .upsert(snapshotRows, { onConflict: 'program_id,period_id' })
+    }
+  }
 
   // 1. Deactivate programs marked as 'skip'
   const skipIds = Object.entries(decisions)

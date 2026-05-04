@@ -156,6 +156,10 @@ export type Database = {
           program_id: string
           period_id: string
           carry_over_from_period_id: string | null
+          monthly_target_rp: number | null
+          monthly_target_user: number | null
+          daily_target_rp: number | null
+          daily_target_user: number | null
           created_at: string | null
         }
         Insert: {
@@ -163,6 +167,10 @@ export type Database = {
           program_id: string
           period_id: string
           carry_over_from_period_id?: string | null
+          monthly_target_rp?: number | null
+          monthly_target_user?: number | null
+          daily_target_rp?: number | null
+          daily_target_user?: number | null
           created_at?: string | null
         }
         Update: {
@@ -170,6 +178,10 @@ export type Database = {
           program_id?: string
           period_id?: string
           carry_over_from_period_id?: string | null
+          monthly_target_rp?: number | null
+          monthly_target_user?: number | null
+          daily_target_rp?: number | null
+          daily_target_user?: number | null
           created_at?: string | null
         }
         Relationships: []
