@@ -777,7 +777,7 @@ export function OverviewClient({
       yesterday_revenue,
       growth_vs_kemarin
     }
-  }, [activePeriod, summary.targetTrend, summary.aggregates.revenue?.actual, programHealths, dailyInputs, metricValues]);
+  }, [activePeriod, summary.targetTrend, summary.aggregates.revenue?.actual, summary.aggregates.revenue?.totalTarget, programHealths, dailyInputs, metricValues]);
 
   return (
     <div className="space-y-6 pb-24">
