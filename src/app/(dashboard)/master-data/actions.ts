@@ -154,7 +154,47 @@ export async function updateProgram(id: string, data: {
 
   const { pic_ids, ...programData } = data
 
-  // Update Program
+  // PENTING: Snapshot target LAMA sebelum di-update ke program_period_settings periode aktif.
+  // Ini memastikan filter periode historis tetap bisa menampilkan target yang benar
+  // bahkan jika admin mengubah target di bulan berjalan.
+  const { data: activePeriodForSnapshot } = await supabase
+    .from('periods')
+    .select('id')
+    .eq('is_active', true)
+    .single()
+
+  if (activePeriodForSnapshot) {
+    const { data: oldProgram } = await supabase
+      .from('programs')
+      .select('monthly_target_rp, monthly_target_user, daily_target_rp, daily_target_user, program_metric_definitions(metric_key, monthly_target, is_target_metric)')
+      .eq('id', id)
+      .single()
+
+    if (oldProgram) {
+      const customTargets: Record<string, number> = {}
+      if (oldProgram.program_metric_definitions) {
+        oldProgram.program_metric_definitions.forEach((m: { metric_key: string; monthly_target: number | null; is_target_metric: boolean }) => {
+          if (m.is_target_metric && m.monthly_target != null) {
+            customTargets[m.metric_key] = m.monthly_target
+          }
+        })
+      }
+
+      await supabase
+        .from('program_period_settings')
+        .upsert({
+          program_id: id,
+          period_id: activePeriodForSnapshot.id,
+          monthly_target_rp: oldProgram.monthly_target_rp,
+          monthly_target_user: oldProgram.monthly_target_user,
+          daily_target_rp: oldProgram.daily_target_rp,
+          daily_target_user: oldProgram.daily_target_user,
+          custom_targets: Object.keys(customTargets).length > 0 ? customTargets : null
+        }, { onConflict: 'program_id,period_id', ignoreDuplicates: true }) // ignoreDuplicates: only insert if doesn't exist yet
+    }
+  }
+
+  // Update Program (targets baru di-write ke tabel programs)
   const { error: progError } = await supabase.from('programs')
     .update({
       ...programData,
@@ -384,18 +424,31 @@ export async function activatePeriodWithDecisions(
   if (fromPeriodId) {
     const { data: activePrograms } = await supabase
       .from('programs')
-      .select('id, monthly_target_rp, monthly_target_user, daily_target_rp, daily_target_user')
+      .select('id, monthly_target_rp, monthly_target_user, daily_target_rp, daily_target_user, program_metric_definitions(metric_key, monthly_target, is_target_metric)')
       .eq('is_active', true)
 
     if (activePrograms && activePrograms.length > 0) {
-      const snapshotRows = activePrograms.map(p => ({
-        program_id: p.id,
-        period_id: fromPeriodId,
-        monthly_target_rp: p.monthly_target_rp,
-        monthly_target_user: p.monthly_target_user,
-        daily_target_rp: p.daily_target_rp,
-        daily_target_user: p.daily_target_user,
-      }))
+      const snapshotRows = activePrograms.map(p => {
+        // Build custom_targets JSON map from metric definitions
+        const customTargets: Record<string, number> = {}
+        if (p.program_metric_definitions) {
+          p.program_metric_definitions.forEach((m: { metric_key: string; monthly_target: number | null; is_target_metric: boolean }) => {
+            if (m.is_target_metric && m.monthly_target != null) {
+              customTargets[m.metric_key] = m.monthly_target
+            }
+          })
+        }
+
+        return {
+          program_id: p.id,
+          period_id: fromPeriodId,
+          monthly_target_rp: p.monthly_target_rp,
+          monthly_target_user: p.monthly_target_user,
+          daily_target_rp: p.daily_target_rp,
+          daily_target_user: p.daily_target_user,
+          custom_targets: Object.keys(customTargets).length > 0 ? customTargets : null
+        }
+      })
 
       // Upsert so re-running the wizard doesn't create duplicates
       await supabase

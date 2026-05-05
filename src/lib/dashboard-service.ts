@@ -230,36 +230,99 @@ export async function getUnifiedDashboardData(options: {
   const periodToQuery = calculationPeriod ?? activePeriod
 
   if (programIds.length > 0) {
-    const { data: periodSettings } = await supabase
+    // Ambil semua snapshot target untuk program-program ini
+    // Kemudian pilih snapshot yang paling cocok (exact match dengan periode filter,
+    // atau terdekat/terbaru sebelum periode tersebut sebagai fallback)
+    const { data: allPeriodSettings } = await supabase
       .from('program_period_settings')
-      .select('program_id, carry_over_from_period_id, monthly_target_rp, monthly_target_user, daily_target_rp, daily_target_user')
-      .eq('period_id', periodToQuery.id)
+      .select('program_id, period_id, carry_over_from_period_id, monthly_target_rp, monthly_target_user, daily_target_rp, daily_target_user, custom_targets')
       .in('program_id', programIds)
 
-    // Build a map of per-period target overrides (only if the columns exist)
-    // This allows historical targets to be used when filtering past date ranges.
+    // Ambil semua periode yang relevan sekaligus untuk mendapatkan urutan bulan/tahunnya
+    const allPeriodIds = Array.from(new Set((allPeriodSettings || []).map(s => s.period_id)))
+    const periodOrderMap = new Map<string, { month: number; year: number }>()
+    
+    if (allPeriodIds.length > 0) {
+      const { data: allPeriods } = await supabase
+        .from('periods')
+        .select('id, month, year')
+        .in('id', allPeriodIds)
+      
+      allPeriods?.forEach(p => periodOrderMap.set(p.id, { month: p.month, year: p.year }))
+    }
+
+    // Tambahkan periodToQuery ke map jika belum ada
+    if (!periodOrderMap.has(periodToQuery.id)) {
+      periodOrderMap.set(periodToQuery.id, { month: periodToQuery.month, year: periodToQuery.year })
+    }
+
+    // Fungsi untuk mengkonversi period ke nilai numerik untuk perbandingan
+    const periodToNum = (month: number, year: number) => year * 12 + month
+    const targetNum = periodToNum(periodToQuery.month, periodToQuery.year)
+
+    // Build map override per-program: pilih snapshot terbaik
     const periodTargetOverrides = new Map<string, {
       monthly_target_rp: number | null
       monthly_target_user: number | null
       daily_target_rp: number | null
       daily_target_user: number | null
+      custom_targets: Record<string, number> | null
     }>()
 
-    periodSettings?.forEach(s => {
-      // Only override if at least one target column has a value
-      const hasTargetData = s.monthly_target_rp != null || s.monthly_target_user != null
-      if (hasTargetData) {
-        periodTargetOverrides.set(s.program_id, {
-          monthly_target_rp: s.monthly_target_rp,
-          monthly_target_user: s.monthly_target_user,
-          daily_target_rp: s.daily_target_rp,
-          daily_target_user: s.daily_target_user,
+    // Kelompokkan snapshot per program_id
+    const settingsByProgram = new Map<string, typeof allPeriodSettings>() 
+    ;(allPeriodSettings || []).forEach(s => {
+      const list = settingsByProgram.get(s.program_id) || []
+      list.push(s)
+      settingsByProgram.set(s.program_id, list)
+    })
+
+    programIds.forEach(programId => {
+      const snapshots = settingsByProgram.get(programId) || []
+      if (snapshots.length === 0) return
+
+      // 1. Cari exact match dulu
+      const exactMatch = snapshots.find(s => s.period_id === periodToQuery.id)
+      if (exactMatch && (exactMatch.monthly_target_rp != null || exactMatch.monthly_target_user != null || exactMatch.custom_targets != null)) {
+        periodTargetOverrides.set(programId, {
+          monthly_target_rp: exactMatch.monthly_target_rp,
+          monthly_target_user: exactMatch.monthly_target_user,
+          daily_target_rp: exactMatch.daily_target_rp,
+          daily_target_user: exactMatch.daily_target_user,
+          custom_targets: exactMatch.custom_targets as Record<string, number> | null
+        })
+        return
+      }
+
+      // 2. Jika tidak ada exact match, cari snapshot terbaru yang masih <= periode filter
+      // (fallback untuk program yang belum di-snapshot sebelum fitur ini dibuat)
+      const snapshotsWithOrder = snapshots
+        .filter(s => {
+          const info = periodOrderMap.get(s.period_id)
+          if (!info) return false
+          return periodToNum(info.month, info.year) <= targetNum
+        })
+        .map(s => {
+          const info = periodOrderMap.get(s.period_id)!
+          return { ...s, periodNum: periodToNum(info.month, info.year) }
+        })
+        .sort((a, b) => b.periodNum - a.periodNum) // sort terbaru dulu
+
+      const bestFallback = snapshotsWithOrder.find(
+        s => s.monthly_target_rp != null || s.monthly_target_user != null || s.custom_targets != null
+      )
+      if (bestFallback) {
+        periodTargetOverrides.set(programId, {
+          monthly_target_rp: bestFallback.monthly_target_rp,
+          monthly_target_user: bestFallback.monthly_target_user,
+          daily_target_rp: bestFallback.daily_target_rp,
+          daily_target_user: bestFallback.daily_target_user,
+          custom_targets: bestFallback.custom_targets as Record<string, number> | null
         })
       }
     })
 
-    // Apply period-specific target overrides to program objects
-    // (creates shallow copies to avoid mutating original data)
+    // Terapkan override ke objek program
     if (periodTargetOverrides.size > 0) {
       programs.forEach((p, idx) => {
         const override = periodTargetOverrides.get(p.id)
@@ -270,12 +333,20 @@ export async function getUnifiedDashboardData(options: {
             monthly_target_user: override.monthly_target_user ?? p.monthly_target_user,
             daily_target_rp: override.daily_target_rp ?? p.daily_target_rp,
             daily_target_user: override.daily_target_user ?? p.daily_target_user,
+            program_metric_definitions: p.program_metric_definitions?.map(m => {
+              if (override.custom_targets && override.custom_targets[m.metric_key] !== undefined) {
+                return { ...m, monthly_target: override.custom_targets[m.metric_key] }
+              }
+              return m
+            })
           }
         }
       })
     }
 
-    const carrySettings = periodSettings?.filter(s => s.carry_over_from_period_id != null) || []
+    // Ambil data carry-over dari allPeriodSettings (hanya yang punya carry_over)
+    const periodSettings = (allPeriodSettings || []).filter(s => s.period_id === periodToQuery.id)
+    const carrySettings = periodSettings.filter(s => s.carry_over_from_period_id != null)
 
     if (carrySettings && carrySettings.length > 0) {
       // Group by from_period_id to batch-fetch efficiently

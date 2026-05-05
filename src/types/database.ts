@@ -160,6 +160,7 @@ export type Database = {
           monthly_target_user: number | null
           daily_target_rp: number | null
           daily_target_user: number | null
+          custom_targets: Json | null
           created_at: string | null
         }
         Insert: {
@@ -171,6 +172,7 @@ export type Database = {
           monthly_target_user?: number | null
           daily_target_rp?: number | null
           daily_target_user?: number | null
+          custom_targets?: Json | null
           created_at?: string | null
         }
         Update: {
@@ -182,6 +184,7 @@ export type Database = {
           monthly_target_user?: number | null
           daily_target_rp?: number | null
           daily_target_user?: number | null
+          custom_targets?: Json | null
           created_at?: string | null
         }
         Relationships: []
