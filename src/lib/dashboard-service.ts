@@ -180,15 +180,26 @@ export async function getUnifiedDashboardData(options: {
     }
   }
 
-  // 3, 4, 5. Fetch all data for the period/range in parallel
+  // Compute a hard date-range for queries to prevent data from adjacent months leaking in.
+  // - If startDate+endDate given: use them directly.
+  // - If periodId given (Laporan Periode button): derive the exact month boundary from the fetched period.
+  // - Otherwise (active period, no filter): derive from the active period's month.
   const milestoneIds = programs.flatMap(p => p.program_milestones?.map(m => m.id) || [])
+  const queryPeriod = calculationPeriod ?? activePeriod
+  const queryStartDate = options.startDate ?? 
+    (queryPeriod ? `${queryPeriod.year}-${String(queryPeriod.month).padStart(2, '0')}-01` : undefined)
+  const queryEndDate = options.endDate ?? 
+    (queryPeriod ? (() => {
+      const lastDay = new Date(queryPeriod.year, queryPeriod.month, 0).getDate()
+      return `${queryPeriod.year}-${String(queryPeriod.month).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`
+    })() : undefined)
 
   const [inputsResult, metricsResult, milestoneResult] = await Promise.all([
     // Daily Inputs
     (async () => {
       let q = supabase.from('daily_inputs').select('*').in('program_id', programIds)
-      if (options.startDate && options.endDate) {
-        q = q.gte('date', options.startDate).lte('date', options.endDate)
+      if (queryStartDate && queryEndDate) {
+        q = q.gte('date', queryStartDate).lte('date', queryEndDate)
       } else {
         q = q.eq('period_id', activePeriod.id)
       }
@@ -197,8 +208,8 @@ export async function getUnifiedDashboardData(options: {
     // Metric Values
     (async () => {
       let q = supabase.from('daily_metric_values').select('*').in('program_id', programIds)
-      if (options.startDate && options.endDate) {
-        q = q.gte('date', options.startDate).lte('date', options.endDate)
+      if (queryStartDate && queryEndDate) {
+        q = q.gte('date', queryStartDate).lte('date', queryEndDate)
       } else {
         q = q.eq('period_id', activePeriod.id)
       }
@@ -208,8 +219,8 @@ export async function getUnifiedDashboardData(options: {
     (async () => {
       if (milestoneIds.length === 0) return { data: [] }
       let q = supabase.from('milestone_completions').select('*').in('milestone_id', milestoneIds)
-      if (options.startDate && options.endDate) {
-        q = q.gte('completed_at', options.startDate).lte('completed_at', options.endDate + 'T23:59:59')
+      if (queryStartDate && queryEndDate) {
+        q = q.gte('completed_at', queryStartDate).lte('completed_at', queryEndDate + 'T23:59:59')
       } else {
         q = q.eq('period_id', activePeriod.id)
       }
@@ -442,6 +453,12 @@ export async function getUnifiedDashboardData(options: {
   const maxAchievementDate = maxMetricDate > maxInputDate ? maxMetricDate : maxInputDate
   const isTodayDone = maxAchievementDate === todayIso
 
+  const now = new Date()
+  const isPastPeriod = calculationPeriod && (
+    calculationPeriod.year < now.getUTCFullYear() ||
+    (calculationPeriod.year === now.getUTCFullYear() && calculationPeriod.month < (now.getUTCMonth() + 1))
+  )
+
   let prorationFactor = 1
   if (options.startDate && options.endDate) {
     const start = new Date(options.startDate)
@@ -450,6 +467,9 @@ export async function getUnifiedDashboardData(options: {
     const daysInSelection = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1
     // Use workingDays from the FILTERED period (e.g. April = 30), not active (May = 31)
     prorationFactor = daysInSelection / workingDays
+  } else if (isPastPeriod) {
+    // Jika melihat laporan periode lalu, periodenya sudah lewat jadi dianggap 100% (1.0)
+    prorationFactor = 1
   } else {
     // If today is not input yet, we only expect progress up to yesterday
     const effectiveDay = isTodayDone ? today : Math.max(0, today - 1)
