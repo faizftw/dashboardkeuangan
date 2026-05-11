@@ -843,9 +843,17 @@ export function buildHealthTrendSeries(
     const start = new Date(startDate); const end = new Date(endDate); const cur = new Date(start)
     while (cur <= end) { dateRange.push(cur.toISOString().split('T')[0]); cur.setDate(cur.getDate() + 1) }
   } else {
-    // Current month view: from day 1 to today (capped at 31)
-    const today = new Date().getDate()
-    for (let i = 1; i <= Math.min(today, 31); i++) {
+    const now = new Date()
+    const isPastPeriod = activePeriod.year < now.getUTCFullYear() || 
+                         (activePeriod.year === now.getUTCFullYear() && activePeriod.month < (now.getUTCMonth() + 1))
+    
+    // Get exact number of days in the period's month (e.g. April = 30)
+    const daysInMonth = new Date(activePeriod.year, activePeriod.month, 0).getDate()
+    
+    // For past periods, show full month. For current period, show up to today.
+    const limit = isPastPeriod ? daysInMonth : Math.min(now.getDate(), daysInMonth)
+
+    for (let i = 1; i <= limit; i++) {
       dateRange.push(`${activePeriod.year}-${String(activePeriod.month).padStart(2, '0')}-${String(i).padStart(2, '0')}`)
     }
   }
@@ -946,8 +954,17 @@ export function buildTargetTrendSeries(
     const start = new Date(startDate); const end = new Date(endDate); const cur = new Date(start)
     while (cur <= end) { dateRange.push(cur.toISOString().split('T')[0]); cur.setDate(cur.getDate() + 1) }
   } else {
-    const today = new Date().getDate()
-    for (let i = 1; i <= Math.min(today, 31); i++) {
+    const now = new Date()
+    const isPastPeriod = activePeriod.year < now.getUTCFullYear() || 
+                         (activePeriod.year === now.getUTCFullYear() && activePeriod.month < (now.getUTCMonth() + 1))
+    
+    // Get exact number of days in the period's month (e.g. April = 30)
+    const daysInMonth = new Date(activePeriod.year, activePeriod.month, 0).getDate()
+    
+    // For past periods, show full month. For current period, show up to today.
+    const limit = isPastPeriod ? daysInMonth : Math.min(now.getDate(), daysInMonth)
+
+    for (let i = 1; i <= limit; i++) {
       dateRange.push(`${activePeriod.year}-${String(activePeriod.month).padStart(2, '0')}-${String(i).padStart(2, '0')}`)
     }
   }
