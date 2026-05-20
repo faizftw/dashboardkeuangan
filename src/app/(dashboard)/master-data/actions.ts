@@ -32,7 +32,9 @@ export async function createProgram(data: {
   const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).single()
   if (profile?.role !== 'admin') return { error: 'Hanya admin yang bisa membuat program.' }
 
-  const { pic_ids, mou_target_signed, mou_target_leads, ...programData } = data
+  const { pic_ids, ...programData } = data
+  delete (programData as Record<string, unknown>).mou_target_signed
+  delete (programData as Record<string, unknown>).mou_target_leads
 
   // Insert Program
   // Note: We'll set pic_id to the first PIC for legacy compatibility if needed
@@ -152,7 +154,9 @@ export async function updateProgram(id: string, data: {
   const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).single()
   if (profile?.role !== 'admin') return { error: 'Hanya admin yang bisa mengubah program.' }
 
-  const { pic_ids, mou_target_signed, mou_target_leads, ...programData } = data
+  const { pic_ids, ...programData } = data
+  delete (programData as Record<string, unknown>).mou_target_signed
+  delete (programData as Record<string, unknown>).mou_target_leads
 
   // PENTING: Snapshot target LAMA sebelum di-update ke program_period_settings periode aktif.
   // Ini memastikan filter periode historis tetap bisa menampilkan target yang benar
